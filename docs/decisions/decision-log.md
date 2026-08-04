@@ -100,3 +100,25 @@ This log records consequential project decisions. Trivial implementation details
 **Rationale:** The previous split ownership produced two pulses for successful jumps and could pulse on cooldown-rejected input.
 
 **Consequences:** Input surfaces share one feedback path, cooldown behavior remains inside the player, and future accessibility or Rite-specific feedback changes have one owner.
+
+## D-010 — Keep run telemetry local and identity-free
+
+**Date:** 2026-08-04  
+**Status:** Accepted
+
+**Decision:** Record bounded gameplay run summaries in local browser storage only. Do not transmit telemetry and do not include LootLocker identity, session tokens, names, browser user agents, device identifiers, IP addresses, or advertising identifiers.
+
+**Rationale:** The project needs structured run evidence for debugging and future leaderboard validation, but no network collection or player tracking is required for the current milestone. A strict local allowlist minimizes privacy and security exposure while preserving useful gameplay diagnostics.
+
+**Consequences:** The latest 20 completed runs are retained under `sex_magick_runs_v1`; current runs remain in memory; malformed or unavailable storage fails safely; any future network telemetry requires a separate explicit product, consent, security, and privacy decision.
+
+## D-011 — Define fast retry as a single transition through the existing restart path
+
+**Date:** 2026-08-04  
+**Status:** Accepted
+
+**Decision:** In the game-over state, `R`, `Space`, `Enter`, and non-control surface input invoke the existing synchronous `restartGame()` method. They must not create a second gameplay implementation or a second RAF chain.
+
+**Rationale:** Fast retry improves arcade flow only if it is immediate, deterministic, and mechanically identical to the existing restart button. Reusing one restart path prevents divergent reset rules and duplicate loops.
+
+**Consequences:** Every retry receives a new local run ID and an exact frame-0, score-0 lifecycle origin; controls remain excluded; one pending RAF callback is required before and after retry; physical touch, iframe-focus, and cross-browser verification remain release gates.
