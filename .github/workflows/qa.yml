@@ -31,10 +31,13 @@ jobs:
           node --check tools/collision-runtime.js
           node --check tools/run-telemetry.js
           node --check tools/obstacle-grammar.js
+          node --check tools/player-reachability.js
+          node --check tools/reachability-policy.js
           node --check tools/test-fixed-step-clock.js
           node --check tools/test-collision-runtime.js
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
+          node --check tools/test-player-reachability.js
           node --check tools/browser-fixed-step-test.mjs
           node --check tools/browser-collision-test.mjs
           node --check tools/browser-telemetry-test.mjs
@@ -42,6 +45,7 @@ jobs:
           node --check tools/run-browser-collision-test.mjs
           node --check tools/run-browser-telemetry-test.mjs
           node --check tools/run-browser-obstacle-grammar-test.mjs
+          node --check tools/run-browser-reachability-test.mjs
 
       - name: Run deterministic unit tests
         run: |
@@ -49,6 +53,7 @@ jobs:
           node tools/test-collision-runtime.js
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
+          node tools/test-player-reachability.js
 
       - name: Run fixed-step Chrome integration
         run: node tools/run-browser-fixed-step-test.mjs
@@ -61,3 +66,6 @@ jobs:
 
       - name: Run obstacle grammar Chrome integration
         run: node tools/run-browser-obstacle-grammar-test.mjs
+
+      - name: Run reachability and physics parity Chrome integration
+        run: node tools/run-browser-reachability-test.mjs
