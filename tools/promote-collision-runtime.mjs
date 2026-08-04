@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
+// Promotion gate version 1: collision truth, debug overlay, and full-screen touch.
 const INDEX_PATH = 'index.html';
 const BROWSER_TEST_PATH = 'tools/browser-fixed-step-test.mjs';
 const COLLISION_SCRIPT = '    <script src="tools/collision-runtime.js"></script>';
