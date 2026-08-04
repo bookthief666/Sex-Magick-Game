@@ -166,6 +166,18 @@ function testFallbackPolicy() {
   assert.equal(active.baseId, 'hex.return-to-axis');
   assert.equal(active.reachabilityFallback, true);
   assert.ok(scheduler.snapshot().reachabilityFallbackCount >= 1);
+
+  const ledger = new grammar.PatternRunLedger({ storage: grammar.createMemoryStorage() });
+  ledger.begin({ runId: 'run_policy_test', seed: 12345, rite: 'HEX', startReason: 'qa' });
+  const spec = scheduler.next({ viewportHeight: 844, gap: 200, orbChance: 0 });
+  ledger.recordSpawn(spec, { frames: 140, score: 0 });
+  const evidence = ledger.snapshot().current;
+  const event = evidence.patternEvents[0];
+  assert.equal(evidence.reachabilityPolicyVersion, policy.POLICY_VERSION);
+  assert.equal(event.reachabilityPolicyVersion, policy.POLICY_VERSION);
+  assert.equal(event.reachabilityVerdict, 'verified');
+  assert.equal(event.reachabilityFallback, true);
+  assert.equal(event.rejectedPatternId, 'hex.axis-hold');
 }
 
 testPhysicsProfiles();
