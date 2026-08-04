@@ -3,8 +3,7 @@
 Date: 2026-08-04  
 Protected baseline: `d3760aaea9c7322d48e471389a67c4e579743e2a`  
 Final tested implementation head: `71d1fedf17b009963c33340a0f102a8886c0ddf5`  
-Fast gameplay QA run: `30925941704`  
-Final documented head: `eb58cc60313feaca08a949326e2dcef073f08145`
+Fast gameplay QA run: `30925941704`
 
 ## Status
 
