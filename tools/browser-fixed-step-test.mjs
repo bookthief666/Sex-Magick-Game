@@ -11,6 +11,18 @@ const DEBUG_PORT = Number(process.env.QA_DEBUG_PORT || 9222);
 const BASE_URL = `http://127.0.0.1:${HTTP_PORT}`;
 const STEP_MS = 1000 / 60;
 const childProcesses = [];
+const EXTERNAL_BLOCKED_URLS = Object.freeze([
+  'https://cdn.tailwindcss.com/*',
+  'https://fonts.googleapis.com/*',
+  'https://fonts.gstatic.com/*',
+  'https://lh3.googleusercontent.com/*',
+  'https://cdn.jsdelivr.net/*',
+  'https://7l3mo9bh.api.lootlocker.io/*'
+]);
+const FIXED_STEP_RUNTIME_URLS = Object.freeze([
+  `${BASE_URL}/tools/fixed-step-clock.js`,
+  `${BASE_URL}/tools/fixed-step-prototype.js`
+]);
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -246,12 +258,23 @@ const TEST_SETUP = `
 `;
 
 async function prepareRun(client, mode, viewport = { width: 1280, height: 720 }) {
+  await client.send('Network.setBlockedURLs', {
+    urls: mode === 'baseline'
+      ? [...EXTERNAL_BLOCKED_URLS, ...FIXED_STEP_RUNTIME_URLS]
+      : EXTERNAL_BLOCKED_URLS
+  });
+
   await navigate(client, `${BASE_URL}/index.html?browserQa=${Date.now()}#debug`, viewport);
-  if (mode === 'fixed') {
+
+  if (mode === 'fixed' && !(await evaluate(client, `!!globalThis.__SEX_MAGICK_TIMING__`))) {
     await injectScript(client, `${BASE_URL}/tools/fixed-step-clock.js`);
     await injectScript(client, `${BASE_URL}/tools/fixed-step-prototype.js`);
+  }
+
+  if (mode === 'fixed') {
     await waitForExpression(client, `!!globalThis.__SEX_MAGICK_TIMING__`);
   }
+
   return evaluate(client, TEST_SETUP);
 }
 
@@ -467,16 +490,7 @@ async function main() {
   await client.send('Runtime.enable');
   await client.send('Log.enable');
   await client.send('Network.enable');
-  await client.send('Network.setBlockedURLs', {
-    urls: [
-      'https://cdn.tailwindcss.com/*',
-      'https://fonts.googleapis.com/*',
-      'https://fonts.gstatic.com/*',
-      'https://lh3.googleusercontent.com/*',
-      'https://cdn.jsdelivr.net/*',
-      'https://7l3mo9bh.api.lootlocker.io/*'
-    ]
-  });
+  await client.send('Network.setBlockedURLs', { urls: EXTERNAL_BLOCKED_URLS });
 
   const exceptions = [];
   client.on('Runtime.exceptionThrown', event => exceptions.push(event.exceptionDetails));
