@@ -1,4 +1,4 @@
-name: Promote tested gameplay runtimes
+name: Promote fixed-step runtime
 
 on:
   push:
@@ -6,8 +6,6 @@ on:
       - develop/sex-magick-2.0
     paths:
       - tools/promote-fixed-step-runtime.mjs
-      - tools/promote-collision-runtime.mjs
-      - .github/workflows/promote-fixed-step.yml
   workflow_dispatch:
 
 permissions:
@@ -30,27 +28,19 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Apply targeted runtime patches
-        run: |
-          node tools/promote-fixed-step-runtime.mjs
-          node tools/promote-collision-runtime.mjs
+      - name: Apply targeted promotion patch
+        run: node tools/promote-fixed-step-runtime.mjs
 
-      - name: Syntax-check runtimes and browser tests
+      - name: Syntax-check timing and browser tests
         run: |
           node --check tools/fixed-step-clock.js
           node --check tools/fixed-step-prototype.js
-          node --check tools/collision-runtime.js
           node --check tools/test-fixed-step-clock.js
-          node --check tools/test-collision-runtime.js
           node --check tools/browser-fixed-step-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
-          node --check tools/promote-fixed-step-runtime.mjs
-          node --check tools/promote-collision-runtime.mjs
 
-      - name: Run deterministic unit tests
-        run: |
-          node tools/test-fixed-step-clock.js
-          node tools/test-collision-runtime.js
+      - name: Run deterministic timing tests
+        run: node tools/test-fixed-step-clock.js
 
       - name: Run integrated headless Chrome tests
         run: node tools/run-browser-fixed-step-test.mjs
@@ -58,12 +48,12 @@ jobs:
       - name: Commit tested runtime integration
         run: |
           if git diff --quiet; then
-            echo "Gameplay runtimes are already integrated."
+            echo "Fixed-step runtime is already integrated."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html tools/browser-fixed-step-test.mjs
-          git commit -m "fix: align collision geometry and mobile touch input"
+          git commit -m "fix: make simulation refresh-rate independent"
           git push origin HEAD:develop/sex-magick-2.0
