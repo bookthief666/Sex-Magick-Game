@@ -148,10 +148,45 @@ This log records consequential project decisions. Trivial implementation details
 ## D-014 — Separate compositional reachability from human timing robustness
 
 **Date:** 2026-08-04  
-**Status:** Accepted as diagnostic foundation
+**Status:** Accepted as diagnostic foundation; interpretation superseded in part by D-017
 
 **Decision:** Propagate position, velocity, and cooldown through complete seeded pattern cycles from a 27-state incoming cloud; require exact full-sequence witness replay with eight additional pixels of clearance; and evaluate timing tolerance with distributed ±1–3-frame perturbations spanning the first through last witness jump. Classify technical reachability separately from provisional robustness. Do not retune obstacle patterns or claim human comfort solely from the resulting perturbation rates.
 
-**Rationale:** All tested full cycles and two-cycle sequences are technically reachable, but every one-cycle hard case is fragile under the selected witness and provisional timing tests. The current solver chooses a terminally convenient witness, not necessarily the most tolerant witness. Pattern changes made before reviewing witness-selection bias, state merging, beam pruning, perturbation construction, and threshold calibration could flatten the game without addressing the actual source of fragility.
+**Rationale:** All tested full cycles and two-cycle sequences are technically reachable. The original Milestone 6 instrumentation classified every one-cycle hard case as fragile under an eight-pixel retained-clearance policy. The current solver chooses a terminally convenient witness, not necessarily the most tolerant witness. Pattern changes made before reviewing witness-selection bias, state merging, beam pruning, perturbation construction, and threshold calibration could flatten the game without addressing the actual source of fragility.
 
-**Consequences:** Milestone 6 remains QA-only and is not loaded by the production entry point. The hard matrix records 16 technically reachable but fragile cases, zero robust candidates, and zero invalid cases. Independent Fable 5 review is required before deciding whether the next step is robustness-aware witness search, broader reachable-set modeling, pattern retuning, or Fold-resize work. Human comfort, physical input latency, active posture changes, and leaderboard authenticity remain unproven.
+**Consequences:** Milestone 6 remains QA-only and is not loaded by the production entry point. Its exact replay witnesses and composition architecture remain accepted. Its original perturbation percentages and surviving-initial-identity interpretation must not be reused as ordinary survival or incoming-corridor evidence; D-017 records the corrected interpretation.
+
+## D-015 — Use a short bounded input buffer and stable gameplay-authoritative contrast
+
+**Date:** 2026-08-04  
+**Status:** Accepted for development and physical playtest
+
+**Decision:** Queue one jump intent only when the current cooldown will expire within three authoritative simulation steps. Fire that intent on the first legal step, coalesce duplicate pending taps, reject earlier taps with explicit quiet feedback, and expose local counters for immediate, queued, fired, rejected, expired, and coalesced input. Reserve stable high-contrast colors for the player core and lethal pillar silhouette while retaining psychedelic motion and color in subordinate atmospheric channels.
+
+**Rationale:** The former `Player.jump()` silently returned during cooldown, making a rejected tap indistinguishable from player error. At the same time, full-spectrum player and pillar cycling could erase collision readability. A short bounded buffer addresses near-boundary intent without creating a long latent action; stable authoritative contrast preserves legibility without discarding the game's visual identity.
+
+**Consequences:** Three steps, approximately 50 ms at 60 Hz, is the initial candidate—not a final human-optimal value. Development may compare zero, three, four, and six steps, but the bounded audit found no additional machine benefit from four or six in the current sample. Physical Android and Fold testing is required before the value is accepted for release. Reduced-motion and low-flash settings, lower jump-particle density, and pause-on-major-resize are part of the same player-truth boundary.
+
+## D-016 — Fail closed on missing reachability policy and separate fast QA from heavy audits
+
+**Date:** 2026-08-04  
+**Status:** Accepted
+
+**Decision:** If the reachability correction policy fails to load or install, preserve Hexagram play but seal Monas and pause any active Monas run rather than scheduling an unverified catalog. Run rapid gameplay contracts and four Chrome integrations on every development push. Move isolated and compositional reachability matrices to a manual, weekly, and relevant-path-triggered audit workflow.
+
+**Rationale:** The previous policy bootstrap only logged failure, allowing the uncorrected Monas catalog to remain reachable despite Milestone 5 proving specific original routes impossible. Heavy solver matrices also taxed every creative edit even though their meaning changes primarily with physics, patterns, policy, or solver code.
+
+**Consequences:** Policy status is exposed through `window.__SEX_MAGICK_POLICY_BOOTSTRAP__`. The fast workflow targets an eight-minute ceiling. Full reachability evidence remains available through `.github/workflows/reachability-audit.yml`, including manual execution before release or after pattern-affecting changes.
+
+## D-017 — Report collision survival separately from retained safety margin and deprecate the initial-identity inference
+
+**Date:** 2026-08-04  
+**Status:** Accepted; supersedes the affected Milestone 6 interpretation
+
+**Decision:** Use `margin = 0` to report collision survival and a separately named positive-margin metric to report retained safety clearance. Do not infer incoming-state diversity from the surviving `initialStateId` count after quantized state deduplication. Model production-style per-gate gap breathing before using a solver result to justify pattern retuning or safety claims.
+
+**Rationale:** The Milestone 6 `10.9%–43.6%` range replayed perturbations with an eight-pixel margin and therefore counted survivable near-misses as failures. The one-time Milestone 7 audit measured constant-gap margin-0 survival at `32.73%–74.55%`, improving to `38.18%–80.00%` with a three-step buffer. Cooldown-tight witness intervals were only `0%–18.18%`, confirming the input-deletion mechanism but rejecting an estimate that it dominated half the transitions. When production-style gap breathing was introduced, margin-0 survival ranged `20.00%–69.09%` unbuffered and `29.09%–74.55%` buffered, while eight-pixel safety retention fell to `0%–5.45%` because the witness had been generated for different geometry.
+
+State deduplication also discarded all but one representative `initialStateId` when histories converged. The resulting count proves neither a narrow nor a wide incoming corridor.
+
+**Consequences:** The old Milestone 6 label `technically-reachable-fragile` remains historical diagnostic output, not a human-fairness verdict. Existing patterns will not be retuned from those percentages. Future provenance analysis must union state-origin masks or solve initial states independently. Future safety witnesses must be generated against the real per-gate gap timeline. No further solver expansion precedes the Hexagram Gate/Gnosis/Void vertical slice.
