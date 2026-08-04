@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en" data-status="running">
+<head>
+  <meta charset="utf-8">
+  <title>Obstacle Grammar Browser QA</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; background: #000; color: #fff; }
+    iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; }
+    #result { position: fixed; inset: 8px; z-index: 100000; margin: 0; padding: 12px; overflow: auto; background: rgba(0,0,0,.94); color: #dff; font: 12px/1.45 monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <iframe id="gameFrame" src="../index.html?patternBrowserQa=1#debug"></iframe>
+  <pre id="result">RUNNING</pre>
+  <script>
+    (() => {
+      'use strict';
+
+      const resultNode = document.getElementById('result');
+      const frame = document.getElementById('gameFrame');
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      function same(left, right) {
+        return JSON.stringify(left) === JSON.stringify(right);
+      }
+
+      function simplify(sequence) {
+        return sequence.map(item => ({
+          patternId: item.patternId,
+          family: item.family,
+          patternStep: item.patternStep,
+          topRatio: item.topRatio,
+          top: item.top,
+          gap: item.gap,
+          orb: item.orb,
+          innerPattern: item.innerPattern,
+          warning: item.warning
+        }));
+      }
+
+      function waitForRuntime(win, timeoutMs = 9000) {
+        return new Promise((resolve, reject) => {
+          const deadline = performance.now() + timeoutMs;
+          const poll = () => {
+            try {
+              if (
+                win.game &&
+                win.__SEX_MAGICK_PATTERNS__ &&
+                win.__SEX_MAGICK_RUNS__ &&
+                win.__SEX_MAGICK_TIMING__ &&
+                win.__SEX_MAGICK_COLLISION__
+              ) {
+                resolve();
+                return;
+              }
+            } catch (_error) {}
+            if (performance.now() >= deadline) {
+              reject(new Error('Timed out waiting for integrated game runtimes'));
+              return;
+            }
+            setTimeout(poll, 25);
+          };
+          poll();
+        });
+      }
+
+      function generateRun(win, rite, seed, count = 72) {
+        const { game, CONFIG } = win;
+        win.__SEX_MAGICK_PATTERNS__.setNextSeed(seed);
+        game.gameMode = rite;
+        game.startGame();
+        game.player.update = () => {};
+        game.player.draw = () => {};
+
+        const rate = Math.max(20, Math.floor(CONFIG.PILLAR_SPAWN_BASE / (game.gameSpeed / 3)));
+        const runId = win.__SEX_MAGICK_RUNS__.getSnapshot().current.runId;
+        const queueLength = win.__qaRafQueue.length;
+
+        game.obstacles = [];
+        game.collectibles = [];
+        game.frames = rate - 1;
+        game.updateGameObjects();
+        const preSpawnCount = game.obstacles.length;
+
+        const sequence = [];
+        let maxDelta = 0;
+        for (let index = 0; index < count; index += 1) {
+          game.obstacles = [];
+          game.collectibles = [];
+          game.frames = (index + 1) * rate;
+          game.updateGameObjects();
+          assert(game.obstacles.length === 1, 'Expected exactly one deterministic obstacle at a spawn frame');
+
+          const pillar = game.obstacles[0];
+          const event = win.__SEX_MAGICK_PATTERNS__.getSnapshot().evidence.current.patternEvents.at(-1);
+          if (sequence.length > 0) {
+            maxDelta = Math.max(maxDelta, Math.abs(event.topRatio - sequence.at(-1).topRatio));
+          }
+          sequence.push({
+            patternId: pillar.patternId,
+            family: pillar.patternFamily,
+            patternStep: pillar.patternStep,
+            topRatio: event.topRatio,
+            top: pillar.baseTop,
+            gap: pillar.gap,
+            orb: game.collectibles.length === 1,
+            innerPattern: pillar.innerPattern,
+            warning: pillar.hasWarning
+          });
+        }
+
+        const patternCurrent = win.__SEX_MAGICK_PATTERNS__.getSnapshot().evidence.current;
+        const telemetryCurrent = win.__SEX_MAGICK_RUNS__.getSnapshot().current;
+        const scheduler = win.__SEX_MAGICK_PATTERNS__.getSnapshot().scheduler;
+        game.returnToMenu();
+
+        return {
+          rite,
+          seed,
+          rate,
+          runId,
+          queueLength,
+          preSpawnCount,
+          sequence: simplify(sequence),
+          maxDelta,
+          linkedRunId: patternCurrent.runId,
+          telemetryRunId: telemetryCurrent.runId,
+          scheduler,
+          familyStarts: sequence.filter(item => item.patternStep === 0).map(item => item.family)
+        };
+      }
+
+      async function run() {
+        const win = frame.contentWindow;
+        await waitForRuntime(win);
+
+        win.__qaRafQueue = [];
+        win.__qaNextRafId = 1;
+        win.requestAnimationFrame = callback => {
+          const id = win.__qaNextRafId++;
+          win.__qaRafQueue.push({ id, callback });
+          return id;
+        };
+        win.cancelAnimationFrame = id => {
+          win.__qaRafQueue = win.__qaRafQueue.filter(item => item.id !== id);
+        };
+
+        win.AudioSys.pause = () => {};
+        win.AudioSys.resume = () => {};
+        win.AudioSys.play = () => {};
+        win.AudioSys.stop = () => {};
+        win.AudioSys.switchToMenuMusic = () => {};
+        win.AudioSys.switchToGameOverMusic = () => {};
+        win.SFX.playTone = async () => {};
+        win.Haptics.jump = () => {};
+        win.Haptics.collect = () => {};
+        win.Haptics.crash = () => {};
+        win.Haptics.levelUp = () => {};
+        win.Haptics.start = () => {};
+        win.Leaderboard.submit = () => {};
+
+        win.__SEX_MAGICK_RUNS__.clearHistory();
+        win.__SEX_MAGICK_PATTERNS__.clearHistory();
+
+        const seed = 0x12345678;
+        const first = generateRun(win, 'HEX', seed);
+        const replay = generateRun(win, 'HEX', seed);
+        const monas = generateRun(win, 'MONAS', seed);
+
+        win.__SEX_MAGICK_PATTERNS__.setDebug(true);
+        const patternSnapshot = win.__SEX_MAGICK_PATTERNS__.getSnapshot();
+        const telemetrySnapshot = win.__SEX_MAGICK_RUNS__.getSnapshot();
+        const panel = win.document.getElementById('sex-magick-pattern-grammar');
+        const persisted = win.localStorage.getItem(win.__SEX_MAGICK_PATTERNS__.storageKey) || '';
+        const forbidden = ['player_identifier', 'session_token', 'userAgent', 'ipAddress', 'deviceId', 'email']
+          .filter(field => persisted.includes(field));
+        const familyCycle = [...win.__SEX_MAGICK_PATTERNS__.familyCycle];
+        const envelope = win.__SEX_MAGICK_PATTERNS__.transitionEnvelope;
+
+        assert(win.__SEX_MAGICK_PATTERNS__.version === 1, 'Unexpected grammar version');
+        assert(win.__SEX_MAGICK_PATTERNS__.mode === 'deterministic-obstacle-grammar', 'Unexpected grammar mode');
+        assert(same(familyCycle, ['safe', 'pressure', 'recovery', 'pressure', 'climax', 'recovery']), 'Unexpected family cycle');
+        assert(first.preSpawnCount === 0, 'Obstacle spawned before preserved cadence');
+        assert(first.queueLength === 1 && replay.queueLength === 1 && monas.queueLength === 1, 'RAF chain count changed');
+        assert(same(first.sequence, replay.sequence), 'Same seed and Rite did not replay identically');
+        assert(!same(first.sequence, monas.sequence), 'Rites did not produce distinct grammar');
+        assert(first.maxDelta <= envelope + 1e-12, 'HEX transition envelope exceeded');
+        assert(replay.maxDelta <= envelope + 1e-12, 'HEX replay transition envelope exceeded');
+        assert(monas.maxDelta <= envelope + 1e-12, 'MONAS transition envelope exceeded');
+        assert(first.runId === first.linkedRunId && first.runId === first.telemetryRunId, 'First run evidence is not linked');
+        assert(replay.runId === replay.linkedRunId, 'Replay evidence is not linked');
+        assert(monas.runId === monas.linkedRunId, 'MONAS evidence is not linked');
+        assert(same(first.familyStarts.slice(0, 6), familyCycle), 'HEX pacing cycle mismatch');
+        assert(same(monas.familyStarts.slice(0, 6), familyCycle), 'MONAS pacing cycle mismatch');
+        assert(patternSnapshot.evidence.recent.length === 3, 'Pattern retention count mismatch');
+        assert(telemetrySnapshot.recent.length === 3, 'Telemetry retention count mismatch');
+        assert(same(
+          patternSnapshot.evidence.recent.map(run => run.runId),
+          telemetrySnapshot.recent.map(run => run.runId)
+        ), 'Pattern and telemetry run IDs diverged');
+        assert(panel && !panel.hidden && panel.textContent.includes('OBSTACLE GRAMMAR'), 'Pattern debug panel unavailable');
+        assert(forbidden.length === 0, 'Forbidden identity fields were persisted');
+        assert(persisted.length > 0, 'Pattern evidence was not persisted');
+        assert(win.__qaRafQueue.length === 1, 'Final RAF chain count changed');
+
+        const summary = [
+          'PASS obstacle grammar browser integration',
+          `MODE ${win.__SEX_MAGICK_PATTERNS__.mode}`,
+          `SEED ${seed}`,
+          `HEX SPAWNS ${first.sequence.length}`,
+          `MONAS SPAWNS ${monas.sequence.length}`,
+          `MAX DELTA HEX ${first.maxDelta.toFixed(3)}`,
+          `MAX DELTA MONAS ${monas.maxDelta.toFixed(3)}`,
+          `ENVELOPE ${envelope.toFixed(3)}`,
+          `PATTERN RUNS ${patternSnapshot.evidence.recent.length}`,
+          `TELEMETRY RUNS ${telemetrySnapshot.recent.length}`,
+          `RAF ${win.__qaRafQueue.length}`,
+          `FORBIDDEN ${forbidden.length}`,
+          `HEX FAMILIES ${first.familyStarts.slice(0, 6).join('>')}`,
+          `MONAS FAMILIES ${monas.familyStarts.slice(0, 6).join('>')}`
+        ].join('\n');
+
+        document.documentElement.dataset.status = 'pass';
+        resultNode.textContent = summary;
+      }
+
+      frame.addEventListener('load', () => {
+        run().catch(error => {
+          document.documentElement.dataset.status = 'fail';
+          resultNode.textContent = `FAIL\n${error.stack || error}`;
+        });
+      }, { once: true });
+    })();
+  </script>
+</body>
+</html>
