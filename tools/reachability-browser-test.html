@@ -27,6 +27,14 @@
         assert(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
       }
 
+      function getGame(win) {
+        try {
+          return win.eval('game');
+        } catch (_error) {
+          return null;
+        }
+      }
+
       function runtimeDiagnostics(win) {
         let scripts = [];
         try {
@@ -35,7 +43,7 @@
             .filter(source => source.includes('fixed-step') || source.includes('obstacle') || source.includes('reachability'));
         } catch (_error) {}
         return {
-          game: Boolean(win.game),
+          game: Boolean(getGame(win)),
           grammarModule: Boolean(win.SexMagickObstacleGrammar),
           patternRuntime: Boolean(win.__SEX_MAGICK_PATTERNS__),
           policyModule: Boolean(win.SexMagickReachabilityPolicy),
@@ -52,7 +60,7 @@
           const poll = () => {
             try {
               if (
-                win.game &&
+                getGame(win) &&
                 win.SexMagickObstacleGrammar &&
                 win.__SEX_MAGICK_REACHABILITY_POLICY__ &&
                 win.__SEX_MAGICK_TIMING__ &&
@@ -88,22 +96,23 @@
 
       function comparePlayerPhysics(win, reachability, rite) {
         const PlayerClass = win.eval('Player');
+        const gameInstance = getGame(win);
         const player = new PlayerClass(rite);
         player.y = 400;
         player.vy = 0;
         player.jumpCooldown = 0;
         player.trail = [];
-        win.game.player = player;
-        win.game.gameMode = rite;
-        win.game.isMobile = true;
-        win.game.settings.sfx = false;
-        win.game.particles = [];
-        win.game.gameOver = () => { throw new Error(`${rite} unexpectedly reached bottom death`); };
+        gameInstance.player = player;
+        gameInstance.gameMode = rite;
+        gameInstance.isMobile = true;
+        gameInstance.settings.sfx = false;
+        gameInstance.particles = [];
+        gameInstance.gameOver = () => { throw new Error(`${rite} unexpectedly reached bottom death`); };
 
         let model = { y: 400, vy: 0, cooldown: 0 };
         let acceptedJumps = 0;
         for (let simulationFrame = 0; simulationFrame < 180; simulationFrame += 1) {
-          win.game.frames = simulationFrame + 1;
+          gameInstance.frames = simulationFrame + 1;
           const requestJump = simulationFrame % 19 === 0 || simulationFrame % 37 === 5;
           const beforeCooldown = player.jumpCooldown;
           if (requestJump) player.jump();
