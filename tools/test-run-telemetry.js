@@ -90,8 +90,8 @@ function testLifecycleAndPersistence() {
     idFactory: () => `run-test-${++idCounter}`
   });
   const game = {
-    frames: 0,
-    score: 0,
+    frames: 99,
+    score: 77,
     highScore: 12,
     currentLevelIdx: 0
   };
@@ -99,8 +99,17 @@ function testLifecycleAndPersistence() {
   const first = store.begin({ rite: 'HEX', startReason: 'menu', game });
   assert.equal(first.runId, 'run-test-1');
   assert.equal(first.rite, 'HEX');
-  assert.equal(first.lifecycleEvents[0].type, 'start');
+  assert.deepEqual(first.lifecycleEvents[0], {
+    type: 'start',
+    frame: 0,
+    score: 0,
+    simulationMs: 0,
+    wallOffsetMs: 0,
+    details: { startReason: 'menu', rite: 'HEX' }
+  });
 
+  game.frames = 0;
+  game.score = 0;
   monotonicMs += 100;
   game.frames = 6;
   game.score = 1;
@@ -151,6 +160,8 @@ function testLifecycleAndPersistence() {
     [5, 'orb']
   ]);
   assert.equal(completed.lifecycleEvents.at(-1).type, 'end');
+  assert.equal(completed.timing.maxStepsPerFrame, 5);
+  assert.equal(completed.timing.suspensionResetMs, 250);
   assert.equal(completed.timing.clock.totalSteps, 12);
   assert.equal(store.currentRun, null);
   assert.equal(store.recentRuns.length, 1);
@@ -165,7 +176,9 @@ function testLifecycleAndPersistence() {
 
   monotonicMs += 10;
   epochMs += 10;
-  store.begin({ rite: 'MONAS', startReason: 'retry', game: { ...game, frames: 0, score: 0 } });
+  const retry = store.begin({ rite: 'MONAS', startReason: 'retry', game: { ...game, frames: 999, score: 999 } });
+  assert.equal(retry.lifecycleEvents[0].frame, 0);
+  assert.equal(retry.lifecycleEvents[0].score, 0);
   store.end({ reason: 'menu', game: { ...game, frames: 2, score: 0 } });
   monotonicMs += 10;
   epochMs += 10;
