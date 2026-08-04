@@ -33,11 +33,13 @@ jobs:
           node --check tools/obstacle-grammar.js
           node --check tools/player-reachability.js
           node --check tools/reachability-policy.js
+          node --check tools/compositional-reachability.js
           node --check tools/test-fixed-step-clock.js
           node --check tools/test-collision-runtime.js
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
           node --check tools/test-player-reachability.js
+          node --check tools/test-compositional-reachability.js
           node --check tools/browser-fixed-step-test.mjs
           node --check tools/browser-collision-test.mjs
           node --check tools/browser-telemetry-test.mjs
@@ -54,6 +56,7 @@ jobs:
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
           node tools/test-player-reachability.js
+          node tools/test-compositional-reachability.js
 
       - name: Run fixed-step Chrome integration
         run: node tools/run-browser-fixed-step-test.mjs
