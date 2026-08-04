@@ -343,6 +343,7 @@ async function main() {
           retryScore,
           retryFrames,
           retryStartReason: afterRetry.current.startReason,
+          retryStartEvent: afterRetry.current.lifecycleEvents[0],
           panelVisible: panel && !panel.hidden,
           panelText: panel?.textContent || '',
           hintText: hint?.textContent || '',
@@ -374,12 +375,22 @@ async function main() {
     assert.equal(result.deathRun.lifecycleEvents.some(event => event.type === 'void-enter'), true);
     assert.equal(result.deathRun.lifecycleEvents.some(event => event.type === 'void-exit'), true);
     assert.equal(result.deathRun.timing.mode, 'fixed-step-runtime');
+    assert.equal(result.deathRun.timing.maxStepsPerFrame, 5);
+    assert.equal(result.deathRun.timing.suspensionResetMs, 250);
     assert.equal(result.storedAfterDeathCount, 1);
     assert.equal(result.retryEventPrevented, true);
     assert.equal(result.retryState, 'playing');
     assert.equal(result.retryScore, 0);
     assert.equal(result.retryFrames, 0, 'retry must synchronously reset simulation frames');
     assert.equal(result.retryStartReason, 'retry');
+    assert.deepEqual(result.retryStartEvent, {
+      type: 'start',
+      frame: 0,
+      score: 0,
+      simulationMs: 0,
+      wallOffsetMs: 0,
+      details: { startReason: 'retry', rite: 'HEX' }
+    });
     assert.equal(result.queueAfterRetry, 1, 'retry must preserve one pending RAF chain');
     assert.equal(result.panelVisible, true);
     assert.match(result.panelText, /RUN TELEMETRY/);
