@@ -1,16 +1,18 @@
-# Claude Opus Comprehensive Review — SEX MAGICK 2.0
+# Claude Opus 5 Comprehensive Review — SEX MAGICK 2.0
 
 ## Operating model
 
-Use the strongest Claude Opus model available to the account through Claude Code. At the time this handoff was prepared, Anthropic's supported-model documentation listed Claude Opus 4.8 as the newest Opus model. Prefer the `opus` alias or select the newest Opus shown by `/model` rather than assuming a future version number.
+Use **Opus 5**, as exposed by the model selector in the owner's Claude account.
 
 Recommended session mode:
 
 - fresh Claude Code session
-- model: latest available Opus
+- model: `Opus 5`
 - effort: `max` for the strategic review, reduced only if usage limits require it
 - permission mode: Plan / read-only
 - repository writes: prohibited except for the single uncommitted response document explicitly requested below
+
+If Claude Code's `/model` menu labels the model differently from the general Claude app, select the newest Opus option actually shown and record the exact displayed model name in the completed review. Do not silently substitute Sonnet, Fable, or an older Opus model.
 
 ## Repository target
 
@@ -39,7 +41,7 @@ Read and follow this complete whole-project assignment:
 docs/handoffs/fable-5-comprehensive-game-evolution-review.md
 ```
 
-The filename records the model originally considered. Its strategic assignment, required reading, alternative-path analysis, vertical-slice specification, and required A–O response structure remain controlling. Execute that assignment as Claude Opus.
+The filename records the model originally considered. Its strategic assignment, required reading, alternative-path analysis, vertical-slice specification, and required A–O response structure remain controlling. Execute that assignment as **Claude Opus 5**.
 
 The central question is not whether Milestone 6 is technically correct. It is:
 
@@ -98,7 +100,7 @@ Also inspect the current GitHub Actions configuration and existing recorded work
 Write the complete response to:
 
 ```text
-docs/reviews/claude-opus-comprehensive-game-evolution-review-response.md
+docs/reviews/claude-opus-5-comprehensive-game-evolution-review-response.md
 ```
 
 Creating that one uncommitted review file is permitted. Do not modify any other repository file and do not commit the response.
@@ -118,6 +120,7 @@ The response must contain:
 
 At completion, print:
 
+- exact displayed Claude model name used
 - verified branch and commit reviewed
 - tests actually executed and their outcomes
 - files read
