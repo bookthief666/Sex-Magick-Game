@@ -34,6 +34,7 @@ jobs:
           node --check tools/player-reachability.js
           node --check tools/reachability-policy.js
           node --check tools/compositional-reachability.js
+          node --check tools/compositional-robustness.js
           node --check tools/test-fixed-step-clock.js
           node --check tools/test-collision-runtime.js
           node --check tools/test-run-telemetry.js
