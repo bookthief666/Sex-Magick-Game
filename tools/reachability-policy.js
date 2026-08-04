@@ -151,6 +151,7 @@
     prototype.next = function nextWithReachabilityEvidence(...args) {
       const result = originalNext.apply(this, args);
       const active = this.active;
+      result.reachabilityPolicyVersion = POLICY_VERSION;
       result.reachabilityVerdict = active?.reachabilityVerdict
         || verdicts[result.basePatternId]
         || 'unclassified';
@@ -171,6 +172,35 @@
       snapshot.activeReachabilityAdjusted = Boolean(this.active?.reachabilityAdjusted);
       return snapshot;
     };
+
+    const ledgerPrototype = grammarApi.PatternRunLedger?.prototype;
+    if (ledgerPrototype && !ledgerPrototype.__reachabilityPolicyEvidenceInstalled) {
+      const originalBegin = ledgerPrototype.begin;
+      const originalRecordSpawn = ledgerPrototype.recordSpawn;
+
+      ledgerPrototype.begin = function beginWithReachabilityPolicyVersion(...args) {
+        const result = originalBegin.apply(this, args);
+        if (this.current) this.current.reachabilityPolicyVersion = POLICY_VERSION;
+        return this.snapshot().current || result;
+      };
+
+      ledgerPrototype.recordSpawn = function recordSpawnWithReachabilityEvidence(spec, game) {
+        const recorded = originalRecordSpawn.call(this, spec, game);
+        if (!recorded || !this.current) return recorded;
+        this.current.reachabilityPolicyVersion = POLICY_VERSION;
+        const event = this.current.patternEvents[this.current.patternEvents.length - 1];
+        if (event) {
+          event.reachabilityPolicyVersion = POLICY_VERSION;
+          event.reachabilityVerdict = String(spec?.reachabilityVerdict || 'unclassified');
+          event.reachabilityAdjusted = Boolean(spec?.reachabilityAdjusted);
+          event.reachabilityFallback = Boolean(spec?.reachabilityFallback);
+          event.rejectedPatternId = spec?.rejectedPatternId ? String(spec.rejectedPatternId) : null;
+        }
+        return recorded;
+      };
+
+      ledgerPrototype.__reachabilityPolicyEvidenceInstalled = true;
+    }
 
     prototype.__reachabilityPolicyInstalled = true;
 
