@@ -1,0 +1,136 @@
+(function installSexMagickFixedStepPrototype() {
+  'use strict';
+
+  const api = globalThis.SexMagickFixedStep;
+  if (!api?.FixedStepClock) {
+    throw new Error('SexMagickFixedStep.FixedStepClock must load before the prototype patch');
+  }
+  if (typeof Game === 'undefined' || typeof GameState === 'undefined') {
+    throw new Error('SEX MAGICK game classes are unavailable; inject after the game script loads');
+  }
+  if (Game.prototype.__fixedStepPrototypeInstalled) return;
+
+  const STEP_MS = 1000 / 60;
+  const MAX_STEPS_PER_FRAME = 5;
+  const SUSPENSION_RESET_MS = 250;
+
+  function ensureClock(instance) {
+    if (!instance.fixedStepClock) {
+      instance.fixedStepClock = new api.FixedStepClock({
+        stepMs: STEP_MS,
+        maxStepsPerFrame: MAX_STEPS_PER_FRAME,
+        suspensionResetMs: SUSPENSION_RESET_MS
+      });
+    }
+    return instance.fixedStepClock;
+  }
+
+  Game.prototype.resetFixedStepTiming = function resetFixedStepTiming() {
+    ensureClock(this).reset();
+    this.renderLastFrameTime = 0;
+    this.lastFrameTime = 0;
+    this.fixedStepLastResult = null;
+  };
+
+  Game.prototype.runFixedSimulationStep = function runFixedSimulationStep() {
+    if (this.hitStop > 0) {
+      this.hitStop -= 1;
+      return;
+    }
+
+    this.frames += 1;
+
+    if (this.frames % 30 === 0 && Math.random() > 0.8) {
+      GlitchFX.trigger(10, 'random');
+    }
+
+    if (this.voidMode) {
+      this.voidTimer -= 1;
+      if (this.voidTimer <= 0) this.endVoidMode();
+    }
+
+    this.tunnelOffset += this.tunnelSpeed * (1 + this.gameSpeed * 0.1) || 10;
+    this.updateGameObjects();
+  };
+
+  Game.prototype.scheduleFixedStepFrame = function scheduleFixedStepFrame() {
+    if (this.fixedStepRafId != null) return;
+
+    this.fixedStepRafId = requestAnimationFrame(time => {
+      this.fixedStepRafId = null;
+      this.gameLoop(time);
+    });
+  };
+
+  Game.prototype.gameLoop = function fixedStepGameLoop(currentTime) {
+    if (this.state !== GameState.PLAYING) {
+      ensureClock(this).reset();
+      this.renderLastFrameTime = 0;
+      return;
+    }
+
+    const manualCall = !Number.isFinite(currentTime);
+    const clock = ensureClock(this);
+
+    if (manualCall) {
+      const now = performance.now();
+      clock.reset(now - STEP_MS);
+      this.renderLastFrameTime = 0;
+
+      // An already scheduled frame will continue the loop. Returning here prevents
+      // pause/resume or rapid restart from creating a second RAF chain.
+      if (this.fixedStepRafId != null) return;
+      currentTime = now;
+    }
+
+    if (this.renderLastFrameTime) {
+      const renderDelta = currentTime - this.renderLastFrameTime;
+      if (renderDelta > 0) {
+        this.fps = Math.round(1000 / renderDelta);
+        if (CONFIG.DEBUG) document.getElementById('fpsCounter').textContent = this.fps;
+      }
+    }
+    this.renderLastFrameTime = currentTime;
+    this.lastFrameTime = currentTime;
+
+    this.fixedStepLastResult = clock.advance(currentTime, () => {
+      if (this.state === GameState.PLAYING) this.runFixedSimulationStep();
+    });
+
+    this.drawScene(currentTime);
+
+    if (this.state === GameState.PLAYING) {
+      this.scheduleFixedStepFrame();
+    }
+  };
+
+  Game.prototype.__fixedStepPrototypeInstalled = true;
+
+  globalThis.__SEX_MAGICK_TIMING__ = Object.freeze({
+    mode: 'branch-only-fixed-step-prototype',
+    version: 1,
+    stepMs: STEP_MS,
+    maxStepsPerFrame: MAX_STEPS_PER_FRAME,
+    suspensionResetMs: SUSPENSION_RESET_MS,
+    getSnapshot() {
+      if (typeof game === 'undefined' || !game) return null;
+      const clock = ensureClock(game);
+      return {
+        state: game.state,
+        rite: game.gameMode,
+        renderFps: game.fps,
+        simulationFrames: game.frames,
+        score: game.score,
+        pendingRaf: game.fixedStepRafId != null,
+        lastAdvance: game.fixedStepLastResult,
+        clock: clock.snapshot()
+      };
+    }
+  });
+
+  console.info('[SEX MAGICK QA] Fixed-step prototype installed', {
+    stepMs: STEP_MS,
+    maxStepsPerFrame: MAX_STEPS_PER_FRAME,
+    suspensionResetMs: SUSPENSION_RESET_MS
+  });
+})();
