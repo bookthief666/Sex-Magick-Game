@@ -1,0 +1,64 @@
+name: Promote collision truth runtime
+
+on:
+  push:
+    branches:
+      - develop/sex-magick-2.0
+    paths:
+      - tools/promote-collision-runtime.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out development branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/sex-magick-2.0
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply targeted collision promotion patch
+        run: node tools/promote-collision-runtime.mjs
+
+      - name: Syntax-check runtime and browser tests
+        run: |
+          node --check tools/fixed-step-clock.js
+          node --check tools/fixed-step-prototype.js
+          node --check tools/collision-runtime.js
+          node --check tools/test-fixed-step-clock.js
+          node --check tools/test-collision-runtime.js
+          node --check tools/browser-fixed-step-test.mjs
+          node --check tools/run-browser-fixed-step-test.mjs
+          node --check tools/promote-collision-runtime.mjs
+
+      - name: Run deterministic unit tests
+        run: |
+          node tools/test-fixed-step-clock.js
+          node tools/test-collision-runtime.js
+
+      - name: Run integrated headless Chrome tests
+        run: node tools/run-browser-fixed-step-test.mjs
+
+      - name: Commit tested collision integration
+        run: |
+          if git diff --quiet; then
+            echo "Collision truth runtime is already integrated."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html tools/browser-fixed-step-test.mjs
+          git commit -m "fix: align collision geometry and mobile touch input"
+          git push origin HEAD:develop/sex-magick-2.0
