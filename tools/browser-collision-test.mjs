@@ -240,6 +240,7 @@ async function main() {
         Haptics.levelUp = () => {};
         Haptics.start = () => {};
         game.settings.sfx = false;
+        game.isMobile = true;
 
         __SEX_MAGICK_COLLISION__.setInputBufferFrames(3);
         __SEX_MAGICK_COLLISION__.resetInputStats();
