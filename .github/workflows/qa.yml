@@ -46,6 +46,7 @@ jobs:
           node --check tools/test-m7-review-diagnostics.js
           node --check tools/browser-fixed-step-test.mjs
           node --check tools/browser-collision-test.mjs
+          node --check tools/browser-policy-fail-closed-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -67,6 +68,9 @@ jobs:
 
       - name: Run collision, input, and touch Chrome integration
         run: node tools/run-browser-collision-test.mjs
+
+      - name: Run fail-closed policy Chrome integration
+        run: node tools/browser-policy-fail-closed-test.mjs
 
       - name: Run telemetry and fast-retry Chrome integration
         run: node tools/run-browser-telemetry-test.mjs
