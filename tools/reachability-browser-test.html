@@ -27,6 +27,25 @@
         assert(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
       }
 
+      function runtimeDiagnostics(win) {
+        let scripts = [];
+        try {
+          scripts = [...win.document.scripts]
+            .map(script => script.src || '[inline]')
+            .filter(source => source.includes('fixed-step') || source.includes('obstacle') || source.includes('reachability'));
+        } catch (_error) {}
+        return {
+          game: Boolean(win.game),
+          grammarModule: Boolean(win.SexMagickObstacleGrammar),
+          patternRuntime: Boolean(win.__SEX_MAGICK_PATTERNS__),
+          policyModule: Boolean(win.SexMagickReachabilityPolicy),
+          policyRuntime: Boolean(win.__SEX_MAGICK_REACHABILITY_POLICY__),
+          timing: Boolean(win.__SEX_MAGICK_TIMING__),
+          collision: Boolean(win.__SEX_MAGICK_COLLISION__),
+          scripts
+        };
+      }
+
       function waitForRuntime(win, timeoutMs = 9000) {
         return new Promise((resolve, reject) => {
           const deadline = performance.now() + timeoutMs;
@@ -44,7 +63,7 @@
               }
             } catch (_error) {}
             if (performance.now() >= deadline) {
-              reject(new Error('Timed out waiting for integrated reachability runtime'));
+              reject(new Error(`Timed out waiting for integrated reachability runtime: ${JSON.stringify(runtimeDiagnostics(win))}`));
               return;
             }
             setTimeout(poll, 25);
@@ -177,6 +196,14 @@
         assert(fallback.fallbackApplied, 'Invalid pattern did not trigger fallback');
         assert(fallback.pattern.id === 'monas.still-point', 'Fallback was not deterministic still point');
 
+        const ledger = new grammar.PatternRunLedger({ storage: grammar.createMemoryStorage() });
+        ledger.begin({ runId: 'browser_policy_evidence', seed: 305419896, rite: 'MONAS', startReason: 'qa' });
+        const evidenceSpec = scheduler.next({ viewportHeight: 844, gap: 200, orbChance: 0 });
+        ledger.recordSpawn(evidenceSpec, { frames: 140, score: 0 });
+        const evidence = ledger.snapshot().current;
+        assert(evidence.reachabilityPolicyVersion === runtimePolicy.version, 'Run evidence lacks policy version');
+        assert(evidence.patternEvents[0].reachabilityPolicyVersion === runtimePolicy.version, 'Spawn evidence lacks policy version');
+
         const summary = [
           'PASS reachability browser integration',
           `POLICY ${runtimePolicy.mode} v${runtimePolicy.version}`,
@@ -187,7 +214,8 @@
           `ADJUSTED RETURN FLOW ${adjustedClassification.classification}`,
           `ADJUSTED MARGIN ${adjustedClassification.verifiedMargin}`,
           `RUNTIME ADJUSTMENT ${adjustedActive.baseId}`,
-          `MONAS FALLBACK ${fallback.pattern.id}`
+          `MONAS FALLBACK ${fallback.pattern.id}`,
+          `EVIDENCE POLICY VERSION ${evidence.reachabilityPolicyVersion}`
         ].join('\n');
 
         document.documentElement.dataset.status = 'pass';
