@@ -380,6 +380,40 @@
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   const query = new URLSearchParams(window.location.search);
   if (query.get('gateSlice') !== '1') return;
+
+  let leaderboardSuppressed = false;
+  try {
+    if (typeof Leaderboard !== 'undefined' && Leaderboard) {
+      const localOnly = async function gateSliceLocalOnlyLeaderboard() {
+        const list = document.getElementById('leaderboardList');
+        if (list) list.textContent = 'GATE SLICE — LOCAL ONLY';
+        const status = document.getElementById('uploadStatus');
+        if (status) status.textContent = 'GATE SLICE — LOCAL ONLY';
+        return { localOnly: true };
+      };
+      Leaderboard.init = localOnly;
+      Leaderboard.fetchTop = localOnly;
+      Leaderboard.submit = localOnly;
+      Leaderboard.__gateSliceLocalOnly = true;
+      leaderboardSuppressed = true;
+    }
+  } catch (error) {
+    console.error('[SEX MAGICK] Gate slice could not suppress leaderboard initialization', error);
+  }
+
+  globalThis.__SEX_MAGICK_GATE_PREFLIGHT__ = Object.freeze({
+    mode: 'gate-slice-local-only-preflight',
+    version: 1,
+    getSnapshot() {
+      return {
+        enabled: true,
+        leaderboardSuppressed,
+        guestSessionAllowed: false,
+        scoreSubmissionAllowed: false
+      };
+    }
+  });
+
   if (
     globalThis.SexMagickGateSlice ||
     document.querySelector('script[data-sex-magick-gate-slice-runtime]')
