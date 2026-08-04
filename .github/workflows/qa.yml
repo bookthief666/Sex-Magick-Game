@@ -2,7 +2,9 @@ name: Fast gameplay QA
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - develop/sex-magick-2.0
   push:
     branches:
       - develop/sex-magick-2.0
