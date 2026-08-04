@@ -28,6 +28,22 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+async function removeChromeProfile(targetPath) {
+  const retryableCodes = new Set(['ENOTEMPTY', 'EBUSY', 'EPERM']);
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    try {
+      await rm(targetPath, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (!retryableCodes.has(error.code)) throw error;
+      if (attempt === 6) {
+        console.warn(`Chrome profile cleanup skipped after ${attempt} attempts: ${error.message}`);
+        return;
+      }
+      await sleep(attempt * 100);
+    }
+  }
+}
 function findCommand(candidates) {
   for (const candidate of candidates) {
     const result = spawnSync('bash', ['-lc', `command -v ${candidate}`], { encoding: 'utf8' });
@@ -515,7 +531,7 @@ async function main() {
     for (const child of childProcesses.reverse()) {
       if (!child.killed) child.kill('SIGTERM');
     }
-    await rm(userDataDir, { recursive: true, force: true });
+    await removeChromeProfile(userDataDir);
   }
 }
 
