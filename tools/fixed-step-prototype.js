@@ -136,3 +136,26 @@
     });
   }
 })();
+
+(function bootstrapCollisionTruthRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickCollision ||
+    document.querySelector('script[data-sex-magick-collision-runtime]')
+  ) {
+    return;
+  }
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./collision-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickCollisionRuntime = 'true';
+  script.onerror = () => {
+    console.error('[SEX MAGICK] Collision truth runtime failed to load', script.src);
+  };
+  document.head.appendChild(script);
+})();
