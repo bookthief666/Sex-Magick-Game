@@ -156,10 +156,36 @@ function hardenBrowserCleanup(source) {
   );
 }
 
+function stabilizeTimingFixture(source) {
+  if (source.includes('CONFIG.ORB_SPAWN_CHANCE = 0;')) return source;
+
+  const oldFixture = [
+    '    game.settings.music = false;',
+    '    game.settings.sfx = false;',
+    '    game.settings.vibration = false;',
+    "    game.gameMode = 'HEX';",
+    '    game.startGame();'
+  ].join('\n');
+
+  const newFixture = [
+    '    // Remove random Orb collection and its hit-stop from the timing fixture.',
+    '    // Orb behavior is tested separately; this run isolates loop, gates, and obstacles.',
+    '    CONFIG.ORB_SPAWN_CHANCE = 0;',
+    '    game.settings.music = false;',
+    '    game.settings.sfx = false;',
+    '    game.settings.vibration = false;',
+    "    game.gameMode = 'HEX';",
+    '    game.startGame();'
+  ].join('\n');
+
+  return replaceExactlyOnce(source, oldFixture, newFixture, 'deterministic timing fixture');
+}
+
 async function promoteBrowserTest() {
   const original = await readFile(BROWSER_TEST_PATH, 'utf8');
   let source = addIntegratedRuntimeABSupport(original);
   source = hardenBrowserCleanup(source);
+  source = stabilizeTimingFixture(source);
   if (source === original) return false;
   await writeFile(BROWSER_TEST_PATH, source);
   return true;
