@@ -122,3 +122,14 @@ This log records consequential project decisions. Trivial implementation details
 **Rationale:** Fast retry improves arcade flow only if it is immediate, deterministic, and mechanically identical to the existing restart button. Reusing one restart path prevents divergent reset rules and duplicate loops.
 
 **Consequences:** Every retry receives a new local run ID and an exact frame-0, score-0 lifecycle origin; controls remain excluded; one pending RAF callback is required before and after retry; physical touch, iframe-focus, and cross-browser verification remain release gates.
+
+## D-012 — Use seeded named obstacle grammar without claiming solved fairness
+
+**Date:** 2026-08-04  
+**Status:** Accepted for development
+
+**Decision:** Replace independent random normal-pillar placement with per-run seeded Hexagram and Monas pattern catalogs organized through `safe`, `pressure`, `recovery`, and `climax` families. Preserve the existing spawn cadence, gap progression, physics, scoring, and progression systems. Constrain consecutive normalized gap-top movement to at most `0.18`.
+
+**Rationale:** Independent random pillars cannot be reliably reproduced, paced, audited, or compared between Rites. Named deterministic patterns create a stable design vocabulary and exact replay surface while keeping the existing core loop intact.
+
+**Consequences:** The same grammar version, seed, Rite, viewport, gap sequence, and Orb probability reproduce the same pattern sequence. Pattern evidence is retained locally under `sex_magick_patterns_v1` and linked only by the local run ID. The `0.18` envelope is explicitly a geometric constraint—not proof that every sequence is beatable. Automated trajectory reachability, high-speed/minimum-gap testing, independent Opus review, and physical playtesting remain release blockers. Local seeds and pattern records are debugging evidence and must not be treated as authoritative leaderboard validation or anti-cheat proof.
