@@ -373,3 +373,27 @@
 
   loadPolicyWhenGrammarIsReady();
 })();
+
+(function bootstrapGateSliceRuntime() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('gateSlice') !== '1') return;
+  if (
+    globalThis.SexMagickGateSlice ||
+    document.querySelector('script[data-sex-magick-gate-slice-runtime]')
+  ) {
+    return;
+  }
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./gate-slice-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickGateSliceRuntime = 'true';
+  script.onerror = () => {
+    console.error('[SEX MAGICK] Gate slice runtime failed to load', script.src);
+  };
+  document.head.appendChild(script);
+})();
