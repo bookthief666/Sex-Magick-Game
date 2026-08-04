@@ -144,3 +144,14 @@ This log records consequential project decisions. Trivial implementation details
 **Rationale:** The Milestone 4 `0.18` normalized transition envelope did not prevent impossible Monas routes on a tall Fold-open viewport at maximum speed and minimum gap. Geometric continuity is not equivalent to dynamic reachability under stateful velocity, damping, cooldown, and finite gate timing.
 
 **Consequences:** All 16 currently named patterns pass the 252-case hard matrix after the measured Monas corrections, with exact replay witnesses and eight-pixel margin. The solver is a deterministic quantized beam search, not a mathematical proof over continuous state space. It begins each isolated pattern centered in its first gate with zero velocity and cooldown; long cross-pattern compositions, incoming-state sets, human timing tolerance, active Fold transitions, physical-device behavior, and independent Opus review remain release blockers. The client-side solver and evidence remain debugging/fairness instrumentation and must not be treated as anti-cheat proof.
+
+## D-014 — Separate compositional reachability from human timing robustness
+
+**Date:** 2026-08-04  
+**Status:** Accepted as diagnostic foundation
+
+**Decision:** Propagate position, velocity, and cooldown through complete seeded pattern cycles from a 27-state incoming cloud; require exact full-sequence witness replay with eight additional pixels of clearance; and evaluate timing tolerance with distributed ±1–3-frame perturbations spanning the first through last witness jump. Classify technical reachability separately from provisional robustness. Do not retune obstacle patterns or claim human comfort solely from the resulting perturbation rates.
+
+**Rationale:** All tested full cycles and two-cycle sequences are technically reachable, but every one-cycle hard case is fragile under the selected witness and provisional timing tests. The current solver chooses a terminally convenient witness, not necessarily the most tolerant witness. Pattern changes made before reviewing witness-selection bias, state merging, beam pruning, perturbation construction, and threshold calibration could flatten the game without addressing the actual source of fragility.
+
+**Consequences:** Milestone 6 remains QA-only and is not loaded by the production entry point. The hard matrix records 16 technically reachable but fragile cases, zero robust candidates, and zero invalid cases. Independent Fable 5 review is required before deciding whether the next step is robustness-aware witness search, broader reachable-set modeling, pattern retuning, or Fold-resize work. Human comfort, physical input latency, active posture changes, and leaderboard authenticity remain unproven.
