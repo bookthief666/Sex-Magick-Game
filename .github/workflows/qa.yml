@@ -1,0 +1,34 @@
+name: QA checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - develop/sex-magick-2.0
+
+permissions:
+  contents: read
+
+jobs:
+  fixed-step-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Syntax-check timing scripts
+        run: |
+          node --check tools/fixed-step-clock.js
+          node --check tools/fixed-step-prototype.js
+          node --check tools/test-fixed-step-clock.js
+
+      - name: Run deterministic timing tests
+        run: node tools/test-fixed-step-clock.js
