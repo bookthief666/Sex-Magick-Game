@@ -25,13 +25,19 @@ It cannot establish broad player appeal because the owner knows the design and d
 develop/sex-magick-2.0
 ```
 
-Validated implementation head before documentation:
+Validated implementation head:
 
 ```text
 71d1fedf17b009963c33340a0f102a8886c0ddf5
 ```
 
-A later documentation-only head is acceptable when the Fast gameplay QA workflow remains green.
+Fast gameplay QA:
+
+```text
+30925941704 — success
+```
+
+A later documentation-only head is acceptable when Fast gameplay QA remains green.
 
 ## Start the local server in Termux
 
@@ -69,13 +75,7 @@ http://127.0.0.1:8000/tools/gate-slice-playtest.html?buffer=3&tester=OWNER-A&dev
 http://127.0.0.1:8000/tools/gate-slice-playtest.html?buffer=6&tester=OWNER-B&device=Fold%206%20closed&minutes=15
 ```
 
-Alternate the order on a later day if the first comparison is close:
-
-```text
-6 → 3
-```
-
-Do not enable `inputFeedback=1`; the ordinary player should not see `QUEUED`, `WAIT`, or `MISSED` coaching text.
+Alternate the order on a later day if the first comparison is close. Do not enable `inputFeedback=1`; ordinary players should not see `QUEUED`, `WAIT`, or `MISSED` coaching text.
 
 ## Optional Fold-open diagnostic
 
@@ -85,7 +85,7 @@ After the closed-posture sessions, run one shorter diagnostic in Fold-open postu
 http://127.0.0.1:8000/tools/gate-slice-playtest.html?buffer=3&tester=OWNER-FOLD-OPEN&device=Fold%206%20open&minutes=10
 ```
 
-Do not fold or unfold during an active run. Test the existing `POSTURE SHIFT / TAP TO RESUME` contract separately by changing posture once during a disposable run.
+Do not fold or unfold during an active scored run. Test the existing `POSTURE SHIFT / TAP TO RESUME` contract separately during a disposable run.
 
 Do not combine closed- and open-posture results into one buffer comparison because the geometry and grip differ.
 
@@ -199,3 +199,9 @@ Do not build or authorize from an owner-only pilot:
 - framework migration
 
 The next code change should respond to observed player evidence, not add another speculative system.
+
+## Related evidence
+
+- `docs/qa/m8-hexagram-gate-slice-results.md`
+- `docs/decisions/d018-opt-in-gate-slice.md`
+- `tools/gate-slice-playtest.html`
