@@ -16,7 +16,7 @@ assert.match(html, /value="6"/, 'six-step condition must exist');
 assert.match(html, /Did the game ever ignore you\?/, 'first required question must be exact');
 assert.match(html, /What is the game asking you to do\?/, 'second required question must be exact');
 assert.match(html, /getInputStats/, 'harness must capture input counters');
-assert.match(html, /inputStats\.lifetime/, 'protocol must direct analysis to lifetime counters');
+assert.match(html, /inputStats\?\.lifetime|inputStats\.lifetime/, 'protocol must direct analysis to lifetime counters');
 assert.match(html, /__SEX_MAGICK_TIMING__/, 'harness must use the exported timing API');
 assert.match(html, /setTextEnabled\?\.\(false\)/, 'player-facing input text must be disabled during the test');
 assert.doesNotMatch(html, /\bfetch\s*\(/, 'harness must not transmit reports');
