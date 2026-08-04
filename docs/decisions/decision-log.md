@@ -67,3 +67,36 @@ This log records consequential project decisions. Trivial implementation details
 **Rationale:** Fixed-step conversion touches hidden interactions across physics, spawning, timers, damping, effects, pause/resume, and score opportunity. Independent adversarial review is proportionate to the regression risk.
 
 **Handoff:** `docs/handoffs/claude-opus-m1-simulation-review.md`
+
+## D-007 — Make collision geometry canonical and visible
+
+**Date:** 2026-08-04  
+**Status:** Accepted
+
+**Decision:** Define canonical player, top-pillar, bottom-pillar, and safe-gap rectangles. Collision, diagnostics, and obstacle rendering must derive from the same pillar dimensions. Mere edge contact is safe; penetration is a collision.
+
+**Rationale:** The former diagonal pillar artwork implied safe empty space inside a rectangular lethal area. Collision fairness requires visual and mechanical boundaries to agree.
+
+**Consequences:** Gap-facing artwork remains inside the lethal rectangles, a debug hitbox overlay is available, and rendered-edge containment is covered by deterministic tests.
+
+## D-008 — Use full-screen gameplay touch with explicit control exclusion
+
+**Date:** 2026-08-04  
+**Status:** Accepted
+
+**Decision:** During active play, accept touch input anywhere in the gameplay surface except on actual controls. Remove the invisible lower-40-percent requirement and change the mobile instruction to `TAP ANYWHERE`.
+
+**Rationale:** A fading instruction must not conceal a permanent input restriction. Full-screen touch matches the displayed instruction and reduces missed inputs on tall phones and foldables.
+
+**Consequences:** Gameplay touches prevent default synthetic mouse duplication; control touches remain available for click synthesis; physical Android, Fold, and mobile Safari testing remains required.
+
+## D-009 — Give Player.jump sole ownership of accepted-jump feedback
+
+**Date:** 2026-08-04  
+**Status:** Accepted
+
+**Decision:** `Game.playerJump()` dispatches to `Player.jump()` once and emits no additional haptic. `Player.jump()` remains responsible for accepted-jump SFX and haptic behavior.
+
+**Rationale:** The previous split ownership produced two pulses for successful jumps and could pulse on cooldown-rejected input.
+
+**Consequences:** Input surfaces share one feedback path, cooldown behavior remains inside the player, and future accessibility or Rite-specific feedback changes have one owner.
