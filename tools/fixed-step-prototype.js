@@ -205,3 +205,26 @@
   };
   document.head.appendChild(script);
 })();
+
+(function bootstrapReachabilityPolicyRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickReachabilityPolicy ||
+    document.querySelector('script[data-sex-magick-reachability-policy]')
+  ) {
+    return;
+  }
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./reachability-policy.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickReachabilityPolicy = 'true';
+  script.onerror = () => {
+    console.error('[SEX MAGICK] Reachability policy failed to load', script.src);
+  };
+  document.head.appendChild(script);
+})();
