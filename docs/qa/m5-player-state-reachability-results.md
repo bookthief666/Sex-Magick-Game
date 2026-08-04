@@ -5,6 +5,8 @@ Protected baseline: `d3760aaea9c7322d48e471389a67c4e579743e2a`
 Tested implementation head: `34c0b1330515c3e40da7343efb1e28bb957949f9`  
 Final implementation workflow run: `30906325023`
 
+> **Superseded safety-margin interpretation:** The 252/252 result remains evidence that exact witnesses replayed under the Milestone 5 constant `110`-pixel gap model. It does **not** establish eight pixels of retained safety under the production per-gate breathing timeline, where spawned gaps can vary approximately from `100` to `120` pixels. The former production-facing eight-pixel safety claim is withdrawn until witnesses are generated against the real per-gate gap sequence. No pattern retuning follows from this correction.
+
 ## Scope
 
 Milestone 5 replaces the Milestone 4 assumption that a bounded gap-position delta is sufficient evidence of fairness with a player-state reachability model that uses the actual Hexagram and Monas step rules.
@@ -69,15 +71,15 @@ The solver performs a deterministic beam search over player state:
 
 Jump and no-jump successors are explored whenever legal. States are deduplicated with a quantized key and bounded by a deterministic beam. An accepted route is not trusted merely because it survives the beam search: its complete jump schedule is replayed through the non-pruned model and must pass every collision-window frame.
 
-Classification:
+Historical Milestone 5 classification under the constant-gap model:
 
-| Classification | Requirement |
+| Classification | Requirement within that model |
 |---|---|
 | `verified` | exact witness replay succeeds with at least 8 additional pixels of safe-gap clearance |
 | `marginal` | replay succeeds with 4 or 0 additional pixels but not 8 |
 | `invalid` | no replayed witness survives with zero additional margin |
 
-The eight-pixel requirement is additional to the existing 12-pixel effective hitbox half-size.
+The eight-pixel value was additional to the existing 12-pixel effective hitbox half-size. These labels remain valid descriptions of the historical constant-gap test output only; they are not production breathing-gap safety labels.
 
 ## Original defect reproduced
 
@@ -138,15 +140,15 @@ The permanent deterministic matrix evaluates:
 - Fold-open hard case: `884 × 1104`, desktop cooldown, speed `8.5`, gap `110`
 - Fold breathing phases `0` and `31`
 
-Total adjusted cases:
+Constant-gap adjusted cases:
 
-| Classification | Count |
+| Historical classification | Count |
 |---|---:|
 | Verified | 252 |
 | Marginal | 0 |
 | Invalid | 0 |
 
-Every accepted case produced a valid replay witness with at least eight pixels of additional clearance.
+Every accepted case produced a valid exact replay witness under the constant `110`-pixel gap model. The former statement that these cases established eight pixels of production safety is withdrawn because production spawns use a per-gate breathing gap timeline.
 
 Representative patterns are additionally exercised at:
 
@@ -198,7 +200,7 @@ The evidence remains local, bounded, identity-free, and non-authoritative for an
 
 ## Browser integration results
 
-The final Chrome integration reported:
+The final Chrome integration historically reported:
 
 ```text
 PASS reachability browser integration
@@ -213,6 +215,8 @@ RUNTIME ADJUSTMENT monas.lunar-sweep
 MONAS FALLBACK monas.still-point
 EVIDENCE POLICY VERSION 1
 ```
+
+`ADJUSTED MARGIN 8` describes the constant-gap test harness and must not be cited as a production breathing-gap guarantee.
 
 All prior deterministic and browser suites remained green:
 
@@ -232,13 +236,14 @@ Accepted for the development branch:
 - exact witness replay
 - reproduction of an original impossible Monas route
 - five measured Monas corrections
-- 252/252 hard-case verification with eight-pixel margin
+- 252/252 exact replay witnesses under the constant `110`-pixel gap model
 - deterministic fallback for future unverified patterns
 - policy-versioned local pattern evidence
 - no regression in Milestones 1–4
 
 Not established by this milestone:
 
+- eight pixels of retained safety under the production per-gate gap timeline
 - a mathematical proof over the continuous state space
 - reachability from every possible incoming player velocity and cooldown
 - proof for every arbitrarily long cross-pattern composition
@@ -249,7 +254,7 @@ Not established by this milestone:
 - physical-device performance of the solver-derived routes
 - leaderboard authenticity or anti-cheat validation
 
-The search uses deterministic quantization and beam pruning. Exact witness replay protects accepted routes from search false positives, but search pruning can still produce false negatives. The current matrix starts each isolated pattern centered in its first gate with zero vertical velocity. Long-sequence and incoming-state coverage remain the next fairness work.
+The search uses deterministic quantization and beam pruning. Exact witness replay protects accepted routes from search false positives, but search pruning can still produce false negatives. The current matrix starts each isolated pattern centered in its first gate with zero vertical velocity. Long-sequence and incoming-state coverage remain unresolved diagnostic work, not a prerequisite for the next human playtest.
 
 ## Rollback
 
