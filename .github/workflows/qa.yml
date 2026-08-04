@@ -11,9 +11,9 @@ permissions:
   contents: read
 
 jobs:
-  fixed-step-tests:
+  gameplay-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
 
     steps:
       - name: Check out repository
@@ -32,13 +32,16 @@ jobs:
           node --check tools/test-fixed-step-clock.js
           node --check tools/test-collision-runtime.js
           node --check tools/browser-fixed-step-test.mjs
+          node --check tools/browser-collision-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
-          node --check tools/promote-collision-runtime.mjs
 
       - name: Run deterministic unit tests
         run: |
           node tools/test-fixed-step-clock.js
           node tools/test-collision-runtime.js
 
-      - name: Run headless Chrome integration tests
+      - name: Run fixed-step Chrome integration
         run: node tools/run-browser-fixed-step-test.mjs
+
+      - name: Run collision and touch Chrome integration
+        run: node tools/browser-collision-test.mjs
