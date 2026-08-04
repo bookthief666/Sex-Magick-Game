@@ -177,7 +177,7 @@ function testFallbackPolicy() {
   assert.equal(event.reachabilityPolicyVersion, policy.POLICY_VERSION);
   assert.equal(event.reachabilityVerdict, 'verified');
   assert.equal(event.reachabilityFallback, true);
-  assert.equal(event.rejectedPatternId, 'hex.axis-hold');
+  assert.equal(event.rejectedPatternId, 'hex.gentle-step');
 }
 
 testPhysicsProfiles();
