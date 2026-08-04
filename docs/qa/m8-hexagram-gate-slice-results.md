@@ -3,7 +3,8 @@
 Date: 2026-08-04  
 Protected baseline: `d3760aaea9c7322d48e471389a67c4e579743e2a`  
 Final tested implementation head: `71d1fedf17b009963c33340a0f102a8886c0ddf5`  
-Fast gameplay QA run: `30925941704`
+Fast gameplay QA run: `30925941704`  
+Decision-log head: `835222380017b66e3ccb1aafc96a47c70550521e`
 
 ## Status
 
@@ -149,21 +150,7 @@ Inside `gateSlice=1`:
 
 The Chrome integration listened to every network request and asserted that no requested URL contained `lootlocker.io`.
 
-The local run evidence records:
-
-- Gate offers
-- Gate entries
-- Gate banks
-- Void attempts
-- Void survivals
-- Void deaths
-- Gnosis and score-source breakdown
-- recent event sequence
-- final score
-- selected input buffer
-- local input counters
-
-This remains debugging/playtest evidence, not anti-cheat proof.
+The local run evidence records Gate offers, entries, banks, Void outcomes, Gnosis and score-source breakdown, final score, selected input buffer, and local input counters. This is debugging/playtest evidence, not anti-cheat proof.
 
 ## Playtest harness
 
@@ -173,48 +160,13 @@ Use:
 tools/gate-slice-playtest.html
 ```
 
-The harness:
-
-- loads the opt-in slice in a same-origin iframe
-- supports 3- and 6-step input candidates
-- runs a 10-, 15-, or 20-minute session
-- clears prior Gate-slice history at session start
-- captures completed and active runs
-- aggregates Gate entry rate and Void survival rate
-- captures input counters
-- records the local-only preflight state
-- asks non-leading comprehension and replay-intent questions
-- exports one local JSON report
-- transmits nothing
+The harness loads the opt-in slice in a same-origin iframe, supports both input candidates, runs a 10-, 15-, or 20-minute session, captures completed and active runs, aggregates Gate entry and Void survival rates, asks comprehension and replay-intent questions, exports one local JSON report, and transmits nothing.
 
 ## Automated evidence
 
-### Deterministic contracts
+`tools/test-gate-slice.js` verifies pure state and scoring contracts. `tools/test-gate-slice-playtest-harness.js` verifies the playtest/export boundary.
 
-`tools/test-gate-slice.js` verifies:
-
-- opt-in query behavior
-- ordered band boundaries
-- top, center, bottom, and unsafe route classification
-- risk Gnosis and score awards
-- streak thresholds
-- full-meter Gate readiness
-- offer, bank, entry, survival, and death state transitions
-- timid-route Gnosis decay
-- Gate entry-rate calculation
-
-`tools/test-gate-slice-playtest-harness.js` verifies:
-
-- the harness controller parses
-- the slice and selected input buffer are passed to the iframe
-- current and completed evidence are captured
-- Gate entry and Void survival rates are derived
-- required questions are present
-- no fetch, XMLHttpRequest, sendBeacon, or WebSocket reporting API exists
-
-### Chrome integration
-
-`tools/browser-gate-slice-test.mjs` verified in the actual game realm:
+The actual Chrome game integration verified:
 
 ```text
 Monas: sealed
@@ -235,61 +187,45 @@ LootLocker network requests: 0
 Browser exceptions: 0
 ```
 
-The synthetic `2/3` entry rate exists only to verify arithmetic and persistence. It is not player evidence and must not be cited as a successful design result.
+The synthetic entry rate verifies arithmetic and persistence only. It is not player evidence.
 
-All existing fast gates remained green:
-
-- fixed-step refresh-rate parity and lifecycle invariants
-- collision, touch, input buffering, and accessibility
-- fail-closed Monas policy fault injection
-- telemetry and fast retry
-- deterministic obstacle grammar
+All existing fast gates remained green: fixed-step timing, collision and input, fail-closed policy behavior, telemetry and fast retry, and deterministic grammar.
 
 ## Established
 
-- the Gate slice is quarantined behind an explicit URL flag
-- ordinary branch behavior is unchanged without that flag
-- Hexagram-only menu state and ordered bands execute
-- risk route classification and Gnosis state transitions execute
-- the player can physically enter or bypass a Gate
-- banking, lethal Void entry, survival, and death execute
-- Gate evidence is retained locally and bounded
-- no LootLocker request is initiated in slice mode
-- the input buffer remains externally selectable
-- no Gate logic expanded the collision god-module
-- all fast deterministic and Chrome regressions pass
+- explicit opt-in quarantine
+- unchanged ordinary branch behavior without the query
+- ordered Hexagram bands
+- risk-route classification and Gnosis transitions
+- physical Gate entry and bypass
+- banking, lethal Void survival, and Void death
+- bounded local evidence
+- zero LootLocker requests in slice mode
+- selectable input-buffer candidate
+- no expansion of the collision god-module
+- green deterministic and Chrome regressions
 
 ## Not established
 
-- that a player notices or understands the risk-zone marks
-- that a player understands how Gnosis is earned
-- that a player anticipates the Gate
-- that entering versus banking is perceived as a real choice
-- that the Gate is positioned fairly among existing obstacles
-- that an eight-second Void is the correct duration
-- that ×3 banking and ×10 Void conversion are balanced
-- that the four band thresholds create good pacing
-- that the current HUD is readable on a physical Fold 6
-- that the three- or six-step input buffer is preferable
-- that Gate entry falls between 25% and 75% in human play
-- that the slice is fun, replayable, commercially useful, or release-ready
-- physical Android, Fold-open, iOS, Safari, or Firefox behavior
+- player comprehension of risk zones, Gnosis, Gate, or banking
+- intentionality of entering versus bypassing
+- fair Gate placement among existing obstacles
+- correct balance, pacing, duration, or HUD
+- preferred input buffer
+- human Gate entry rate
+- fun, replayability, product value, or release readiness
+- physical-device and cross-browser parity beyond the forthcoming Fold pilot
 - production safety margin under breathing gaps
-- leaderboard trustworthiness outside the quarantined slice
 
 ## Decision gate
 
-The next decision must use human evidence from the local harness.
-
-Primary signal:
+The next decision must use human evidence from the local harness. The primary provisional signal is:
 
 ```text
-Gate entry rate between 25% and 75%
+25% ≤ Gate entry rate ≤ 75%
 ```
 
-This range is a provisional indicator that the Gate is functioning as a decision rather than an automatic action. It is not sufficient by itself. Players must also understand the meter and Gate, report that entry and bypass felt intentional, and voluntarily choose another run.
-
-An owner-only Fold 6 pilot can identify obvious defects and comprehension failures. It cannot establish broad player appeal. Additional unfamiliar testers remain required before merge or deployment.
+This is useful only alongside comprehension, intentionality, reported feel, and voluntary replay. An owner-only Fold 6 pilot can identify obvious defects but cannot establish broad appeal.
 
 ## Deployment
 
