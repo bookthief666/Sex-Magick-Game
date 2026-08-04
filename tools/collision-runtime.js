@@ -73,17 +73,49 @@
     };
   }
 
-  function drawJaggedEdge(ctx, width, boundaryY, direction) {
-    const count = 5;
-    const inset = 8;
-    const safeStrokeInset = 2;
-    const baseY = boundaryY + direction * safeStrokeInset;
+  function buildJaggedEdgePoints(width, boundaryY, direction, options = {}) {
+    if (direction !== -1 && direction !== 1) {
+      throw new RangeError('direction must be -1 for a top edge or 1 for a bottom edge');
+    }
+
+    const resolvedWidth = Math.max(0, finiteNumber(width));
+    const resolvedBoundary = finiteNumber(boundaryY);
+    const count = Number.isInteger(options.count) && options.count > 0 ? options.count : 5;
+    const inset = Math.max(0, finiteNumber(options.inset, 8));
+    const safeStrokeInset = Math.max(0, finiteNumber(options.safeStrokeInset, 2));
+    const baseY = resolvedBoundary + direction * safeStrokeInset;
+    const points = [];
 
     for (let index = 0; index <= count; index += 1) {
-      const x = width / 2 - (index * width / count);
-      const y = baseY + direction * (index % 2 === 0 ? 0 : inset);
-      ctx.lineTo(x, y);
+      points.push({
+        x: resolvedWidth / 2 - (index * resolvedWidth / count),
+        y: baseY + direction * (index % 2 === 0 ? 0 : inset)
+      });
     }
+
+    return points;
+  }
+
+  function drawJaggedEdge(ctx, width, boundaryY, direction) {
+    for (const point of buildJaggedEdgePoints(width, boundaryY, direction)) {
+      ctx.lineTo(point.x, point.y);
+    }
+  }
+
+  function dispatchPlayerJump(gameInstance, playingState = 'playing') {
+    if (
+      !gameInstance ||
+      gameInstance.state !== playingState ||
+      !gameInstance.player ||
+      typeof gameInstance.player.jump !== 'function'
+    ) {
+      return false;
+    }
+
+    // Player.jump owns SFX and haptics. The former Game.playerJump implementation
+    // emitted a second haptic pulse after Player.jump had already emitted one.
+    gameInstance.player.jump();
+    return true;
   }
 
   function drawTruthfulPillar(ctx) {
@@ -109,6 +141,7 @@
     ctx.lineWidth = 4;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
 
+    // Every gap-facing top-edge point stays inside the top collision rectangle.
     ctx.beginPath();
     ctx.moveTo(-this.w / 2, -10);
     ctx.lineTo(this.w / 2, -10);
@@ -128,6 +161,7 @@
     this.drawPattern(ctx, Math.min(this.w, Math.max(0, this.top)) * 0.3);
     ctx.restore();
 
+    // Every gap-facing bottom-edge point stays inside the bottom collision rectangle.
     ctx.beginPath();
     ctx.moveTo(-this.w / 2, viewportHeight + 10);
     ctx.lineTo(this.w / 2, viewportHeight + 10);
@@ -274,6 +308,10 @@
 
     Pillar.prototype.draw = drawTruthfulPillar;
 
+    Game.prototype.playerJump = function singleFeedbackPlayerJump() {
+      return dispatchPlayerJump(this, GameState.PLAYING);
+    };
+
     Game.prototype.drawGameObjects = function drawGameObjectsWithCollisionTruth() {
       originalDrawGameObjects.call(this);
       if (debugEnabled) drawCollisionOverlay(this);
@@ -306,6 +344,7 @@
         return {
           state: game.state,
           touchPolicy: 'full-screen-gameplay-excluding-controls',
+          jumpFeedbackPolicy: 'player-owned-single-pulse',
           debugEnabled,
           player: game.getPlayerCollisionRect(),
           pillars: game.obstacles.map(pillar => pillar.getCollisionRects(game.canvas.height))
@@ -315,6 +354,7 @@
 
     console.info('[SEX MAGICK] Collision truth runtime installed', {
       touchPolicy: 'full-screen-gameplay-excluding-controls',
+      jumpFeedbackPolicy: 'player-owned-single-pulse',
       debugToggle: 'H'
     });
   }
@@ -324,6 +364,8 @@
     normalizeRect,
     rectsOverlap,
     buildPlayerRect,
-    buildPillarRects
+    buildPillarRects,
+    buildJaggedEdgePoints,
+    dispatchPlayerJump
   });
 });
