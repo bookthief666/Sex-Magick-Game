@@ -7,7 +7,11 @@ const {
   buildPlayerRect,
   buildPillarRects,
   buildJaggedEdgePoints,
-  dispatchPlayerJump
+  dispatchPlayerJump,
+  resolveJumpRequest,
+  advanceBufferedJumpState,
+  DEFAULT_INPUT_BUFFER_FRAMES,
+  MAX_INPUT_BUFFER_FRAMES
 } = require('./collision-runtime.js');
 
 function testNormalization() {
@@ -103,6 +107,43 @@ function testSingleFeedbackJumpDispatch() {
   assert.equal(dispatchPlayerJump({ state: 'playing', player: null }), false);
 }
 
+function testBufferedInputClassification() {
+  assert.equal(DEFAULT_INPUT_BUFFER_FRAMES, 3);
+  assert.equal(MAX_INPUT_BUFFER_FRAMES, 6);
+  assert.deepEqual(resolveJumpRequest(0, 3), {
+    status: 'immediate', pendingFrames: 0, cooldown: 0, bufferFrames: 3
+  });
+  assert.deepEqual(resolveJumpRequest(1, 3), {
+    status: 'buffered', pendingFrames: 1, cooldown: 1, bufferFrames: 3
+  });
+  assert.deepEqual(resolveJumpRequest(3, 3), {
+    status: 'buffered', pendingFrames: 3, cooldown: 3, bufferFrames: 3
+  });
+  assert.deepEqual(resolveJumpRequest(4, 3), {
+    status: 'rejected', pendingFrames: 0, cooldown: 4, bufferFrames: 3
+  });
+  assert.equal(resolveJumpRequest(1, 0).status, 'rejected');
+  assert.equal(resolveJumpRequest(2, 999).bufferFrames, 6, 'runtime buffer must remain bounded');
+}
+
+function testBufferedInputAdvance() {
+  assert.deepEqual(advanceBufferedJumpState({ cooldown: 0, pendingFrames: 0 }), {
+    status: 'idle', fire: false, pendingFrames: 0
+  });
+  assert.deepEqual(advanceBufferedJumpState({ cooldown: 2, pendingFrames: 3 }), {
+    status: 'pending', fire: false, pendingFrames: 2
+  });
+  assert.deepEqual(advanceBufferedJumpState({ cooldown: 1, pendingFrames: 2 }), {
+    status: 'pending', fire: false, pendingFrames: 1
+  });
+  assert.deepEqual(advanceBufferedJumpState({ cooldown: 0, pendingFrames: 1 }), {
+    status: 'fire', fire: true, pendingFrames: 0
+  });
+  assert.deepEqual(advanceBufferedJumpState({ cooldown: 2, pendingFrames: 1 }), {
+    status: 'expired', fire: false, pendingFrames: 0
+  });
+}
+
 testNormalization();
 testStrictOverlapPolicy();
 testPlayerInset();
@@ -110,5 +151,7 @@ testPillarRects();
 testViewportClamping();
 testRenderedEdgeTruth();
 testSingleFeedbackJumpDispatch();
+testBufferedInputClassification();
+testBufferedInputAdvance();
 
 console.log('collision-runtime: all geometry and input contracts passed');
