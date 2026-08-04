@@ -1,14 +1,14 @@
-(function installSexMagickFixedStepPrototype() {
+(function installSexMagickFixedStepRuntime() {
   'use strict';
 
   const api = globalThis.SexMagickFixedStep;
   if (!api?.FixedStepClock) {
-    throw new Error('SexMagickFixedStep.FixedStepClock must load before the prototype patch');
+    throw new Error('SexMagickFixedStep.FixedStepClock must load before the fixed-step runtime');
   }
   if (typeof Game === 'undefined' || typeof GameState === 'undefined') {
-    throw new Error('SEX MAGICK game classes are unavailable; inject after the game script loads');
+    throw new Error('SEX MAGICK game classes are unavailable; load the fixed-step runtime after the game script');
   }
-  if (Game.prototype.__fixedStepPrototypeInstalled) return;
+  if (Game.prototype.__fixedStepRuntimeInstalled) return;
 
   const STEP_MS = 1000 / 60;
   const MAX_STEPS_PER_FRAME = 5;
@@ -104,10 +104,10 @@
     }
   };
 
-  Game.prototype.__fixedStepPrototypeInstalled = true;
+  Game.prototype.__fixedStepRuntimeInstalled = true;
 
   globalThis.__SEX_MAGICK_TIMING__ = Object.freeze({
-    mode: 'branch-only-fixed-step-prototype',
+    mode: 'fixed-step-runtime',
     version: 1,
     stepMs: STEP_MS,
     maxStepsPerFrame: MAX_STEPS_PER_FRAME,
@@ -128,9 +128,11 @@
     }
   });
 
-  console.info('[SEX MAGICK QA] Fixed-step prototype installed', {
-    stepMs: STEP_MS,
-    maxStepsPerFrame: MAX_STEPS_PER_FRAME,
-    suspensionResetMs: SUSPENSION_RESET_MS
-  });
+  if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG) {
+    console.info('[SEX MAGICK] Fixed-step runtime installed', {
+      stepMs: STEP_MS,
+      maxStepsPerFrame: MAX_STEPS_PER_FRAME,
+      suspensionResetMs: SUSPENSION_RESET_MS
+    });
+  }
 })();
