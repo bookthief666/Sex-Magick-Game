@@ -29,8 +29,11 @@ async function waitForHttp(url, timeoutMs = 15_000) {
   while (Date.now() < deadline) {
     try {
       const response = await fetch(url);
-      if (response.ok) return;
-      lastError = new Error(`HTTP ${response.status}`);
+      const ok = response.ok;
+      const status = response.status;
+      await response.arrayBuffer();
+      if (ok) return;
+      lastError = new Error(`HTTP ${status}`);
     } catch (error) {
       lastError = error;
     }
@@ -154,7 +157,8 @@ async function main() {
   children.push(chrome);
 
   await waitForHttp(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
-  const targets = await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`)).json();
+  const targetsResponse = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`);
+  const targets = await targetsResponse.json();
   const pageTarget = targets.find(target => target.type === 'page');
   assert.ok(pageTarget?.webSocketDebuggerUrl, 'Chrome page target not found');
 
