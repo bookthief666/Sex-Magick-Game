@@ -10,7 +10,7 @@ const HTTP_PORT = Number(process.env.M9_QA_HTTP_PORT || 4186);
 const DEBUG_PORT = Number(process.env.M9_QA_DEBUG_PORT || 9236);
 const BASE_URL = `http://127.0.0.1:${HTTP_PORT}`;
 const children = [];
-const BLOCKED = [
+const BLOCKED_URLS = [
   'https://cdn.tailwindcss.com/*',
   'https://fonts.googleapis.com/*',
   'https://fonts.gstatic.com/*',
@@ -19,7 +19,7 @@ const BLOCKED = [
   'https://7l3mo9bh.api.lootlocker.io/*'
 ];
 
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function findCommand(candidates) {
   for (const candidate of candidates) {
@@ -58,10 +58,17 @@ class CDPClient {
   async connect() {
     this.socket = new WebSocket(this.url);
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('CDP open timeout')), 10_000);
-      this.socket.addEventListener('open', () => { clearTimeout(timer); resolve(); }, { once: true });
-      this.socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('CDP socket error')); }, { once: true });
+      const timeout = setTimeout(() => reject(new Error('CDP open timeout')), 10_000);
+      this.socket.addEventListener('open', () => {
+        clearTimeout(timeout);
+        resolve();
+      }, { once: true });
+      this.socket.addEventListener('error', () => {
+        clearTimeout(timeout);
+        reject(new Error('CDP socket error'));
+      }, { once: true });
     });
+
     this.socket.addEventListener('message', event => {
       const message = JSON.parse(String(event.data));
       if (message.id) {
@@ -144,11 +151,20 @@ async function main() {
   await waitForHttp(`${BASE_URL}/index.html`);
 
   const chrome = spawn(chromeBinary, [
-    '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
-    '--disable-background-networking', '--disable-default-apps', '--disable-extensions', '--mute-audio',
-    `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${userDataDir}`, 'about:blank'
+    '--headless=new',
+    '--no-sandbox',
+    '--disable-gpu',
+    '--disable-dev-shm-usage',
+    '--disable-background-networking',
+    '--disable-default-apps',
+    '--disable-extensions',
+    '--mute-audio',
+    `--remote-debugging-port=${DEBUG_PORT}`,
+    `--user-data-dir=${userDataDir}`,
+    'about:blank'
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
   children.push(chrome);
+
   await waitForHttp(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
   const targets = await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`)).json();
   const page = targets.find(target => target.type === 'page');
@@ -159,7 +175,7 @@ async function main() {
   await client.send('Page.enable');
   await client.send('Runtime.enable');
   await client.send('Network.enable');
-  await client.send('Network.setBlockedURLs', { urls: BLOCKED });
+  await client.send('Network.setBlockedURLs', { urls: BLOCKED_URLS });
   await client.send('Emulation.setUserAgentOverride', {
     userAgent: 'Mozilla/5.0 (Linux; Android 16; SM-F956U) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36'
   });
@@ -196,6 +212,7 @@ async function main() {
         globalThis.cancelAnimationFrame = id => {
           globalThis.__qaRafQueue = globalThis.__qaRafQueue.filter(item => item.id !== id);
         };
+
         AudioSys.pause = () => {};
         AudioSys.resume = () => {};
         AudioSys.play = () => {};
@@ -239,6 +256,8 @@ async function main() {
           draw() {}
         }];
         game.updateGameObjects();
+        const gatesAfterUnsafe = game.gateSliceState.gatesCleared;
+        const scoreAfterUnsafe = game.score;
         const afterUnsafe = __SEX_MAGICK_GATE_EVIDENCE__.getSessionSnapshot();
 
         game.obstacles = [];
@@ -274,9 +293,9 @@ async function main() {
           viewport: __SEX_MAGICK_VIEWPORT__.getSnapshot(),
           htmlProfile: document.documentElement.dataset.smViewportProfile,
           gatesBeforeUnsafe,
-          gatesAfterUnsafe: game.gateSliceState.gatesCleared,
+          gatesAfterUnsafe,
           scoreBeforeUnsafe,
-          scoreAfterUnsafe: scoreBeforeUnsafe,
+          scoreAfterUnsafe,
           unsafeCount: afterUnsafe.unsafeCrossings.length,
           duringDecision: duringDecision.activeDecision,
           afterEntry,
