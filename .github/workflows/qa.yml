@@ -36,4 +36,21 @@ jobs:
         run: node tools/test-fixed-step-clock.js
 
       - name: Run headless Chrome integration tests
-        run: node tools/run-browser-fixed-step-test.mjs
+        shell: bash
+        run: |
+          set +e
+          node tools/run-browser-fixed-step-test.mjs 2>&1 | tee /tmp/browser-fixed-step.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+
+          if grep -q "All fixed-step browser integration checks passed" /tmp/browser-fixed-step.log \
+            && grep -q "ENOTEMPTY: directory not empty.*sex-magick-chrome" /tmp/browser-fixed-step.log; then
+            echo "::warning::Browser assertions passed; ignored a Chrome profile cleanup race."
+            exit 0
+          fi
+
+          exit "$status"
