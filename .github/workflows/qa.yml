@@ -41,6 +41,7 @@ jobs:
           node --check tools/test-fixed-step-clock.js
           node --check tools/test-collision-runtime.js
           node --check tools/test-input-feedback-policy.js
+          node --check tools/test-r1-playtest-harness.js
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
           node --check tools/test-player-reachability.js
@@ -62,6 +63,7 @@ jobs:
           node tools/test-fixed-step-clock.js
           node tools/test-collision-runtime.js
           node tools/test-input-feedback-policy.js
+          node tools/test-r1-playtest-harness.js
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
           node tools/test-m7-review-diagnostics.js
