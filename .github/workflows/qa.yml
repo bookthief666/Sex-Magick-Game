@@ -48,6 +48,7 @@ jobs:
           node --check tools/run-browser-telemetry-test.mjs
           node --check tools/run-browser-obstacle-grammar-test.mjs
           node --check tools/run-browser-reachability-test.mjs
+          node --check tools/run-browser-compositional-test.mjs
 
       - name: Run deterministic unit tests
         run: |
@@ -72,3 +73,6 @@ jobs:
 
       - name: Run reachability and physics parity Chrome integration
         run: node tools/run-browser-reachability-test.mjs
+
+      - name: Run compositional reachability Chrome integration
+        run: node tools/run-browser-compositional-test.mjs
