@@ -240,6 +240,9 @@ const TEST_SETUP = `
       if (this.jumpCooldown > 0) this.jumpCooldown -= 1;
     };
 
+    // Remove random Orb collection and its hit-stop from the timing fixture.
+    // Orb behavior is tested separately; this run isolates loop, gates, and obstacles.
+    CONFIG.ORB_SPAWN_CHANCE = 0;
     game.settings.music = false;
     game.settings.sfx = false;
     game.settings.vibration = false;
