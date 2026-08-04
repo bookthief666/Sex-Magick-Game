@@ -4,7 +4,8 @@ Date: 2026-08-04
 Protected baseline: `d3760aaea9c7322d48e471389a67c4e579743e2a`  
 Initial integrated runtime commit: `f65b17a3d4857508f2b956dc288c9bde25972e9d`  
 Runtime semantic cleanup: `86eb41d054bfec95ba620ed38eeeb89e9ad78a34`  
-Browser harness cleanup hardening: `aedaf5300554c6e59794d8c6e836067ceda3c8d0`
+Browser harness cleanup hardening: `aedaf5300554c6e59794d8c6e836067ceda3c8d0`  
+Deterministic timing-fixture correction: `a046c68a4dcf44eb840b162c190ae2c1681418ee`
 
 ## Scope
 
@@ -50,7 +51,9 @@ The pure scheduler test passed for:
 
 The browser integration test executes the actual `index.html` game classes. Optional external services are blocked so results do not depend on Google Drive, jsDelivr, Google Fonts, Tailwind CDN, or LootLocker.
 
-The player update and death behavior are neutralized only for controlled timing measurement. Obstacle spawning, travel, score events, and the real game-loop lifecycle continue to execute.
+The player update and death behavior are neutralized only for controlled timing measurement. Random Orb generation is disabled in this specific timing fixture because an Orb pickup deliberately applies three frames of hit stop; leaving it random made an exact baseline frame-count assertion nondeterministic. Orb and hit-stop behavior remain unchanged in the game and require separate gameplay tests.
+
+Obstacle spawning, travel, gate-score events, and the real game-loop lifecycle continue to execute.
 
 ### Ten-second controlled run
 
@@ -99,7 +102,7 @@ The repository now runs on every development push and pull request:
 - deterministic scheduler tests
 - actual headless Chrome integration tests
 
-The browser runner retries Chrome profile deletion so cleanup cannot hide or replace a gameplay assertion failure.
+The browser runner retries Chrome profile deletion so cleanup cannot hide or replace a gameplay assertion failure. The timing fixture removes Orb randomness so refresh-rate assertions measure the same deterministic gate-and-obstacle scenario on every run.
 
 ## Acceptance status
 
@@ -116,6 +119,9 @@ Accepted for the development branch:
 Still required before itch.io release:
 
 - subjective movement and game-feel comparison on physical 60 and 120 Hz displays
+- real Hexagram and Monas jump-arc tests
+- Orb pickup and hit-stop equivalence across refresh rates
+- real collision and death transitions during catch-up
 - Android Chrome smoke test
 - Samsung Fold 6 closed/open posture and touch test
 - desktop Safari and Firefox smoke tests
