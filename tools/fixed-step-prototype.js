@@ -145,18 +145,14 @@
     typeof document === 'undefined' ||
     globalThis.SexMagickCollision ||
     document.querySelector('script[data-sex-magick-collision-runtime]')
-  ) {
-    return;
-  }
+  ) return;
 
   const currentSource = document.currentScript?.src || window.location.href;
   const script = document.createElement('script');
   script.src = new URL('./collision-runtime.js', currentSource).href;
   script.async = false;
   script.dataset.sexMagickCollisionRuntime = 'true';
-  script.onerror = () => {
-    console.error('[SEX MAGICK] Collision truth runtime failed to load', script.src);
-  };
+  script.onerror = () => console.error('[SEX MAGICK] Collision truth runtime failed to load', script.src);
   document.head.appendChild(script);
 })();
 
@@ -168,18 +164,14 @@
     typeof document === 'undefined' ||
     globalThis.SexMagickInputFeedbackPolicy ||
     document.querySelector('script[data-sex-magick-input-feedback-policy]')
-  ) {
-    return;
-  }
+  ) return;
 
   const currentSource = document.currentScript?.src || window.location.href;
   const script = document.createElement('script');
   script.src = new URL('./input-feedback-policy.js', currentSource).href;
   script.async = false;
   script.dataset.sexMagickInputFeedbackPolicy = 'true';
-  script.onerror = () => {
-    console.error('[SEX MAGICK] Input feedback policy failed to load', script.src);
-  };
+  script.onerror = () => console.error('[SEX MAGICK] Input feedback policy failed to load', script.src);
   document.head.appendChild(script);
 })();
 
@@ -191,18 +183,14 @@
     typeof document === 'undefined' ||
     globalThis.SexMagickRunTelemetry ||
     document.querySelector('script[data-sex-magick-run-telemetry]')
-  ) {
-    return;
-  }
+  ) return;
 
   const currentSource = document.currentScript?.src || window.location.href;
   const script = document.createElement('script');
   script.src = new URL('./run-telemetry.js', currentSource).href;
   script.async = false;
   script.dataset.sexMagickRunTelemetry = 'true';
-  script.onerror = () => {
-    console.error('[SEX MAGICK] Local run telemetry failed to load', script.src);
-  };
+  script.onerror = () => console.error('[SEX MAGICK] Local run telemetry failed to load', script.src);
   document.head.appendChild(script);
 })();
 
@@ -214,18 +202,14 @@
     typeof document === 'undefined' ||
     globalThis.SexMagickObstacleGrammar ||
     document.querySelector('script[data-sex-magick-obstacle-grammar]')
-  ) {
-    return;
-  }
+  ) return;
 
   const currentSource = document.currentScript?.src || window.location.href;
   const script = document.createElement('script');
   script.src = new URL('./obstacle-grammar.js', currentSource).href;
   script.async = false;
   script.dataset.sexMagickObstacleGrammar = 'true';
-  script.onerror = () => {
-    console.error('[SEX MAGICK] Deterministic obstacle grammar failed to load', script.src);
-  };
+  script.onerror = () => console.error('[SEX MAGICK] Deterministic obstacle grammar failed to load', script.src);
   document.head.appendChild(script);
 })();
 
@@ -351,9 +335,7 @@
     script.async = false;
     script.dataset.sexMagickReachabilityPolicy = 'true';
     script.onload = () => verifyPolicyInstallation();
-    script.onerror = () => {
-      installFailClosedGuard(`policy script failed to load: ${script.src}`);
-    };
+    script.onerror = () => installFailClosedGuard(`policy script failed to load: ${script.src}`);
     document.head.appendChild(script);
   }
 
@@ -417,17 +399,51 @@
   if (
     globalThis.SexMagickGateSlice ||
     document.querySelector('script[data-sex-magick-gate-slice-runtime]')
-  ) {
-    return;
-  }
+  ) return;
 
   const currentSource = document.currentScript?.src || window.location.href;
   const script = document.createElement('script');
   script.src = new URL('./gate-slice-runtime.js', currentSource).href;
   script.async = false;
   script.dataset.sexMagickGateSliceRuntime = 'true';
-  script.onerror = () => {
-    console.error('[SEX MAGICK] Gate slice runtime failed to load', script.src);
-  };
+  script.onerror = () => console.error('[SEX MAGICK] Gate slice runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapViewportRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickViewport ||
+    document.querySelector('script[data-sex-magick-viewport-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./viewport-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickViewportRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Viewport profile runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapGateEvidenceRuntime() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (new URLSearchParams(window.location.search).get('gateSlice') !== '1') return;
+  if (
+    globalThis.SexMagickGateEvidence ||
+    document.querySelector('script[data-sex-magick-gate-evidence-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./gate-evidence-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickGateEvidenceRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Gate evidence runtime failed to load', script.src);
   document.head.appendChild(script);
 })();
