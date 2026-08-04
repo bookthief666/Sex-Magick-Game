@@ -6,7 +6,9 @@ Opus review target: `1d374dea03941426ecd224330275aa05668b7d86`
 Player-facing implementation head with full legacy QA: `d086658e959288ff2136203ee602a1c62261aae1`  
 Full legacy QA workflow run: `30917555952`  
 Diagnostic implementation and one-time audit head: `2c9f209f5b5acee8f6dd883bac5bce6eeeda99d5`  
-One-time Milestone 7 audit workflow run: `30918191676`
+One-time Milestone 7 audit workflow run: `30918191676`  
+Final browser-validated code head: `d66ef5aff9538783abb4a964229f97bbb71f525b`  
+Final browser-validation workflow run: `30919324210`
 
 ## Scope
 
@@ -320,6 +322,32 @@ Passed:
 - collision/input/touch Chrome integration
 - telemetry/retry Chrome integration
 - obstacle-grammar Chrome integration
+
+### Final real-Player browser gate
+
+Commit:
+
+```text
+d66ef5aff9538783abb4a964229f97bbb71f525b
+```
+
+Workflow:
+
+```text
+30919324210
+```
+
+The Chrome integration used the actual mobile `Player` runtime and confirmed:
+
+- one-step-early input queues with a three-step buffer
+- vertical impulse does not occur at queue time
+- the queued Hexagram impulse fires exactly once on the first legal step
+- the accepted mobile cooldown is eight steps
+- an earlier cooldown input is recorded as rejected
+- a cooldown-zero input fires immediately
+- stable player and hazard colors are exposed by the runtime
+- reduced-motion and low-flash state can be enabled
+- full-screen touch, control exclusion, collision truth, one-death catch-up behavior, telemetry/retry, and obstacle grammar remain green
 
 ## Acceptance status
 
