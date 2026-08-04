@@ -137,46 +137,46 @@ This log records consequential project decisions. Trivial implementation details
 ## D-013 — Require exact player-state reachability and policy-versioned fallback
 
 **Date:** 2026-08-04  
-**Status:** Accepted for development
+**Status:** Accepted for development; production safety interpretation superseded by D-017
 
-**Decision:** Evaluate named obstacle patterns with a deterministic player-state solver that models the current Rite physics, cooldown, collision window, breathing motion, speed, gap, and viewport. Accept a tested route only when its complete jump witness replays successfully with at least eight additional pixels of clearance. Apply measured corrections to the five Monas patterns that failed the hard matrix. If a future pattern is absent from the verified verdict set, deterministically substitute `hex.return-to-axis` for Hexagram or `monas.still-point` for Monas. Record the reachability policy version and fallback/adjustment verdict in local pattern evidence.
+**Decision:** Evaluate named obstacle patterns with a deterministic player-state solver that models the current Rite physics, cooldown, collision window, breathing motion, speed, gap, and viewport. Apply measured corrections to the five Monas patterns that failed the hard constant-gap matrix. If a future pattern is absent from the verified verdict set, deterministically substitute `hex.return-to-axis` for Hexagram or `monas.still-point` for Monas. Record the reachability policy version and fallback/adjustment verdict in local pattern evidence.
 
-**Rationale:** The Milestone 4 `0.18` normalized transition envelope did not prevent impossible Monas routes on a tall Fold-open viewport at maximum speed and minimum gap. Geometric continuity is not equivalent to dynamic reachability under stateful velocity, damping, cooldown, and finite gate timing.
+**Rationale:** The Milestone 4 `0.18` normalized transition envelope did not prevent impossible Monas routes on a tall Fold-open viewport at maximum speed and minimum tested gap. Geometric continuity is not equivalent to dynamic reachability under stateful velocity, damping, cooldown, and finite gate timing.
 
-**Consequences:** All 16 currently named patterns pass the 252-case hard matrix after the measured Monas corrections, with exact replay witnesses and eight-pixel margin. The solver is a deterministic quantized beam search, not a mathematical proof over continuous state space. It begins each isolated pattern centered in its first gate with zero velocity and cooldown; long cross-pattern compositions, incoming-state sets, human timing tolerance, active Fold transitions, physical-device behavior, and independent Opus review remain release blockers. The client-side solver and evidence remain debugging/fairness instrumentation and must not be treated as anti-cheat proof.
+**Consequences:** All 16 named patterns retain exact replay witnesses under the Milestone 5 constant `110`-pixel matrix after the measured Monas corrections. That result does not establish a positive production safety margin because production uses a per-gate breathing timeline that can approach `100` pixels. Human timing tolerance, active Fold transitions, physical-device behavior, and production-gap witnesses remain unresolved.
 
 ## D-014 — Separate compositional reachability from human timing robustness
 
 **Date:** 2026-08-04  
 **Status:** Accepted as diagnostic foundation; interpretation superseded in part by D-017
 
-**Decision:** Propagate position, velocity, and cooldown through complete seeded pattern cycles from a 27-state incoming cloud; require exact full-sequence witness replay with eight additional pixels of clearance; and evaluate timing tolerance with distributed ±1–3-frame perturbations spanning the first through last witness jump. Classify technical reachability separately from provisional robustness. Do not retune obstacle patterns or claim human comfort solely from the resulting perturbation rates.
+**Decision:** Propagate position, velocity, and cooldown through complete seeded pattern cycles from a 27-state incoming cloud; require exact full-sequence witness replay under the tested model; and evaluate timing tolerance with distributed ±1–3-frame perturbations spanning the first through last witness jump. Classify technical reachability separately from provisional robustness. Do not retune obstacle patterns or claim human comfort solely from the resulting perturbation rates.
 
-**Rationale:** All tested full cycles and two-cycle sequences are technically reachable. The original Milestone 6 instrumentation classified every one-cycle hard case as fragile under an eight-pixel retained-clearance policy. The current solver chooses a terminally convenient witness, not necessarily the most tolerant witness. Pattern changes made before reviewing witness-selection bias, state merging, beam pruning, perturbation construction, and threshold calibration could flatten the game without addressing the actual source of fragility.
+**Rationale:** All tested full cycles and two-cycle sequences are technically reachable. The original Milestone 6 instrumentation classified every one-cycle hard case as fragile under an eight-pixel retained-clearance policy. The current solver chooses a terminally convenient witness, not necessarily the most tolerant witness.
 
 **Consequences:** Milestone 6 remains QA-only and is not loaded by the production entry point. Its exact replay witnesses and composition architecture remain accepted. Its original perturbation percentages and surviving-initial-identity interpretation must not be reused as ordinary survival or incoming-corridor evidence; D-017 records the corrected interpretation.
 
-## D-015 — Use a short bounded input buffer and stable gameplay-authoritative contrast
+## D-015 — Use bounded input-buffer candidates and stable gameplay-authoritative contrast
 
 **Date:** 2026-08-04  
-**Status:** Accepted for development and physical playtest
+**Status:** Accepted for development and physical playtest; final buffer unresolved
 
-**Decision:** Queue one jump intent only when the current cooldown will expire within three authoritative simulation steps. Fire that intent on the first legal step, coalesce duplicate pending taps, reject earlier taps with explicit quiet feedback, and expose local counters for immediate, queued, fired, rejected, expired, and coalesced input. Reserve stable high-contrast colors for the player core and lethal pillar silhouette while retaining psychedelic motion and color in subordinate atmospheric channels.
+**Decision:** Support one queued jump intent within a bounded cooldown window, coalesce duplicate pending taps, reject earlier taps with quiet feedback, and expose local counters for immediate, queued, fired, rejected, expired, and coalesced input. Reserve stable high-contrast colors for the player core and lethal pillar silhouette while retaining psychedelic motion and color in subordinate atmospheric channels.
 
-**Rationale:** The former `Player.jump()` silently returned during cooldown, making a rejected tap indistinguishable from player error. At the same time, full-spectrum player and pillar cycling could erase collision readability. A short bounded buffer addresses near-boundary intent without creating a long latent action; stable authoritative contrast preserves legibility without discarding the game's visual identity.
+**Rationale:** The former `Player.jump()` silently returned during cooldown, making a rejected tap indistinguishable from player error. Full-spectrum player and pillar cycling could also erase collision readability.
 
-**Consequences:** Three steps, approximately 50 ms at 60 Hz, is the initial candidate—not a final human-optimal value. Development may compare zero, three, four, and six steps, but the bounded audit found no additional machine benefit from four or six in the current sample. Physical Android and Fold testing is required before the value is accepted for release. Reduced-motion and low-flash settings, lower jump-particle density, and pause-on-major-resize are part of the same player-truth boundary.
+**Consequences:** Three and six simulation steps remain human-test candidates through `?inputBuffer=3` and `?inputBuffer=6`. Machine evidence does not select the final value. Reduced-motion and low-flash settings, lower jump-particle density, and pause-on-major-resize are part of the same player-truth boundary.
 
 ## D-016 — Fail closed on missing reachability policy and separate fast QA from heavy audits
 
 **Date:** 2026-08-04  
 **Status:** Accepted
 
-**Decision:** If the reachability correction policy fails to load or install, preserve Hexagram play but seal Monas and pause any active Monas run rather than scheduling an unverified catalog. Run rapid gameplay contracts and four Chrome integrations on every development push. Move isolated and compositional reachability matrices to a manual, weekly, and relevant-path-triggered audit workflow.
+**Decision:** If the reachability correction policy fails to load or install, preserve Hexagram play but seal Monas and pause any active Monas run rather than scheduling an unverified catalog. Run rapid gameplay contracts and Chrome integrations on every development push. Move isolated and compositional reachability matrices to a manual, weekly, and relevant-path-triggered audit workflow.
 
 **Rationale:** The previous policy bootstrap only logged failure, allowing the uncorrected Monas catalog to remain reachable despite Milestone 5 proving specific original routes impossible. Heavy solver matrices also taxed every creative edit even though their meaning changes primarily with physics, patterns, policy, or solver code.
 
-**Consequences:** Policy status is exposed through `window.__SEX_MAGICK_POLICY_BOOTSTRAP__`. The fast workflow targets an eight-minute ceiling. Full reachability evidence remains available through `.github/workflows/reachability-audit.yml`, including manual execution before release or after pattern-affecting changes.
+**Consequences:** Policy status is exposed through `window.__SEX_MAGICK_POLICY_BOOTSTRAP__`. Full reachability evidence remains available through `.github/workflows/reachability-audit.yml`.
 
 ## D-017 — Report collision survival separately from retained safety margin and deprecate the initial-identity inference
 
@@ -185,8 +185,21 @@ This log records consequential project decisions. Trivial implementation details
 
 **Decision:** Use `margin = 0` to report collision survival and a separately named positive-margin metric to report retained safety clearance. Do not infer incoming-state diversity from the surviving `initialStateId` count after quantized state deduplication. Model production-style per-gate gap breathing before using a solver result to justify pattern retuning or safety claims.
 
-**Rationale:** The Milestone 6 `10.9%–43.6%` range replayed perturbations with an eight-pixel margin and therefore counted survivable near-misses as failures. The one-time Milestone 7 audit measured constant-gap margin-0 survival at `32.73%–74.55%`, improving to `38.18%–80.00%` with a three-step buffer. Cooldown-tight witness intervals were only `0%–18.18%`, confirming the input-deletion mechanism but rejecting an estimate that it dominated half the transitions. When production-style gap breathing was introduced, margin-0 survival ranged `20.00%–69.09%` unbuffered and `29.09%–74.55%` buffered, while eight-pixel safety retention fell to `0%–5.45%` because the witness had been generated for different geometry.
+**Rationale:** The Milestone 6 `10.9%–43.6%` range replayed perturbations with an eight-pixel margin and therefore counted survivable near-misses as failures. The one-time Milestone 7 audit measured constant-gap margin-0 survival at `32.73%–74.55%`, improving to `38.18%–80.00%` with a three-step buffer. Cooldown-tight witness intervals were only `0%–18.18%`. With production-style gap breathing, margin-0 survival ranged `20.00%–69.09%` unbuffered and `29.09%–74.55%` buffered, while eight-pixel safety retention fell to `0%–5.45%` because the witness had been generated for different geometry.
 
 State deduplication also discarded all but one representative `initialStateId` when histories converged. The resulting count proves neither a narrow nor a wide incoming corridor.
 
-**Consequences:** The old Milestone 6 label `technically-reachable-fragile` remains historical diagnostic output, not a human-fairness verdict. Existing patterns will not be retuned from those percentages. Future provenance analysis must union state-origin masks or solve initial states independently. Future safety witnesses must be generated against the real per-gate gap timeline. No further solver expansion precedes the Hexagram Gate/Gnosis/Void vertical slice.
+**Consequences:** The old Milestone 6 label `technically-reachable-fragile` remains historical diagnostic output, not a human-fairness verdict. Existing patterns will not be retuned from those percentages. Future provenance analysis must union state-origin masks or solve initial states independently. Future safety witnesses must be generated against the real per-gate gap timeline.
+
+## D-018 — Implement the Gate hypothesis as a quarantined opt-in slice
+
+**Date:** 2026-08-04  
+**Status:** Accepted for development experiment only
+
+**Decision:** Implement the Hexagram Gnosis/Gate/Void hypothesis behind `?gateSlice=1`, without replacing ordinary branch behavior, merging the draft PR, or deploying. Preserve both input-buffer candidates. Keep the experiment in `tools/gate-slice-runtime.js` rather than expanding `tools/collision-runtime.js`.
+
+**Rationale:** The project had repeatedly deferred its central player-facing wager hypothesis while adding verification infrastructure. The owner explicitly directed development to continue while currently having access only to one Samsung Galaxy Z Fold 6. A query-quarantined implementation allows physical evaluation without treating the missing multi-person evidence as completed.
+
+**Consequences:** The slice contains four ordered bands, visible risk zones, Gnosis gain and decay, a physical enter-or-bypass Gate, banking, a lethal transformed Void, bounded local evidence, and a Fold-friendly playtest harness. Monas is sealed in slice mode. The leaderboard is disabled before initialization, and browser QA proves that no LootLocker request is initiated. Automated success proves execution only—not fun, comprehension, balance, replayability, or release readiness.
+
+**Full record:** `docs/decisions/d018-opt-in-gate-slice.md`
