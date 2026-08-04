@@ -16,6 +16,7 @@ on:
       - 'tools/compositional-reachability.js'
       - 'tools/compositional-robustness.js'
       - 'tools/m7-review-diagnostics.js'
+      - 'tools/run-m7-review-audit.js'
       - 'tools/test-player-reachability.js'
       - 'tools/test-compositional-reachability.js'
       - 'tools/test-m7-review-diagnostics.js'
@@ -24,7 +25,7 @@ on:
       - 'tools/run-browser-reachability-test.mjs'
       - 'tools/run-browser-compositional-test.mjs'
       - '.github/workflows/reachability-audit.yml'
-  
+
 permissions:
   contents: read
 
@@ -49,6 +50,7 @@ jobs:
           node --check tools/compositional-reachability.js
           node --check tools/compositional-robustness.js
           node --check tools/m7-review-diagnostics.js
+          node --check tools/run-m7-review-audit.js
           node --check tools/test-player-reachability.js
           node --check tools/test-compositional-reachability.js
           node --check tools/test-m7-review-diagnostics.js
@@ -63,6 +65,9 @@ jobs:
 
       - name: Run Milestone 7 diagnostic contracts
         run: node tools/test-m7-review-diagnostics.js
+
+      - name: Run bounded Opus review audit
+        run: node tools/run-m7-review-audit.js
 
       - name: Run real-player reachability Chrome integration
         run: node tools/run-browser-reachability-test.mjs
