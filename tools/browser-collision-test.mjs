@@ -239,6 +239,35 @@ async function main() {
         Haptics.crash = () => {};
         Haptics.levelUp = () => {};
         Haptics.start = () => {};
+        game.settings.sfx = false;
+
+        __SEX_MAGICK_COLLISION__.setInputBufferFrames(3);
+        __SEX_MAGICK_COLLISION__.resetInputStats();
+        game.state = GameState.PLAYING;
+        game.particles = [];
+        const inputPlayer = new Player('HEX');
+        game.player = inputPlayer;
+        inputPlayer.jumpCooldown = 1;
+        inputPlayer.vy = 0;
+        inputPlayer.jump();
+        const queuedPendingFrames = inputPlayer.__sexMagickPendingJumpFrames;
+        const queuedVy = inputPlayer.vy;
+        inputPlayer.update();
+        const firedVy = inputPlayer.vy;
+        const firedCooldown = inputPlayer.jumpCooldown;
+        inputPlayer.__sexMagickPendingJumpFrames = 0;
+        inputPlayer.jumpCooldown = 8;
+        inputPlayer.jump();
+        inputPlayer.jumpCooldown = 0;
+        inputPlayer.jump();
+        const inputStats = __SEX_MAGICK_COLLISION__.getInputStats();
+        const inputBufferFrames = __SEX_MAGICK_COLLISION__.getInputBufferFrames();
+        const gameplayColors = __SEX_MAGICK_COLLISION__.colors;
+        __SEX_MAGICK_COLLISION__.setReducedMotion(true);
+        __SEX_MAGICK_COLLISION__.setLowFlash(true);
+        const accessibilityEnabled = __SEX_MAGICK_COLLISION__.getAccessibility();
+        __SEX_MAGICK_COLLISION__.setReducedMotion(false);
+        __SEX_MAGICK_COLLISION__.setLowFlash(false);
 
         const pillar = new Pillar(0, 180);
         pillar.x = 200;
@@ -312,6 +341,15 @@ async function main() {
 
         return {
           runtimeVersion: __SEX_MAGICK_COLLISION__.version,
+          inputTruthVersion: __SEX_MAGICK_COLLISION__.inputTruthVersion,
+          inputBufferFrames,
+          queuedPendingFrames,
+          queuedVy,
+          firedVy,
+          firedCooldown,
+          inputStats,
+          gameplayColors,
+          accessibilityEnabled,
           rects,
           safeGap,
           topCollision,
@@ -333,6 +371,19 @@ async function main() {
     `);
 
     assert.equal(result.runtimeVersion, 2);
+    assert.equal(result.inputTruthVersion, 1);
+    assert.equal(result.inputBufferFrames, 3);
+    assert.equal(result.queuedPendingFrames, 1, 'one-step cooldown input should queue');
+    assert.equal(result.queuedVy, 0, 'queued input must not fire early');
+    assert.equal(result.firedVy, -7.5, 'queued Hexagram input must fire on the first legal step');
+    assert.equal(result.firedCooldown, 8, 'mobile queued input must own the accepted cooldown');
+    assert.equal(result.inputStats.current.buffered, 1);
+    assert.equal(result.inputStats.current.bufferedFired, 1);
+    assert.equal(result.inputStats.current.rejected, 1);
+    assert.equal(result.inputStats.current.immediate, 1);
+    assert.equal(result.gameplayColors.playerCore, '#f8fbff');
+    assert.equal(result.gameplayColors.hazard, '#ff2f6d');
+    assert.deepEqual(result.accessibilityEnabled, { reducedMotion: true, lowFlash: true });
     assert.equal(result.safeGap, true);
     assert.equal(result.topCollision, true);
     assert.equal(result.bottomCollision, true);
