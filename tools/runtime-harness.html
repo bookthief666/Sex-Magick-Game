@@ -216,7 +216,7 @@
 
     document.getElementById('reload').addEventListener('click', () => {
       log('Reload requested', 'warn');
-      iframe.src = `../index.html#debug&qa=${Date.now()}`;
+      iframe.src = `../index.html?qa=${Date.now()}#debug`;
     });
 
     document.getElementById('clear').addEventListener('click', () => {
