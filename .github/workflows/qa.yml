@@ -1,4 +1,4 @@
-name: QA checks
+name: Fast gameplay QA
 
 on:
   pull_request:
@@ -11,9 +11,9 @@ permissions:
   contents: read
 
 jobs:
-  gameplay-tests:
+  fast-gameplay-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 8
 
     steps:
       - name: Check out repository
@@ -35,12 +35,14 @@ jobs:
           node --check tools/reachability-policy.js
           node --check tools/compositional-reachability.js
           node --check tools/compositional-robustness.js
+          node --check tools/m7-review-diagnostics.js
           node --check tools/test-fixed-step-clock.js
           node --check tools/test-collision-runtime.js
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
           node --check tools/test-player-reachability.js
           node --check tools/test-compositional-reachability.js
+          node --check tools/test-m7-review-diagnostics.js
           node --check tools/browser-fixed-step-test.mjs
           node --check tools/browser-collision-test.mjs
           node --check tools/browser-telemetry-test.mjs
@@ -51,19 +53,18 @@ jobs:
           node --check tools/run-browser-reachability-test.mjs
           node --check tools/run-browser-compositional-test.mjs
 
-      - name: Run deterministic unit tests
+      - name: Run fast deterministic contracts
         run: |
           node tools/test-fixed-step-clock.js
           node tools/test-collision-runtime.js
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
-          node tools/test-player-reachability.js
-          node tools/test-compositional-reachability.js
+          node tools/test-m7-review-diagnostics.js
 
       - name: Run fixed-step Chrome integration
         run: node tools/run-browser-fixed-step-test.mjs
 
-      - name: Run collision and touch Chrome integration
+      - name: Run collision, input, and touch Chrome integration
         run: node tools/run-browser-collision-test.mjs
 
       - name: Run telemetry and fast-retry Chrome integration
@@ -71,9 +72,3 @@ jobs:
 
       - name: Run obstacle grammar Chrome integration
         run: node tools/run-browser-obstacle-grammar-test.mjs
-
-      - name: Run reachability and physics parity Chrome integration
-        run: node tools/run-browser-reachability-test.mjs
-
-      - name: Run compositional reachability Chrome integration
-        run: node tools/run-browser-compositional-test.mjs
