@@ -350,7 +350,7 @@ async function main() {
     assert.equal(result.afterEntry.voidActive, true);
     assert.equal(result.afterEntry.state.currentWager, 10);
     assert.equal(result.afterEntry.state.gateEntries, 1);
-    assert.equal(result.speedDuringVoid, 5.7);
+    assert.ok(Math.abs(result.speedDuringVoid - 5.7) < 1e-9);
 
     assert.equal(result.afterSurvival.voidActive, false);
     assert.equal(result.afterSurvival.state.voidSurvivals, 1);
