@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - develop/sex-magick-2.0
+      - develop/m9-runtime-hardening
 
 permissions:
   contents: read
@@ -13,7 +14,7 @@ permissions:
 jobs:
   fast-gameplay-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
 
     steps:
       - name: Check out repository
@@ -31,6 +32,8 @@ jobs:
           node --check tools/collision-runtime.js
           node --check tools/input-feedback-policy.js
           node --check tools/gate-slice-runtime.js
+          node --check tools/gate-evidence-runtime.js
+          node --check tools/viewport-runtime.js
           node --check tools/run-telemetry.js
           node --check tools/obstacle-grammar.js
           node --check tools/player-reachability.js
@@ -45,6 +48,9 @@ jobs:
           node --check tools/test-r1-playtest-harness.js
           node --check tools/test-gate-slice.js
           node --check tools/test-gate-slice-playtest-harness.js
+          node --check tools/test-gate-slice-playtest-v2-harness.js
+          node --check tools/test-gate-evidence-runtime.js
+          node --check tools/test-viewport-runtime.js
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
           node --check tools/test-player-reachability.js
@@ -54,6 +60,7 @@ jobs:
           node --check tools/browser-collision-test.mjs
           node --check tools/browser-policy-fail-closed-test.mjs
           node --check tools/browser-gate-slice-test.mjs
+          node --check tools/browser-m9-runtime-hardening-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -70,6 +77,9 @@ jobs:
           node tools/test-r1-playtest-harness.js
           node tools/test-gate-slice.js
           node tools/test-gate-slice-playtest-harness.js
+          node tools/test-gate-slice-playtest-v2-harness.js
+          node tools/test-gate-evidence-runtime.js
+          node tools/test-viewport-runtime.js
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
           node tools/test-m7-review-diagnostics.js
@@ -85,6 +95,9 @@ jobs:
 
       - name: Run Gate slice Chrome integration
         run: node tools/browser-gate-slice-test.mjs
+
+      - name: Run M9 runtime hardening Chrome integration
+        run: node tools/browser-m9-runtime-hardening-test.mjs
 
       - name: Run telemetry and fast-retry Chrome integration
         run: node tools/run-browser-telemetry-test.mjs
