@@ -29,6 +29,7 @@ jobs:
           node --check tools/fixed-step-clock.js
           node --check tools/fixed-step-prototype.js
           node --check tools/collision-runtime.js
+          node --check tools/input-feedback-policy.js
           node --check tools/run-telemetry.js
           node --check tools/obstacle-grammar.js
           node --check tools/player-reachability.js
@@ -39,6 +40,7 @@ jobs:
           node --check tools/run-m7-review-audit.js
           node --check tools/test-fixed-step-clock.js
           node --check tools/test-collision-runtime.js
+          node --check tools/test-input-feedback-policy.js
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
           node --check tools/test-player-reachability.js
@@ -59,6 +61,7 @@ jobs:
         run: |
           node tools/test-fixed-step-clock.js
           node tools/test-collision-runtime.js
+          node tools/test-input-feedback-policy.js
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
           node tools/test-m7-review-diagnostics.js
