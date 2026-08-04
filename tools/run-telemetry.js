@@ -216,11 +216,17 @@
         levelIndex: 0,
         voidEntries: 0,
         scoreEvents: [],
-        lifecycleEvents: [],
+        lifecycleEvents: [{
+          type: 'start',
+          frame: 0,
+          score: 0,
+          simulationMs: 0,
+          wallOffsetMs: 0,
+          details: { startReason, rite }
+        }],
         timing: null
       };
 
-      this.recordLifecycle('start', options.game, { startReason, rite });
       this.emit();
       return clone(this.currentRun);
     }
@@ -352,7 +358,16 @@
 
     function timingSnapshot() {
       try {
-        return root.__SEX_MAGICK_TIMING__?.getSnapshot?.() || null;
+        const timingApi = root.__SEX_MAGICK_TIMING__;
+        const snapshot = timingApi?.getSnapshot?.();
+        if (!snapshot) return null;
+        return {
+          ...snapshot,
+          mode: timingApi.mode,
+          stepMs: timingApi.stepMs,
+          maxStepsPerFrame: timingApi.maxStepsPerFrame,
+          suspensionResetMs: timingApi.suspensionResetMs
+        };
       } catch (_error) {
         return null;
       }
