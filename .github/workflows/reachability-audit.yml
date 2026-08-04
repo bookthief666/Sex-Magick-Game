@@ -1,0 +1,71 @@
+name: Reachability and composition audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 10 * * 1'
+  push:
+    branches:
+      - develop/sex-magick-2.0
+    paths:
+      - 'tools/fixed-step-prototype.js'
+      - 'tools/collision-runtime.js'
+      - 'tools/obstacle-grammar.js'
+      - 'tools/reachability-policy.js'
+      - 'tools/player-reachability.js'
+      - 'tools/compositional-reachability.js'
+      - 'tools/compositional-robustness.js'
+      - 'tools/m7-review-diagnostics.js'
+      - 'tools/test-player-reachability.js'
+      - 'tools/test-compositional-reachability.js'
+      - 'tools/test-m7-review-diagnostics.js'
+      - 'tools/reachability-browser-test.html'
+      - 'tools/compositional-browser-test.html'
+      - 'tools/run-browser-reachability-test.mjs'
+      - 'tools/run-browser-compositional-test.mjs'
+      - '.github/workflows/reachability-audit.yml'
+  
+permissions:
+  contents: read
+
+jobs:
+  reachability-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Syntax-check solver surface
+        run: |
+          node --check tools/player-reachability.js
+          node --check tools/reachability-policy.js
+          node --check tools/compositional-reachability.js
+          node --check tools/compositional-robustness.js
+          node --check tools/m7-review-diagnostics.js
+          node --check tools/test-player-reachability.js
+          node --check tools/test-compositional-reachability.js
+          node --check tools/test-m7-review-diagnostics.js
+          node --check tools/run-browser-reachability-test.mjs
+          node --check tools/run-browser-compositional-test.mjs
+
+      - name: Run isolated reachability matrix
+        run: node tools/test-player-reachability.js
+
+      - name: Run compositional and perturbation matrix
+        run: node tools/test-compositional-reachability.js
+
+      - name: Run Milestone 7 diagnostic contracts
+        run: node tools/test-m7-review-diagnostics.js
+
+      - name: Run real-player reachability Chrome integration
+        run: node tools/run-browser-reachability-test.mjs
+
+      - name: Run compositional Chrome integration
+        run: node tools/run-browser-compositional-test.mjs
