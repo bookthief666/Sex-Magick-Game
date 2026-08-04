@@ -5,7 +5,9 @@ const {
   normalizeRect,
   rectsOverlap,
   buildPlayerRect,
-  buildPillarRects
+  buildPillarRects,
+  buildJaggedEdgePoints,
+  dispatchPlayerJump
 } = require('./collision-runtime.js');
 
 function testNormalization() {
@@ -66,10 +68,47 @@ function testViewportClamping() {
   assert.equal(rects.bottom.height, 0);
 }
 
+function testRenderedEdgeTruth() {
+  const gapTop = 220;
+  const gapBottom = 400;
+  const topPoints = buildJaggedEdgePoints(80, gapTop, -1);
+  const bottomPoints = buildJaggedEdgePoints(80, gapBottom, 1);
+
+  assert.equal(topPoints.length, 6);
+  assert.equal(bottomPoints.length, 6);
+  assert.ok(topPoints.every(point => point.y <= gapTop - 2), 'top artwork must stay above its collision boundary');
+  assert.ok(bottomPoints.every(point => point.y >= gapBottom + 2), 'bottom artwork must stay below its collision boundary');
+  assert.deepEqual(topPoints.map(point => point.x), bottomPoints.map(point => point.x));
+  assert.throws(() => buildJaggedEdgePoints(80, gapTop, 0), /direction must be/);
+}
+
+function testSingleFeedbackJumpDispatch() {
+  let jumpCalls = 0;
+  const gameLike = {
+    state: 'playing',
+    player: {
+      jump() {
+        jumpCalls += 1;
+      }
+    }
+  };
+
+  assert.equal(dispatchPlayerJump(gameLike), true);
+  assert.equal(jumpCalls, 1, 'the dispatch layer must call Player.jump exactly once');
+
+  gameLike.state = 'paused';
+  assert.equal(dispatchPlayerJump(gameLike), false);
+  assert.equal(jumpCalls, 1, 'paused input must not reach Player.jump');
+
+  assert.equal(dispatchPlayerJump({ state: 'playing', player: null }), false);
+}
+
 testNormalization();
 testStrictOverlapPolicy();
 testPlayerInset();
 testPillarRects();
 testViewportClamping();
+testRenderedEdgeTruth();
+testSingleFeedbackJumpDispatch();
 
-console.log('collision-runtime: all geometry contracts passed');
+console.log('collision-runtime: all geometry and input contracts passed');
