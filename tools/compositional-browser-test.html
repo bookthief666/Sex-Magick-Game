@@ -69,7 +69,9 @@
         await waitForBaseRuntime(win);
         await loadScript(win, './player-reachability.js', 'SexMagickReachability');
         const composition = await loadScript(win, './compositional-reachability.js', 'SexMagickCompositionalReachability');
+        const robustnessPolicy = await loadScript(win, './compositional-robustness.js', 'SexMagickCompositionalRobustness');
         assert(composition, 'Compositional API missing');
+        assert(robustnessPolicy, 'Distributed robustness API missing');
 
         const results = [];
         for (const rite of ['HEX', 'MONAS']) {
@@ -96,7 +98,7 @@
           assert(solution.boundaryResults.length === 6, `${rite} family boundary count changed`);
           assert(solution.minimumClearance >= 8, `${rite} browser witness lost margin`);
 
-          const robustness = composition.evaluateWitnessRobustness(solution, {
+          const robustness = robustnessPolicy.evaluateWitnessRobustness(solution, {
             viewportWidth: 390,
             viewportHeight: 844,
             mobile: true,
@@ -109,12 +111,15 @@
           });
           assert(robustness.baseValid, `${rite} base witness failed perturbation replay`);
           assert(robustness.results.some(item => !item.valid), `${rite} perturbation audit produced no failures`);
+          assert(robustness.coverage.sampledJumpCount > 0, `${rite} has no sampled jumps`);
+          assert(robustness.coverage.firstSampledIndex === 0, `${rite} perturbation coverage missed the first jump`);
+          assert(robustness.coverage.lastSampledIndex === solution.jumpFrames.length - 1, `${rite} perturbation coverage missed the last jump`);
           results.push({ rite, first, solution, robustness });
         }
 
         const summary = [
           'PASS compositional reachability browser integration',
-          `MODE composition v${composition.COMPOSITION_VERSION}`,
+          `MODE composition v${composition.COMPOSITION_VERSION} robustness v${robustnessPolicy.ROBUSTNESS_VERSION}`,
           ...results.flatMap(entry => [
             `${entry.rite} DIGEST ${entry.first.digest}`,
             `${entry.rite} GATES ${entry.first.gateCount}`,
@@ -123,7 +128,8 @@
             `${entry.rite} SURVIVORS ${entry.solution.survivingStateCount}`,
             `${entry.rite} MIN CLEARANCE ${entry.solution.minimumClearance.toFixed(3)}`,
             `${entry.rite} ROBUSTNESS ${entry.robustness.classification}`,
-            `${entry.rite} PERTURBATION RATE ${entry.robustness.overallRate.toFixed(3)}`
+            `${entry.rite} PERTURBATION RATE ${entry.robustness.overallRate.toFixed(3)}`,
+            `${entry.rite} COVERAGE ${entry.robustness.coverage.sampledJumpCount}/${entry.robustness.coverage.totalJumps} FIRST ${entry.robustness.coverage.firstSampledIndex} LAST ${entry.robustness.coverage.lastSampledIndex}`
           ])
         ].join('\n');
 
