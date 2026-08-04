@@ -109,7 +109,6 @@
     ctx.lineWidth = 4;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
 
-    // Top pillar: every visible point remains at or above the collision boundary.
     ctx.beginPath();
     ctx.moveTo(-this.w / 2, -10);
     ctx.lineTo(this.w / 2, -10);
@@ -129,7 +128,6 @@
     this.drawPattern(ctx, Math.min(this.w, Math.max(0, this.top)) * 0.3);
     ctx.restore();
 
-    // Bottom pillar: every visible point remains at or below the collision boundary.
     ctx.beginPath();
     ctx.moveTo(-this.w / 2, viewportHeight + 10);
     ctx.lineTo(this.w / 2, viewportHeight + 10);
@@ -223,10 +221,41 @@
     if (indicator) indicator.textContent = 'TAP ANYWHERE';
   }
 
+  function installTouchPolicy() {
+    if (root.__sexMagickFullScreenTouchInstalled) return;
+
+    window.addEventListener('touchstart', event => {
+      if (typeof game === 'undefined' || !game || game.state !== GameState.PLAYING || !game.player) return;
+
+      if (isControlTarget(event.target)) {
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      game.playerJump();
+    }, { passive: false, capture: true });
+
+    root.__sexMagickFullScreenTouchInstalled = true;
+  }
+
+  function installDebugToggle() {
+    if (root.__sexMagickCollisionDebugToggleInstalled) return;
+
+    window.addEventListener('keydown', event => {
+      if (event.code !== 'KeyH') return;
+      event.preventDefault();
+      debugEnabled = !debugEnabled;
+      console.info(`[SEX MAGICK] Collision overlay ${debugEnabled ? 'enabled' : 'disabled'}`);
+    });
+
+    root.__sexMagickCollisionDebugToggleInstalled = true;
+  }
+
   function install() {
     if (Game.prototype.__collisionTruthRuntimeInstalled) return;
 
-    const originalInitEventListeners = Game.prototype.initEventListeners;
     const originalDrawGameObjects = Game.prototype.drawGameObjects;
 
     Game.prototype.getPlayerCollisionRect = function getPlayerCollisionRect() {
@@ -250,47 +279,17 @@
       if (debugEnabled) drawCollisionOverlay(this);
     };
 
-    Game.prototype.initEventListeners = function initEventListenersWithFullScreenTouch() {
-      const nativeAddEventListener = window.addEventListener;
-      let suppressedLegacyTouchHandler = false;
-
-      window.addEventListener = function interceptLegacyTouchRegistration(type, listener, options) {
-        if (type === 'touchstart' && !suppressedLegacyTouchHandler) {
-          suppressedLegacyTouchHandler = true;
-          return undefined;
-        }
-        return nativeAddEventListener.call(this, type, listener, options);
-      };
-
-      try {
-        originalInitEventListeners.call(this);
-      } finally {
-        window.addEventListener = nativeAddEventListener;
-      }
-
-      nativeAddEventListener.call(window, 'touchstart', event => {
-        if (this.state !== GameState.PLAYING || !this.player || isControlTarget(event.target)) return;
-        event.preventDefault();
-        this.playerJump();
-      }, { passive: false });
-
-      nativeAddEventListener.call(window, 'keydown', event => {
-        if (event.code !== 'KeyH') return;
-        event.preventDefault();
-        debugEnabled = !debugEnabled;
-        console.info(`[SEX MAGICK] Collision overlay ${debugEnabled ? 'enabled' : 'disabled'}`);
-      });
-    };
-
     Game.prototype.__collisionTruthRuntimeInstalled = true;
     installMobileInstructionStyle();
+    installTouchPolicy();
+    installDebugToggle();
 
     const query = new URLSearchParams(window.location.search);
     debugEnabled = query.get('hitboxes') === '1' || window.location.hash.includes('hitboxes');
 
     root.__SEX_MAGICK_COLLISION__ = Object.freeze({
       mode: 'collision-truth-runtime',
-      version: 1,
+      version: 2,
       setDebug(value) {
         debugEnabled = Boolean(value);
         return debugEnabled;
