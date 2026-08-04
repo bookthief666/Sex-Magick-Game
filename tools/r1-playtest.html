@@ -138,7 +138,7 @@
           const attempt = () => {
             try {
               const gameWindow = frame.contentWindow;
-              if (gameWindow?.__SEX_MAGICK_COLLISION__ && gameWindow?.game) {
+              if (gameWindow?.__SEX_MAGICK_COLLISION__ && gameWindow?.__SEX_MAGICK_TIMING__) {
                 resolve(gameWindow);
                 return;
               }
@@ -200,16 +200,17 @@
       function captureGameState() {
         const gameWindow = frame.contentWindow;
         const collision = gameWindow?.__SEX_MAGICK_COLLISION__;
-        const game = gameWindow?.game;
+        const timing = gameWindow?.__SEX_MAGICK_TIMING__?.getSnapshot?.() || null;
         return {
           inputStats: collision?.getInputStats?.() || null,
           configuredBufferFrames: collision?.getInputBufferFrames?.() ?? null,
-          game: game ? {
-            state: game.state,
-            rite: game.gameMode,
-            score: Number(game.score || 0),
-            frames: Number(game.frames || 0),
-            highScore: Number(game.highScore || 0)
+          game: timing ? {
+            state: timing.state,
+            rite: timing.rite,
+            score: Number(timing.score || 0),
+            frames: Number(timing.simulationFrames || 0),
+            renderFps: Number(timing.renderFps || 0),
+            pendingRaf: Boolean(timing.pendingRaf)
           } : null,
           viewport: {
             width: gameWindow?.innerWidth || null,
@@ -224,10 +225,7 @@
         clearInterval(sessionTimer);
         sessionTimer = null;
         captured = captureGameState();
-        try {
-          const gameWindow = frame.contentWindow;
-          if (gameWindow?.game?.state === gameWindow?.GameState?.PLAYING) gameWindow.game.togglePause();
-        } catch (_error) {}
+        frame.src = 'about:blank';
         try { document.exitFullscreen?.(); } catch (_error) {}
         sessionMeta.endedAt = new Date().toISOString();
         sessionMeta.actualDurationMs = Math.max(0, Math.round(performance.now() - sessionMeta.startedMonotonicMs));
