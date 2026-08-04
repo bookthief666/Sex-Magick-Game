@@ -133,3 +133,14 @@ This log records consequential project decisions. Trivial implementation details
 **Rationale:** Independent random pillars cannot be reliably reproduced, paced, audited, or compared between Rites. Named deterministic patterns create a stable design vocabulary and exact replay surface while keeping the existing core loop intact.
 
 **Consequences:** The same grammar version, seed, Rite, viewport, gap sequence, and Orb probability reproduce the same pattern sequence. Pattern evidence is retained locally under `sex_magick_patterns_v1` and linked only by the local run ID. The `0.18` envelope is explicitly a geometric constraint—not proof that every sequence is beatable. Automated trajectory reachability, high-speed/minimum-gap testing, independent Opus review, and physical playtesting remain release blockers. Local seeds and pattern records are debugging evidence and must not be treated as authoritative leaderboard validation or anti-cheat proof.
+
+## D-013 — Require exact player-state reachability and policy-versioned fallback
+
+**Date:** 2026-08-04  
+**Status:** Accepted for development
+
+**Decision:** Evaluate named obstacle patterns with a deterministic player-state solver that models the current Rite physics, cooldown, collision window, breathing motion, speed, gap, and viewport. Accept a tested route only when its complete jump witness replays successfully with at least eight additional pixels of clearance. Apply measured corrections to the five Monas patterns that failed the hard matrix. If a future pattern is absent from the verified verdict set, deterministically substitute `hex.return-to-axis` for Hexagram or `monas.still-point` for Monas. Record the reachability policy version and fallback/adjustment verdict in local pattern evidence.
+
+**Rationale:** The Milestone 4 `0.18` normalized transition envelope did not prevent impossible Monas routes on a tall Fold-open viewport at maximum speed and minimum gap. Geometric continuity is not equivalent to dynamic reachability under stateful velocity, damping, cooldown, and finite gate timing.
+
+**Consequences:** All 16 currently named patterns pass the 252-case hard matrix after the measured Monas corrections, with exact replay witnesses and eight-pixel margin. The solver is a deterministic quantized beam search, not a mathematical proof over continuous state space. It begins each isolated pattern centered in its first gate with zero velocity and cooldown; long cross-pattern compositions, incoming-state sets, human timing tolerance, active Fold transitions, physical-device behavior, and independent Opus review remain release blockers. The client-side solver and evidence remain debugging/fairness instrumentation and must not be treated as anti-cheat proof.
