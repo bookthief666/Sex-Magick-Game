@@ -190,7 +190,9 @@ async function main() {
   });
 
   const exceptions = [];
+  const requestedUrls = [];
   client.on('Runtime.exceptionThrown', event => exceptions.push(event.exceptionDetails));
+  client.on('Network.requestWillBeSent', event => requestedUrls.push(event.request?.url || ''));
 
   try {
     await client.send('Page.navigate', {
@@ -199,6 +201,10 @@ async function main() {
     await waitForExpression(
       client,
       `typeof game !== 'undefined' && !!game && !!globalThis.__SEX_MAGICK_GATE_SLICE__`
+    );
+    await waitForExpression(
+      client,
+      `!document.getElementById('menuButtons').classList.contains('hidden')`
     );
 
     const result = await evaluate(client, `
@@ -252,6 +258,7 @@ async function main() {
           hexText: document.getElementById('startHexBtn').textContent,
           leaderboardHidden: document.querySelector('.leaderboard-container').hidden
         };
+        const preflight = __SEX_MAGICK_GATE_PREFLIGHT__.getSnapshot();
         const orderedLevels = game.gameLevels.map(level => level.name);
 
         game.gateSliceState.gatesCleared = 6;
@@ -311,6 +318,7 @@ async function main() {
 
         return {
           menu,
+          preflight,
           orderedLevels,
           afterRisk,
           scoreAfterRisk,
@@ -334,6 +342,14 @@ async function main() {
     assert.match(result.menu.monasText, /SEALED/);
     assert.match(result.menu.hexText, /THE GATE/);
     assert.equal(result.menu.leaderboardHidden, true);
+    assert.equal(result.preflight.leaderboardSuppressed, true);
+    assert.equal(result.preflight.guestSessionAllowed, false);
+    assert.equal(result.preflight.scoreSubmissionAllowed, false);
+    assert.equal(
+      requestedUrls.some(url => url.includes('lootlocker.io')),
+      false,
+      `Gate slice must not initiate LootLocker requests: ${JSON.stringify(requestedUrls)}`
+    );
     assert.deepEqual(result.orderedLevels, ['MALKUTH', 'YESOD', 'TIPHARETH', 'GEBURAH']);
 
     assert.equal(result.afterRisk.state.gatesCleared, 7);
@@ -371,7 +387,7 @@ async function main() {
     assert.equal(exceptions.length, 0, `Browser exceptions: ${JSON.stringify(exceptions)}`);
 
     console.log('gate-slice-browser: all integration checks passed');
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify({ ...result, requestedUrls }, null, 2));
   } finally {
     client.close();
     for (const child of children.reverse()) {
