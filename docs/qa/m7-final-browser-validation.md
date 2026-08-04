@@ -7,6 +7,8 @@ Final browser-tested code head: `6211652d1e033d8624446cec7a70a83de6c77aa9`
 Fast gameplay QA run: `30919867438`  
 Job: `92027343121`
 
+> **Scope correction:** This document closes the automated browser gate only. It does not close the R-1 human playtest gate, select a final buffer value, or establish production eight-pixel safety. The Hexagram Gate slice remains paused until the physical-phone protocol in `docs/playtests/r1-input-truth-protocol.md` is completed.
+
 ## Result
 
 The exact code head passed the complete fast gameplay gate:
@@ -47,6 +49,8 @@ rejected: 1
 expired: 0
 coalesced: 0
 ```
+
+The browser result proves the mechanics of the candidate buffer. It does not show whether three steps or six steps feels better to a person using a physical phone.
 
 The same browser gate reconfirmed:
 
@@ -107,7 +111,7 @@ The same workflow reconfirmed:
 
 Established for development:
 
-- bounded three-step input-intent candidate
+- bounded input-intent implementation with URL-tunable candidate values
 - real runtime queued, immediate, and rejected paths
 - stable gameplay-authoritative contrast
 - runtime reduced-motion and low-flash controls
@@ -116,9 +120,10 @@ Established for development:
 
 Still not established:
 
-- that three steps is the best-feeling buffer for a human player
+- whether 3 or 6 steps is the better human-facing buffer
 - physical Android and Fold input latency
 - physical 60/120 Hz game-feel equivalence
+- production eight-pixel safety under per-gate breathing gaps
 - active Fold remapping
 - Safari and Firefox parity
 - a fun Gnosis/Gate/Void wager loop
