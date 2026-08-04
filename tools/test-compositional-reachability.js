@@ -5,6 +5,7 @@ const grammar = require('./obstacle-grammar.js');
 const policy = require('./reachability-policy.js');
 const reachability = require('./player-reachability.js');
 const composition = require('./compositional-reachability.js');
+const robustnessPolicy = require('./compositional-robustness.js');
 
 policy.install(grammar);
 
@@ -27,6 +28,7 @@ function summarizeCase(entry) {
     robustness: entry.robustnessClassification,
     robustnessRate: entry.robustnessRate,
     distanceOneRate: entry.distanceOneRate,
+    perturbationCoverage: entry.coverage,
     failedPatternId: entry.failedPatternId
   };
 }
@@ -78,7 +80,7 @@ for (const rite of ['HEX', 'MONAS']) {
   assert.ok(solution.minimumClearance >= 8);
   assert.deepEqual(solution.boundaryResults.map(boundary => boundary.family), grammar.FAMILY_CYCLE);
 
-  const robustness = composition.evaluateWitnessRobustness(solution, {
+  const robustness = robustnessPolicy.evaluateWitnessRobustness(solution, {
     viewportWidth: 390,
     viewportHeight: 844,
     mobile: true,
@@ -94,10 +96,13 @@ for (const rite of ['HEX', 'MONAS']) {
   assert.ok(robustness.validCount >= 1);
   assert.ok(robustness.overallRate >= 0 && robustness.overallRate <= 1);
   assert.ok(robustness.results.some(result => !result.valid), `${rite} perturbation audit failed to distinguish the exact witness from timing errors`);
+  assert.ok(robustness.coverage.sampledJumpCount > 0);
+  assert.equal(robustness.coverage.firstSampledIndex, 0);
+  assert.equal(robustness.coverage.lastSampledIndex, solution.jumpFrames.length - 1);
   focusedCases.push({ rite, generated, solution, robustness });
 }
 
-const matrix = composition.auditCompositionMatrix({
+const matrix = robustnessPolicy.auditMatrix({
   seeds: [0x12345678, 0xdecafbad],
   scenarios: [
     { id: 'phone-hard', width: 390, height: 844, mobile: true, speed: 8.5, gap: 110, breathPhases: [0, 31] },
@@ -107,7 +112,7 @@ const matrix = composition.auditCompositionMatrix({
   margin: 8,
   beamWidth: 900,
   maximumDistance: 3,
-  maximumPerturbationCases: 60
+  maximumCases: 60
 });
 
 assert.equal(matrix.totalCases, 16);
@@ -117,6 +122,9 @@ assert.ok(matrix.cases.every(entry => entry.boundaryCount === grammar.FAMILY_CYC
 assert.ok(matrix.cases.every(entry => entry.minimumClearance >= 8));
 assert.ok(matrix.cases.every(entry => entry.solution.survivingInitialStateCount > 0));
 assert.ok(matrix.cases.every(entry => entry.robustnessClassification !== 'invalid'));
+assert.ok(matrix.cases.every(entry => entry.coverage?.sampledJumpCount > 0));
+assert.ok(matrix.cases.every(entry => entry.coverage?.firstSampledIndex === 0));
+assert.ok(matrix.cases.every(entry => entry.coverage?.lastSampledIndex === entry.jumpCount - 1));
 
 const longCases = [];
 for (const rite of ['HEX', 'MONAS']) {
@@ -153,6 +161,7 @@ for (const rite of ['HEX', 'MONAS']) {
 console.log('compositional-reachability: all deterministic contracts passed');
 console.log(JSON.stringify({
   compositionVersion: composition.COMPOSITION_VERSION,
+  robustnessVersion: robustnessPolicy.ROBUSTNESS_VERSION,
   solverVersion: reachability.SOLVER_VERSION,
   grammarVersion: grammar.GRAMMAR_VERSION,
   reachabilityPolicyVersion: policy.POLICY_VERSION,
@@ -169,7 +178,8 @@ console.log(JSON.stringify({
     caseCount: entry.robustness.caseCount,
     validCount: entry.robustness.validCount,
     overallRate: entry.robustness.overallRate,
-    distanceRates: entry.robustness.distanceRates
+    distanceRates: entry.robustness.distanceRates,
+    coverage: entry.robustness.coverage
   })),
   longCases
 }, null, 2));
