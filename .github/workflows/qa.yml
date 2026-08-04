@@ -30,9 +30,10 @@ jobs:
           node --check tools/fixed-step-prototype.js
           node --check tools/test-fixed-step-clock.js
           node --check tools/browser-fixed-step-test.mjs
+          node --check tools/run-browser-fixed-step-test.mjs
 
       - name: Run deterministic timing tests
         run: node tools/test-fixed-step-clock.js
 
       - name: Run headless Chrome integration tests
-        run: node tools/browser-fixed-step-test.mjs
+        run: node tools/run-browser-fixed-step-test.mjs
