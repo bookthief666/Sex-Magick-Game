@@ -40,7 +40,9 @@
 
     this.frames += 1;
 
-    if (this.frames % 30 === 0 && Math.random() > 0.8) {
+    const reducedMotion = typeof document !== 'undefined'
+      && document.documentElement.classList.contains('sex-magick-reduced-motion');
+    if (!reducedMotion && this.frames % 30 === 0 && Math.random() > 0.8) {
       GlitchFX.trigger(10, 'random');
     }
 
@@ -77,8 +79,6 @@
       clock.reset(now - STEP_MS);
       this.renderLastFrameTime = 0;
 
-      // An already scheduled frame will continue the loop. Returning here prevents
-      // pause/resume or rapid restart from creating a second RAF chain.
       if (this.fixedStepRafId != null) return;
       currentTime = now;
     }
@@ -213,33 +213,140 @@
 
   const currentSource = document.currentScript?.src || window.location.href;
   const startedAt = Date.now();
+  let status = 'waiting-for-grammar';
+  let reason = null;
+
+  function updateBootstrapStatus(nextStatus, nextReason = null) {
+    status = nextStatus;
+    reason = nextReason;
+  }
+
+  function sealMonas(message) {
+    const button = document.getElementById('startMonasBtn');
+    if (button) {
+      button.disabled = true;
+      button.dataset.reachabilityPolicyUnavailable = 'true';
+      button.title = message;
+      if (!button.textContent.includes('SEALED')) button.textContent = 'RITE OF MONAS — SEALED';
+    }
+  }
+
+  function showPolicyFailure(instance, message) {
+    sealMonas(message);
+    if (!instance || instance.gameMode !== 'MONAS' || instance.state !== GameState.PLAYING) return;
+    instance.togglePause();
+    const heading = document.querySelector('#pauseScreen .title-text');
+    if (heading) heading.textContent = 'RITE SEALED';
+    const resume = document.getElementById('resumeBtn');
+    if (resume) {
+      resume.textContent = 'RETURN TO VOID';
+      resume.onclick = event => {
+        event.stopPropagation();
+        instance.returnToMenu();
+      };
+    }
+    const pauseScreen = document.getElementById('pauseScreen');
+    if (pauseScreen) pauseScreen.title = message;
+  }
+
+  function installFailClosedGuard(failureReason) {
+    if (Game.prototype.__reachabilityPolicyFailClosedInstalled) return;
+    const message = `Reachability policy unavailable: ${failureReason}`;
+    const guardedUpdate = Game.prototype.updateGameObjects;
+    const guardedStart = Game.prototype.startGame;
+    const guardedRestart = Game.prototype.restartGame;
+
+    Game.prototype.updateGameObjects = function updateGameObjectsWithPolicyGuard(...args) {
+      if (this.gameMode === 'MONAS' && !globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+        showPolicyFailure(this, message);
+        return undefined;
+      }
+      return guardedUpdate.apply(this, args);
+    };
+
+    Game.prototype.startGame = function startGameWithPolicyGuard(...args) {
+      if (this.gameMode === 'MONAS' && !globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+        showPolicyFailure(this, message);
+        return undefined;
+      }
+      return guardedStart.apply(this, args);
+    };
+
+    Game.prototype.restartGame = function restartGameWithPolicyGuard(...args) {
+      if (this.gameMode === 'MONAS' && !globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+        showPolicyFailure(this, message);
+        return undefined;
+      }
+      return guardedRestart.apply(this, args);
+    };
+
+    Game.prototype.__reachabilityPolicyFailClosedInstalled = true;
+    sealMonas(message);
+    updateBootstrapStatus('failed-closed', failureReason);
+    console.error('[SEX MAGICK] Reachability policy failed closed; Monas sealed', failureReason);
+  }
+
+  function verifyPolicyInstallation(timeoutMs = 5000) {
+    const verificationStartedAt = Date.now();
+    const attempt = () => {
+      if (globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+        updateBootstrapStatus('ready');
+        return;
+      }
+      if (Date.now() - verificationStartedAt >= timeoutMs) {
+        installFailClosedGuard('policy script loaded but runtime installation did not complete');
+        return;
+      }
+      setTimeout(attempt, 10);
+    };
+    attempt();
+  }
 
   function loadPolicyWhenGrammarIsReady() {
-    if (
-      globalThis.SexMagickReachabilityPolicy ||
-      document.querySelector('script[data-sex-magick-reachability-policy]')
-    ) {
+    if (globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+      updateBootstrapStatus('ready');
+      return;
+    }
+
+    if (document.querySelector('script[data-sex-magick-reachability-policy]')) {
+      verifyPolicyInstallation();
       return;
     }
 
     if (!globalThis.SexMagickObstacleGrammar) {
       if (Date.now() - startedAt >= 5000) {
-        console.error('[SEX MAGICK] Reachability policy bootstrap timed out waiting for obstacle grammar');
+        installFailClosedGuard('timed out waiting for obstacle grammar');
         return;
       }
       setTimeout(loadPolicyWhenGrammarIsReady, 10);
       return;
     }
 
+    updateBootstrapStatus('loading-policy');
     const script = document.createElement('script');
     script.src = new URL('./reachability-policy.js', currentSource).href;
     script.async = false;
     script.dataset.sexMagickReachabilityPolicy = 'true';
+    script.onload = () => verifyPolicyInstallation();
     script.onerror = () => {
-      console.error('[SEX MAGICK] Reachability policy failed to load', script.src);
+      installFailClosedGuard(`policy script failed to load: ${script.src}`);
     };
     document.head.appendChild(script);
   }
+
+  globalThis.__SEX_MAGICK_POLICY_BOOTSTRAP__ = Object.freeze({
+    mode: 'reachability-policy-bootstrap',
+    version: 1,
+    getSnapshot() {
+      return {
+        status,
+        reason,
+        policyInstalled: Boolean(globalThis.__SEX_MAGICK_REACHABILITY_POLICY__),
+        failClosedInstalled: Boolean(Game.prototype.__reachabilityPolicyFailClosedInstalled),
+        monasSealed: Boolean(document.getElementById('startMonasBtn')?.disabled)
+      };
+    }
+  });
 
   loadPolicyWhenGrammarIsReady();
 })();
