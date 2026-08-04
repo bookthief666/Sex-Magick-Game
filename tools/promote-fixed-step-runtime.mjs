@@ -30,9 +30,8 @@ async function promoteIndex() {
   return true;
 }
 
-async function promoteBrowserTest() {
-  let source = await readFile(BROWSER_TEST_PATH, 'utf8');
-  if (source.includes('const EXTERNAL_BLOCKED_URLS = Object.freeze')) return false;
+function addIntegratedRuntimeABSupport(source) {
+  if (source.includes('const EXTERNAL_BLOCKED_URLS = Object.freeze')) return source;
 
   const constantsReplacement = [
     'const childProcesses = [];',
@@ -111,9 +110,57 @@ async function promoteBrowserTest() {
     ''
   ].join('\n');
 
-  const newBlockedUrls = "  await client.send('Network.setBlockedURLs', { urls: EXTERNAL_BLOCKED_URLS });\n";
-  source = replaceExactlyOnce(source, oldBlockedUrls, newBlockedUrls, 'browser initial blocked URLs');
+  return replaceExactlyOnce(
+    source,
+    oldBlockedUrls,
+    "  await client.send('Network.setBlockedURLs', { urls: EXTERNAL_BLOCKED_URLS });\n",
+    'browser initial blocked URLs'
+  );
+}
 
+function hardenBrowserCleanup(source) {
+  if (source.includes('async function removeChromeProfile')) return source;
+
+  const helper = [
+    'async function removeChromeProfile(targetPath) {',
+    '  const retryableCodes = new Set([\'ENOTEMPTY\', \'EBUSY\', \'EPERM\']);',
+    '  for (let attempt = 1; attempt <= 6; attempt += 1) {',
+    '    try {',
+    '      await rm(targetPath, { recursive: true, force: true });',
+    '      return;',
+    '    } catch (error) {',
+    '      if (!retryableCodes.has(error.code)) throw error;',
+    '      if (attempt === 6) {',
+    '        console.warn(`Chrome profile cleanup skipped after ${attempt} attempts: ${error.message}`);',
+    '        return;',
+    '      }',
+    '      await sleep(attempt * 100);',
+    '    }',
+    '  }',
+    '}',
+    ''
+  ].join('\n');
+
+  source = replaceExactlyOnce(
+    source,
+    'function findCommand(candidates) {',
+    `${helper}function findCommand(candidates) {`,
+    'browser cleanup helper insertion'
+  );
+
+  return replaceExactlyOnce(
+    source,
+    '    await rm(userDataDir, { recursive: true, force: true });',
+    '    await removeChromeProfile(userDataDir);',
+    'browser profile cleanup call'
+  );
+}
+
+async function promoteBrowserTest() {
+  const original = await readFile(BROWSER_TEST_PATH, 'utf8');
+  let source = addIntegratedRuntimeABSupport(original);
+  source = hardenBrowserCleanup(source);
+  if (source === original) return false;
   await writeFile(BROWSER_TEST_PATH, source);
   return true;
 }
