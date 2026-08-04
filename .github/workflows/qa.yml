@@ -24,33 +24,21 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Syntax-check timing scripts
+      - name: Syntax-check runtime and tests
         run: |
           node --check tools/fixed-step-clock.js
           node --check tools/fixed-step-prototype.js
+          node --check tools/collision-runtime.js
           node --check tools/test-fixed-step-clock.js
+          node --check tools/test-collision-runtime.js
           node --check tools/browser-fixed-step-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
+          node --check tools/promote-collision-runtime.mjs
 
-      - name: Run deterministic timing tests
-        run: node tools/test-fixed-step-clock.js
+      - name: Run deterministic unit tests
+        run: |
+          node tools/test-fixed-step-clock.js
+          node tools/test-collision-runtime.js
 
       - name: Run headless Chrome integration tests
-        shell: bash
-        run: |
-          set +e
-          node tools/run-browser-fixed-step-test.mjs 2>&1 | tee /tmp/browser-fixed-step.log
-          status=${PIPESTATUS[0]}
-          set -e
-
-          if [ "$status" -eq 0 ]; then
-            exit 0
-          fi
-
-          if grep -q "All fixed-step browser integration checks passed" /tmp/browser-fixed-step.log \
-            && grep -q "ENOTEMPTY: directory not empty.*sex-magick-chrome" /tmp/browser-fixed-step.log; then
-            echo "::warning::Browser assertions passed; ignored a Chrome profile cleanup race."
-            exit 0
-          fi
-
-          exit "$status"
+        run: node tools/run-browser-fixed-step-test.mjs
