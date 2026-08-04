@@ -1,0 +1,76 @@
+name: Promote fixed-step runtime
+
+on:
+  push:
+    branches:
+      - develop/sex-magick-2.0
+    paths:
+      - tools/promote-fixed-step-runtime.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out development branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop/sex-magick-2.0
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply targeted promotion patch
+        run: node tools/promote-fixed-step-runtime.mjs
+
+      - name: Syntax-check timing and browser tests
+        run: |
+          node --check tools/fixed-step-clock.js
+          node --check tools/fixed-step-prototype.js
+          node --check tools/test-fixed-step-clock.js
+          node --check tools/browser-fixed-step-test.mjs
+          node --check tools/run-browser-fixed-step-test.mjs
+
+      - name: Run deterministic timing tests
+        run: node tools/test-fixed-step-clock.js
+
+      - name: Run integrated headless Chrome tests
+        shell: bash
+        run: |
+          set +e
+          node tools/run-browser-fixed-step-test.mjs 2>&1 | tee /tmp/browser-fixed-step.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+
+          if grep -q "All fixed-step browser integration checks passed" /tmp/browser-fixed-step.log \
+            && grep -q "ENOTEMPTY: directory not empty.*sex-magick-chrome" /tmp/browser-fixed-step.log; then
+            echo "::warning::Browser assertions passed; ignored a Chrome profile cleanup race."
+            exit 0
+          fi
+
+          exit "$status"
+
+      - name: Commit tested runtime integration
+        run: |
+          if git diff --quiet; then
+            echo "Fixed-step runtime is already integrated."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html tools/browser-fixed-step-test.mjs
+          git commit -m "fix: make simulation refresh-rate independent"
+          git push origin HEAD:develop/sex-magick-2.0
