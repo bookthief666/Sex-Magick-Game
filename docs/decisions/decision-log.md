@@ -203,3 +203,29 @@ State deduplication also discarded all but one representative `initialStateId` w
 **Consequences:** The slice contains four ordered bands, visible risk zones, Gnosis gain and decay, a physical enter-or-bypass Gate, banking, a lethal transformed Void, bounded local evidence, and a Fold-friendly playtest harness. Monas is sealed in slice mode. The leaderboard is disabled before initialization, and browser QA proves that no LootLocker request is initiated. Automated success proves execution only—not fun, comprehension, balance, replayability, or release readiness.
 
 **Full record:** `docs/decisions/d018-opt-in-gate-slice.md`
+
+## D-019 — Separate session evidence and viewport composition from unresolved Gate design
+
+**Date:** 2026-08-04  
+**Status:** Accepted on stacked development branch
+
+**Decision:** Freeze the Milestone 8 Gate experiment on `develop/sex-magick-2.0` and perform complete-session evidence correction and device-aware viewport composition on `develop/m9-runtime-hardening`. Do not change Gate, Gnosis, Void, score balance, input physics, obstacle patterns, Monas, progression, leaderboards, or deployment behavior.
+
+**Rationale:** The first owner report lost early runs beyond the 20-record persistence cap, included an unsafe crossing in successful-clear arithmetic, and established the physical `368 × 869` Fold-closed viewport as a distinct composition target. These defects could be corrected independently of the unresolved Gate design.
+
+**Consequences:** Session evidence is retained independently of bounded persistence; unsafe crossings cannot increase Gate clears or score; Gate visibility and movement-toward proxies are recorded without claiming conscious intent; Fold closed/open profiles are explicit; `collision-runtime.js` remains unchanged.
+
+**Full record:** `docs/decisions/d019-runtime-evidence-and-viewport-hardening.md`
+
+## D-020 — Bound high-DPR rendering and fail open with procedural asset fallbacks
+
+**Date:** 2026-08-04  
+**Status:** Accepted for development; physical-device performance remains unvalidated
+
+**Decision:** Preserve logical CSS-pixel gameplay coordinates while allocating a separate canvas backing store bounded by DPR `3` and eight million pixels. Replace indefinite catalog-image loading with finite anonymous-CORS attempts, explicit offline mode, inspectable outcomes, idempotent completion, and shared accent-keyed procedural fallbacks. Install the compatibility shims in parser order before game construction.
+
+**Rationale:** Directly multiplying canvas dimensions would break game-space consumers, while one CSS pixel per backing pixel underuses high-density Fold displays. External asset failure should reduce visual richness rather than block gameplay or leave undefined image state. Dynamic-only bootstrapping did not prove interception before the original preload began.
+
+**Consequences:** Fold-closed and Fold-open Chrome cases retain logical dimensions while using bounded DPR backing stores; managed RGB-split rendering uses logical scratch blits instead of `getImageData`; explicit offline mode produces no catalog requests; parser-time `document.write` is accepted only as a contained bridge for the current single-file architecture.
+
+**Full record:** `docs/decisions/d020-bounded-dpr-and-asset-fallbacks.md`
