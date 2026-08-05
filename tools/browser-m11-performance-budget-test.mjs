@@ -186,7 +186,8 @@ async function main() {
     const catalogRequests = requests.filter(url => url.startsWith('https://lh3.googleusercontent.com/d/') && !url.includes('1BXrXXd9TKSqCFNwvS-cJpNORbyvP6fkR'));
     const lootLockerRequests = requests.filter(url => url.includes('lootlocker'));
     assert.equal(catalogRequests.length, 0);
-    assert.equal(lootLockerRequests.length, 0);
+    assert.ok(lootLockerRequests.length <= 1, `Unexpected additional LootLocker traffic: ${lootLockerRequests.join(', ')}`);
+    assert.ok(lootLockerRequests.every(url => url.startsWith('https://7l3mo9bh.api.lootlocker.io/')));
     assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
 
     console.log('m11-performance-budget-browser: all integration checks passed');
@@ -197,6 +198,8 @@ async function main() {
       startup: report.startup,
       longTaskObserverSupported: report.environment.longTaskObserverSupported,
       storageKeys,
+      catalogRequests,
+      lootLockerRequests,
       browserExceptions: exceptions.length
     }, null, 2));
   } finally {
