@@ -14,6 +14,11 @@ assert.equal(parsed.mode, 'offline');
 assert.equal(parsed.attemptTimeoutMs, 750);
 assert.equal(parsed.overallTimeoutMs, 4200);
 
+const defaults = assets.parseAssetOptions({ search: '' });
+assert.equal(defaults.mode, 'auto');
+assert.equal(defaults.attemptTimeoutMs, 2500);
+assert.equal(defaults.overallTimeoutMs, 6500);
+
 assert.equal(
   assets.appendRetryQuery('https://example.com/image=s0', 2),
   'https://example.com/image=s0?smRetry=2'
@@ -31,7 +36,6 @@ const manifest = assets.createAssetManifest([
   suffix: '=s0',
   debug: false
 });
-
 assert.deepEqual(manifest.map(item => item.url), [
   'https://assets.example/alpha=s0',
   'https://assets.example/beta=s0'
