@@ -5,9 +5,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SexMagickCanvasRender = api;
 
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    api.scheduleInstall();
-  }
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') api.scheduleInstall();
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createCanvasRenderApi(root) {
   'use strict';
 
@@ -24,6 +22,7 @@
   let originalGlitchRgbSplit = null;
 
   function finiteNumber(value, fallback = 0) {
+    if (value === null || value === undefined || value === '') return fallback;
     const resolved = Number(value);
     return Number.isFinite(resolved) ? resolved : fallback;
   }
@@ -82,11 +81,8 @@
 
   function parseRenderOptions(locationLike = root.location, windowLike = root) {
     let params;
-    try {
-      params = new URLSearchParams(locationLike?.search || '');
-    } catch (_error) {
-      params = new URLSearchParams('');
-    }
+    try { params = new URLSearchParams(locationLike?.search || ''); }
+    catch (_error) { params = new URLSearchParams(''); }
 
     return Object.freeze({
       requestedDpr: params.get('renderDpr') || 'native',
@@ -104,8 +100,7 @@
     if (typeof HTMLCanvasElement === 'undefined') return null;
     const width = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width');
     const height = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'height');
-    if (!width?.get || !width?.set || !height?.get || !height?.set) return null;
-    return { width, height };
+    return width?.get && width?.set && height?.get && height?.set ? { width, height } : null;
   }
 
   function configureContext(state) {
@@ -113,6 +108,19 @@
     ctx.setTransform(metrics.scaleX, 0, 0, metrics.scaleY, 0, 0);
     ctx.imageSmoothingEnabled = true;
     if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
+  }
+
+  function getStateSnapshot(state) {
+    if (!state) return null;
+    return Object.freeze({
+      mode: 'logical-css-pixels-with-bounded-dpr-backing',
+      version: VERSION,
+      ...state.metrics,
+      resizeCount: state.resizeCount,
+      drawCount: state.drawCount,
+      readbackMode: 'logical-scratch-blit',
+      activatedAt: state.activatedAt
+    });
   }
 
   function applyBackingStore(state) {
@@ -140,9 +148,7 @@
     state.canvas.style.width = `${metrics.logicalWidth}px`;
     state.canvas.style.height = `${metrics.logicalHeight}px`;
 
-    root.dispatchEvent?.(new CustomEvent('sex-magick:render-metrics', {
-      detail: getStateSnapshot(state)
-    }));
+    root.dispatchEvent?.(new CustomEvent('sex-magick:render-metrics', { detail: getStateSnapshot(state) }));
     return metrics;
   }
 
@@ -159,7 +165,6 @@
     if (!canvas || !ctx) throw new Error('Canvas and 2D context are required');
     const existing = canvasStates.get(canvas);
     if (existing) return existing;
-
     const descriptors = getCanvasDescriptors();
     if (!descriptors) throw new Error('Native canvas width/height descriptors are unavailable');
 
@@ -215,12 +220,9 @@
     const state = canvasStates.get(canvas);
     if (!state) return null;
     const transform = state.ctx.getTransform?.();
-    if (
-      !transform ||
-      Math.abs(transform.a - state.metrics.scaleX) > 1e-6 ||
-      Math.abs(transform.d - state.metrics.scaleY) > 1e-6 ||
-      transform.b !== 0 || transform.c !== 0 || transform.e !== 0 || transform.f !== 0
-    ) {
+    if (!transform || Math.abs(transform.a - state.metrics.scaleX) > 1e-6 ||
+      Math.abs(transform.d - state.metrics.scaleY) > 1e-6 || transform.b !== 0 ||
+      transform.c !== 0 || transform.e !== 0 || transform.f !== 0) {
       configureContext(state);
     }
     state.drawCount += 1;
@@ -229,7 +231,8 @@
 
   function installDprSafeGlitch() {
     const glitch = (() => {
-      try { return typeof GlitchFX !== 'undefined' ? GlitchFX : root.GlitchFX; } catch (_error) { return root.GlitchFX; }
+      try { return typeof GlitchFX !== 'undefined' ? GlitchFX : root.GlitchFX; }
+      catch (_error) { return root.GlitchFX; }
     })();
     if (!glitch?.rgbSplit || glitch.__dprSafeRgbSplitInstalled) return false;
 
@@ -248,17 +251,8 @@
       scratch.width = state.metrics.logicalWidth;
       scratch.height = state.metrics.logicalHeight;
       const scratchCtx = scratch.getContext('2d');
-      scratchCtx.drawImage(
-        ctx.canvas,
-        0,
-        0,
-        state.metrics.backingWidth,
-        state.metrics.backingHeight,
-        0,
-        0,
-        state.metrics.logicalWidth,
-        state.metrics.logicalHeight
-      );
+      scratchCtx.drawImage(ctx.canvas, 0, 0, state.metrics.backingWidth, state.metrics.backingHeight,
+        0, 0, state.metrics.logicalWidth, state.metrics.logicalHeight);
 
       return {
         rOffset,
@@ -269,9 +263,7 @@
           targetCtx.globalCompositeOperation = 'screen';
           targetCtx.globalAlpha = 0.8;
           targetCtx.drawImage(scratch, rOffset, 0, width, height);
-          targetCtx.globalAlpha = 0.8;
           targetCtx.drawImage(scratch, 0, gOffset, width, height);
-          targetCtx.globalAlpha = 0.8;
           targetCtx.drawImage(scratch, bOffset, bOffset, width, height);
           targetCtx.restore();
         }
@@ -281,34 +273,19 @@
     return true;
   }
 
-  function getStateSnapshot(state) {
-    if (!state) return null;
-    return Object.freeze({
-      mode: 'logical-css-pixels-with-bounded-dpr-backing',
-      version: VERSION,
-      ...state.metrics,
-      resizeCount: state.resizeCount,
-      drawCount: state.drawCount,
-      readbackMode: 'logical-scratch-blit',
-      activatedAt: state.activatedAt
-    });
-  }
-
-  function getCanvasSnapshot(canvas) {
-    return getStateSnapshot(canvasStates.get(canvas));
-  }
+  function getCanvasSnapshot(canvas) { return getStateSnapshot(canvasStates.get(canvas)); }
 
   function currentGameInstance() {
-    try {
-      if (typeof game !== 'undefined' && game) return game;
-    } catch (_error) {}
+    try { if (typeof game !== 'undefined' && game) return game; }
+    catch (_error) {}
     return root.game || null;
   }
 
   function install() {
     if (installed) return root.__SEX_MAGICK_RENDER__ || null;
     const GameClass = (() => {
-      try { return typeof Game !== 'undefined' ? Game : root.Game; } catch (_error) { return root.Game; }
+      try { return typeof Game !== 'undefined' ? Game : root.Game; }
+      catch (_error) { return root.Game; }
     })();
     if (!GameClass?.prototype) return null;
     if (GameClass.prototype.__canvasRenderRuntimeInstalled && root.__SEX_MAGICK_RENDER__) {
@@ -322,10 +299,7 @@
 
     GameClass.prototype.resizeCanvas = function resizeCanvasWithDpr(...args) {
       try {
-        activateCanvas(this.canvas, this.ctx, {
-          width: root.innerWidth,
-          height: root.innerHeight
-        });
+        activateCanvas(this.canvas, this.ctx, { width: root.innerWidth, height: root.innerHeight });
         const metrics = setLogicalSize(this.canvas, root.innerWidth, root.innerHeight);
         this.calculateScaleFactor();
         this.adjustForScreenSize();
@@ -344,7 +318,6 @@
 
     installDprSafeGlitch();
     GameClass.prototype.__canvasRenderRuntimeInstalled = true;
-
     root.__SEX_MAGICK_RENDER__ = Object.freeze({
       mode: 'logical-css-pixels-with-bounded-dpr-backing',
       version: VERSION,
@@ -352,8 +325,7 @@
         return instance?.canvas ? getCanvasSnapshot(instance.canvas) : null;
       },
       refresh(instance = currentGameInstance()) {
-        if (!instance?.resizeCanvas) return null;
-        return instance.resizeCanvas();
+        return instance?.resizeCanvas ? instance.resizeCanvas() : null;
       },
       computeRenderMetrics,
       parseRenderOptions
@@ -365,7 +337,6 @@
       const active = currentGameInstance();
       if (active?.resizeCanvas) active.resizeCanvas();
     });
-
     return root.__SEX_MAGICK_RENDER__;
   }
 
