@@ -6,11 +6,13 @@ on:
       - main
       - develop/sex-magick-2.0
       - develop/m9-runtime-hardening
+      - develop/m10-render-resilience
   push:
     branches:
       - develop/sex-magick-2.0
       - develop/m9-runtime-hardening
       - develop/m10-render-resilience
+      - develop/m11-performance-budget
 
 permissions:
   contents: read
@@ -40,6 +42,7 @@ jobs:
           node --check tools/viewport-runtime.js
           node --check tools/canvas-render-runtime.js
           node --check tools/asset-resilience-runtime.js
+          node --check tools/performance-budget-runtime.js
           node --check tools/run-telemetry.js
           node --check tools/obstacle-grammar.js
           node --check tools/player-reachability.js
@@ -59,6 +62,8 @@ jobs:
           node --check tools/test-viewport-runtime.js
           node --check tools/test-canvas-render-runtime.js
           node --check tools/test-asset-resilience-runtime.js
+          node --check tools/test-performance-budget-runtime.js
+          node --check tools/test-performance-budget-harness.js
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
           node --check tools/test-player-reachability.js
@@ -70,6 +75,7 @@ jobs:
           node --check tools/browser-gate-slice-test.mjs
           node --check tools/browser-m9-runtime-hardening-test.mjs
           node --check tools/browser-m10-render-resilience-test.mjs
+          node --check tools/browser-m11-performance-budget-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -91,6 +97,8 @@ jobs:
           node tools/test-viewport-runtime.js
           node tools/test-canvas-render-runtime.js
           node tools/test-asset-resilience-runtime.js
+          node tools/test-performance-budget-runtime.js
+          node tools/test-performance-budget-harness.js
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
           node tools/test-m7-review-diagnostics.js
@@ -112,6 +120,9 @@ jobs:
 
       - name: Run M10 render and asset resilience Chrome integration
         run: node tools/browser-m10-render-resilience-test.mjs
+
+      - name: Run M11 performance budget Chrome integration
+        run: node tools/browser-m11-performance-budget-test.mjs
 
       - name: Run telemetry and fast-retry Chrome integration
         run: node tools/run-browser-telemetry-test.mjs
