@@ -10,19 +10,41 @@ const clientVersion = execSync('npx playwright --version', { encoding: 'utf8' })
 
 if (!username || !accessKey) throw new Error('BrowserStack repository secrets are unavailable.');
 if (!localIdentifier) throw new Error('BrowserStack Local identifier is unavailable.');
+if (clientVersion !== '1.60.0') {
+  throw new Error(`Unexpected Playwright client version ${clientVersion}; expected 1.60.0 for this BrowserStack gate.`);
+}
 
 const targets = [
   {
     name: 'Desktop Chrome smoke',
-    caps: { os: 'Windows', os_version: '11', browser: 'chrome', browser_version: 'latest', resolution: '1440x900' }
+    supportsConsole: true,
+    caps: {
+      os: 'Windows',
+      osVersion: '11',
+      browser: 'chrome',
+      browser_version: 'latest',
+      resolution: '1440x900'
+    }
   },
   {
     name: 'Samsung Galaxy S23 Ultra smoke',
-    caps: { device: 'Samsung Galaxy S23 Ultra', os: 'android', os_version: '13.0', browser: 'chrome', real_mobile: 'true' }
+    supportsConsole: true,
+    caps: {
+      deviceName: 'Samsung Galaxy S23 Ultra',
+      osVersion: '13.0',
+      browser: 'chrome',
+      realMobile: 'true'
+    }
   },
   {
     name: 'iPhone 13 Safari smoke',
-    caps: { device: 'iPhone 13', os: 'ios', os_version: '15', browser: 'playwright-webkit', real_mobile: 'true' }
+    supportsConsole: false,
+    caps: {
+      deviceName: 'iPhone 13',
+      osVersion: '15',
+      browser: 'safari',
+      realMobile: 'true'
+    }
   }
 ];
 
@@ -35,7 +57,7 @@ async function mark(page, status, reason) {
   } catch (_) {}
 }
 
-async function runTarget(target) {
+function createCapabilities(target) {
   const caps = {
     ...target.caps,
     name: target.name,
@@ -45,40 +67,55 @@ async function runTarget(target) {
     'browserstack.accessKey': accessKey,
     'browserstack.local': 'true',
     'browserstack.localIdentifier': localIdentifier,
-    'browserstack.playwrightVersion': '1.latest',
+    'browserstack.playwrightVersion': '1.60',
     'client.playwrightVersion': clientVersion,
     'browserstack.debug': 'true',
-    'browserstack.console': 'info',
     'browserstack.networkLogs': 'true',
     'browserstack.video': 'true'
   };
+  if (target.supportsConsole) caps['browserstack.console'] = 'info';
+  return caps;
+}
 
+async function runTarget(target) {
+  const caps = createCapabilities(target);
   const endpoint = `wss://cdp.browserstack.com/playwright?caps=${encodeURIComponent(JSON.stringify(caps))}`;
-  const browser = await chromium.connect({ wsEndpoint: endpoint });
-  const context = await browser.newContext({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  const page = await context.newPage();
+  const browser = await chromium.connect({ wsEndpoint: endpoint, timeout: 60_000 });
+  const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
 
   try {
     await page.goto('http://localhost:8099/index.html?assetMode=offline&renderDpr=native', {
-      waitUntil: 'domcontentloaded', timeout: 30_000
+      waitUntil: 'domcontentloaded', timeout: 45_000
     });
-    await page.locator('#game-container').waitFor({ state: 'visible', timeout: 20_000 });
-    await page.locator('canvas').first().waitFor({ state: 'visible', timeout: 20_000 });
-    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_VIEWPORT__?.getSnapshot?.()), null, { timeout: 20_000 });
+    await page.locator('#game-container').waitFor({ state: 'visible', timeout: 30_000 });
+    await page.locator('canvas').first().waitFor({ state: 'visible', timeout: 30_000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_VIEWPORT__?.getSnapshot?.()), null, { timeout: 30_000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_TOUCH_TARGETS__), null, { timeout: 30_000 });
 
     const evidence = await page.evaluate(() => {
       const canvas = document.querySelector('canvas');
       const rect = canvas?.getBoundingClientRect();
       const viewport = window.__SEX_MAGICK_VIEWPORT__?.getSnapshot?.();
+      const visibleButtons = [...document.querySelectorAll('button')].filter(element => {
+        const style = getComputedStyle(element);
+        const bounds = element.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && bounds.width > 0 && bounds.height > 0;
+      });
+      const undersized = visibleButtons.map(button => {
+        const bounds = button.getBoundingClientRect();
+        return { text: button.textContent?.trim().slice(0, 40), width: bounds.width, height: bounds.height };
+      }).filter(item => item.width < 44 || item.height < 44);
       return {
         title: document.title,
         profile: viewport?.profile,
         viewport: [innerWidth, innerHeight],
         overflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
         canvas: rect ? [rect.width, rect.height] : null,
-        backingPixels: Number(canvas?.dataset.smBackingWidth || 0) * Number(canvas?.dataset.smBackingHeight || 0)
+        backingPixels: Number(canvas?.dataset.smBackingWidth || 0) * Number(canvas?.dataset.smBackingHeight || 0),
+        touchTargetMinimum: window.__SEX_MAGICK_TOUCH_TARGETS__?.minimumCssPixels,
+        undersized
       };
     });
 
@@ -88,6 +125,9 @@ async function runTarget(target) {
       throw new Error(`Canvas does not cover viewport: ${JSON.stringify(evidence)}`);
     }
     if (evidence.backingPixels > 8_000_000) throw new Error(`Backing budget exceeded: ${evidence.backingPixels}`);
+    if (evidence.touchTargetMinimum !== 44 || evidence.undersized.length) {
+      throw new Error(`Touch target policy failed: ${JSON.stringify(evidence.undersized)}`);
+    }
     if (errors.length) throw new Error(`Browser exceptions: ${errors.join(' | ')}`);
 
     console.log(JSON.stringify({ target: target.name, evidence }, null, 2));
@@ -96,7 +136,7 @@ async function runTarget(target) {
     await mark(page, 'failed', String(error?.message || error).slice(0, 255));
     throw error;
   } finally {
-    await context.close().catch(() => {});
+    await page.close().catch(() => {});
     await browser.close().catch(() => {});
   }
 }
