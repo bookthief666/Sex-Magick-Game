@@ -7,11 +7,10 @@
     "serve:test": "http-server . -a 127.0.0.1 -p 8099 -c-1",
     "test:cross-screen": "playwright test --config=playwright.config.ts",
     "test:cross-screen:update": "playwright test --config=playwright.config.ts --update-snapshots",
-    "test:browserstack": "browserstack-node-sdk playwright test --config=playwright.browserstack.config.ts"
+    "test:browserstack": "node tools/browserstack-real-device-smoke.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.0",
-    "browserstack-node-sdk": "1.65.2",
+    "@playwright/test": "1.60.0",
     "http-server": "14.1.1"
   }
 }
