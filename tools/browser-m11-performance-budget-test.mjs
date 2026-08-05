@@ -27,6 +27,20 @@ async function waitHttp(url, timeout = 15000) {
   }
   throw new Error(`Timed out waiting for ${url}`);
 }
+async function removeProfile(directory) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      await rm(directory, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
+      return;
+    } catch (error) {
+      if (attempt === 7) {
+        console.warn(`[M11 QA] Could not remove temporary Chrome profile: ${error.message}`);
+        return;
+      }
+      await sleep(100 * (attempt + 1));
+    }
+  }
+}
 
 class CDP {
   constructor(url) { this.url = url; this.id = 1; this.pending = new Map(); this.listeners = new Map(); }
@@ -70,11 +84,13 @@ async function evaluate(cdp, expression) {
 }
 async function waitExpression(cdp, expression, timeout = 25000) {
   const end = Date.now() + timeout;
+  let lastError = null;
   while (Date.now() < end) {
-    try { if (await evaluate(cdp, expression)) return; } catch (_error) {}
+    try { if (await evaluate(cdp, expression)) return; }
+    catch (error) { lastError = error; }
     await sleep(50);
   }
-  throw new Error(`Timed out waiting for ${expression}`);
+  throw new Error(`Timed out waiting for ${expression}${lastError ? `: ${lastError.message}` : ''}`);
 }
 
 async function main() {
@@ -116,7 +132,7 @@ async function main() {
   cdp.on('Network.requestWillBeSent', event => requests.push(event.request.url));
 
   try {
-    await cdp.send('Page.navigate', { url: `${BASE_URL}/index.html?assetMode=offline&renderDpr=native&perfProbe=1&perfPanel=1&perfWarmupFrames=0&perfSampleFrames=120&perfMaxSegments=4&viewportProfile=fold-closed&m11=${Date.now()}` });
+    await cdp.send('Page.navigate', { url: `${BASE_URL}/index.html?assetMode=offline&renderDpr=native&perfProbe=1&perfPanel=1&perfWarmupFrames=0&perfSampleFrames=120&perfMaxSegments=4&m11=${Date.now()}` });
     await waitExpression(cdp, `typeof game !== 'undefined' && !!__SEX_MAGICK_PERFORMANCE__ && __SEX_MAGICK_ASSETS__.getSnapshot()?.summary?.pending === 0`);
     await waitExpression(cdp, `!document.getElementById('menuButtons')?.classList.contains('hidden')`);
     await evaluate(cdp, `
@@ -186,7 +202,8 @@ async function main() {
   } finally {
     cdp.close();
     for (const child of children.reverse()) if (!child.killed) child.kill('SIGTERM');
-    await rm(profile, { recursive: true, force: true });
+    await sleep(250);
+    await removeProfile(profile);
   }
 }
 
