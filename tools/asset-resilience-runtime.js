@@ -16,9 +16,11 @@
   const DEFAULT_ATTEMPT_TIMEOUT_MS = 2500;
   const DEFAULT_OVERALL_TIMEOUT_MS = 6500;
   const MAX_NETWORK_ATTEMPTS = 2;
+  const FALLBACK_WIDTH = 480;
+  const FALLBACK_HEIGHT = 270;
+  const fallbackCache = new Map();
   let installed = false;
   let installTimer = null;
-  let originalPreloadAllImages = null;
   let originalFinishLoading = null;
 
   function finiteNumber(value, fallback = 0) {
@@ -119,54 +121,65 @@
       lastError: record.lastError,
       reason: record.reason,
       originClean: record.originClean,
+      fallbackKey: record.fallbackKey,
       settledAtMs: record.settledAtMs
     };
   }
 
+  function normalizeAccent(accent) {
+    const value = String(accent || '#00e5ff').trim().toLowerCase();
+    return /^#[0-9a-f]{3,8}$/i.test(value) ? value : '#00e5ff';
+  }
+
   function createFallbackCanvas(asset, reason = 'unavailable') {
+    const accent = normalizeAccent(asset?.accent);
+    if (fallbackCache.has(accent)) return fallbackCache.get(accent);
+
     const canvas = document.createElement('canvas');
-    canvas.width = 960;
-    canvas.height = 540;
+    canvas.width = FALLBACK_WIDTH;
+    canvas.height = FALLBACK_HEIGHT;
     canvas.complete = true;
     canvas.__sexMagickFallback = true;
+    canvas.__sexMagickFallbackKey = accent;
     canvas.__sexMagickFallbackReason = reason;
     const ctx = canvas.getContext('2d');
-    const accent = asset.accent || '#00e5ff';
 
-    const gradient = ctx.createRadialGradient(480, 270, 20, 480, 270, 600);
-    gradient.addColorStop(0, `${accent}55`);
+    const gradient = ctx.createRadialGradient(240, 135, 10, 240, 135, 300);
+    gradient.addColorStop(0, `${accent}66`);
     gradient.addColorStop(0.45, '#11131c');
     gradient.addColorStop(1, '#020204');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
-    ctx.translate(480, 270);
+    ctx.translate(240, 128);
     ctx.strokeStyle = accent;
-    ctx.globalAlpha = 0.72;
-    ctx.lineWidth = 4;
+    ctx.globalAlpha = 0.78;
+    ctx.lineWidth = 2;
     for (let ring = 1; ring <= 4; ring += 1) {
       ctx.beginPath();
-      ctx.arc(0, 0, ring * 46, 0, Math.PI * 2);
+      ctx.arc(0, 0, ring * 23, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.rotate(Math.PI / 6);
     for (let index = 0; index < 6; index += 1) {
       ctx.rotate(Math.PI / 3);
       ctx.beginPath();
-      ctx.moveTo(52, 0);
-      ctx.lineTo(188, 0);
+      ctx.moveTo(26, 0);
+      ctx.lineTo(94, 0);
       ctx.stroke();
     }
     ctx.restore();
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#f8fbff';
-    ctx.font = '700 34px sans-serif';
-    ctx.fillText(String(asset.name || asset.id || 'SIGIL').toUpperCase(), 480, 475);
+    ctx.font = '700 18px sans-serif';
+    ctx.fillText('SIGIL CHANNEL OFFLINE', 240, 232);
     ctx.fillStyle = accent;
-    ctx.font = '16px monospace';
-    ctx.fillText('PROCEDURAL FALLBACK · GAMEPLAY REMAINS AVAILABLE', 480, 507);
+    ctx.font = '10px monospace';
+    ctx.fillText('PROCEDURAL FIELD · GAMEPLAY AVAILABLE', 240, 250);
+
+    fallbackCache.set(accent, canvas);
     return canvas;
   }
 
@@ -182,9 +195,7 @@
         image.onerror = null;
         callback(value);
       };
-      const timer = setTimeout(() => {
-        finish(reject, new Error(`attempt-timeout:${timeoutMs}`));
-      }, timeoutMs);
+      const timer = setTimeout(() => finish(reject, new Error(`attempt-timeout:${timeoutMs}`)), timeoutMs);
 
       image.crossOrigin = 'anonymous';
       image.decoding = 'async';
@@ -222,22 +233,24 @@
     state.finishedAt = new Date().toISOString();
     state.durationMs = Math.max(0, Math.round(performance.now() - state.startedMonotonicMs));
     clearTimeout(state.overallTimer);
-    state.snapshot = buildInstanceSnapshot(instance);
     instance.finishLoading();
+    state.snapshot = buildInstanceSnapshot(instance);
     root.dispatchEvent?.(new CustomEvent('sex-magick:assets-ready', { detail: state.snapshot }));
     return state.snapshot;
   }
 
   function settleFallback(instance, record, level, reason, error = null) {
     if (record.settled) return;
+    const fallback = createFallbackCanvas(record, reason);
     record.settled = true;
     record.status = 'fallback';
-    record.source = 'procedural';
+    record.source = 'procedural-shared-atlas';
     record.reason = reason;
     record.lastError = error ? String(error?.message || error) : record.lastError;
     record.originClean = true;
+    record.fallbackKey = fallback.__sexMagickFallbackKey;
     record.settledAtMs = Math.max(0, Math.round(performance.now() - instance.__smAssetRuntime.startedMonotonicMs));
-    level.img = createFallbackCanvas(record, reason);
+    level.img = fallback;
     level.loaded = true;
     level.assetFallback = true;
     level.assetStatus = cloneRecord(record);
@@ -252,6 +265,7 @@
     record.reason = null;
     record.lastError = null;
     record.originClean = true;
+    record.fallbackKey = null;
     record.settledAtMs = Math.max(0, Math.round(performance.now() - instance.__smAssetRuntime.startedMonotonicMs));
     level.img = image;
     level.loaded = true;
@@ -303,6 +317,8 @@
       total: state.total,
       finishCalls: state.finishCalls,
       networkAttempts: state.networkAttempts,
+      fallbackSurfaceCount: fallbackCache.size,
+      fallbackSurfacePixels: fallbackCache.size * FALLBACK_WIDTH * FALLBACK_HEIGHT,
       summary: summarizeRecords(records),
       records
     });
@@ -329,9 +345,12 @@
       try { return typeof CONFIG !== 'undefined' ? CONFIG : root.CONFIG; } catch (_error) { return root.CONFIG; }
     })();
     if (!Array.isArray(levels) || !config) return null;
+    if (GameClass.prototype.__assetResilienceRuntimeInstalled && root.__SEX_MAGICK_ASSETS__) {
+      installed = true;
+      return root.__SEX_MAGICK_ASSETS__;
+    }
 
     installed = true;
-    originalPreloadAllImages = GameClass.prototype.preloadAllImages;
     originalFinishLoading = GameClass.prototype.finishLoading;
 
     GameClass.prototype.finishLoading = function finishLoadingOnce(...args) {
@@ -376,6 +395,7 @@
           lastError: null,
           reason: null,
           originClean: null,
+          fallbackKey: null,
           settledAtMs: null,
           settled: false
         })),
@@ -413,7 +433,8 @@
       normalizeMode,
       parseAssetOptions,
       createAssetManifest,
-      summarizeRecords
+      summarizeRecords,
+      getFallbackSurfaceCount() { return fallbackCache.size; }
     });
 
     const instance = currentGameInstance();
@@ -441,6 +462,8 @@
     DEFAULT_ATTEMPT_TIMEOUT_MS,
     DEFAULT_OVERALL_TIMEOUT_MS,
     MAX_NETWORK_ATTEMPTS,
+    FALLBACK_WIDTH,
+    FALLBACK_HEIGHT,
     normalizeMode,
     parseAssetOptions,
     appendRetryQuery,
