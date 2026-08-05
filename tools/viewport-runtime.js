@@ -277,3 +277,45 @@
     refresh
   });
 });
+
+(function bootstrapM10RenderingAndAssets() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const currentSource = document.currentScript?.src || window.location.href;
+  const queue = [
+    {
+      source: './canvas-render-runtime.js',
+      dataset: 'sexMagickCanvasRenderRuntime',
+      selector: 'script[data-sex-magick-canvas-render-runtime]',
+      globalName: 'SexMagickCanvasRender'
+    },
+    {
+      source: './asset-resilience-runtime.js',
+      dataset: 'sexMagickAssetResilienceRuntime',
+      selector: 'script[data-sex-magick-asset-resilience-runtime]',
+      globalName: 'SexMagickAssetResilience'
+    }
+  ];
+
+  function loadNext(index) {
+    if (index >= queue.length) return;
+    const item = queue[index];
+    if (globalThis[item.globalName] || document.querySelector(item.selector)) {
+      loadNext(index + 1);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = new URL(item.source, currentSource).href;
+    script.async = false;
+    script.dataset[item.dataset] = 'true';
+    script.onload = () => loadNext(index + 1);
+    script.onerror = () => {
+      console.error('[SEX MAGICK] M10 runtime failed to load', script.src);
+      loadNext(index + 1);
+    };
+    document.head.appendChild(script);
+  }
+
+  loadNext(0);
+})();
