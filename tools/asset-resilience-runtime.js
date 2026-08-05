@@ -5,9 +5,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SexMagickAssetResilience = api;
 
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    api.scheduleInstall();
-  }
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') api.scheduleInstall();
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createAssetResilienceApi(root) {
   'use strict';
 
@@ -24,6 +22,7 @@
   let originalFinishLoading = null;
 
   function finiteNumber(value, fallback = 0) {
+    if (value === null || value === undefined || value === '') return fallback;
     const resolved = Number(value);
     return Number.isFinite(resolved) ? resolved : fallback;
   }
@@ -39,22 +38,15 @@
 
   function parseAssetOptions(locationLike = root.location) {
     let params;
-    try {
-      params = new URLSearchParams(locationLike?.search || '');
-    } catch (_error) {
-      params = new URLSearchParams('');
-    }
+    try { params = new URLSearchParams(locationLike?.search || ''); }
+    catch (_error) { params = new URLSearchParams(''); }
     return Object.freeze({
       mode: normalizeMode(params.get('assetMode')),
       attemptTimeoutMs: Math.round(clamp(
-        finiteNumber(params.get('assetAttemptMs'), DEFAULT_ATTEMPT_TIMEOUT_MS),
-        250,
-        4000
+        finiteNumber(params.get('assetAttemptMs'), DEFAULT_ATTEMPT_TIMEOUT_MS), 250, 4000
       )),
       overallTimeoutMs: Math.round(clamp(
-        finiteNumber(params.get('assetOverallMs'), DEFAULT_OVERALL_TIMEOUT_MS),
-        1000,
-        10_000
+        finiteNumber(params.get('assetOverallMs'), DEFAULT_OVERALL_TIMEOUT_MS), 1000, 10_000
       ))
     });
   }
@@ -67,8 +59,7 @@
       if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return parsed.href;
       return `${parsed.pathname}${parsed.search}${parsed.hash}`;
     } catch (_error) {
-      const delimiter = raw.includes('?') ? '&' : '?';
-      return `${raw}${delimiter}smRetry=${encodeURIComponent(attempt)}`;
+      return `${raw}${raw.includes('?') ? '&' : '?'}smRetry=${encodeURIComponent(attempt)}`;
     }
   }
 
@@ -178,7 +169,6 @@
     ctx.fillStyle = accent;
     ctx.font = '10px monospace';
     ctx.fillText('PROCEDURAL FIELD · GAMEPLAY AVAILABLE', 240, 250);
-
     fallbackCache.set(accent, canvas);
     return canvas;
   }
@@ -196,7 +186,6 @@
         callback(value);
       };
       const timer = setTimeout(() => finish(reject, new Error(`attempt-timeout:${timeoutMs}`)), timeoutMs);
-
       image.crossOrigin = 'anonymous';
       image.decoding = 'async';
       image.onload = () => {
@@ -224,6 +213,27 @@
       const fallbackLabel = summary.fallback > 0 ? ` · ${summary.fallback} FALLBACK` : '';
       text.innerText = `CHARGING SIGIL... ${settled}/${state.total}${fallbackLabel}`;
     }
+  }
+
+  function buildInstanceSnapshot(instance) {
+    const state = instance?.__smAssetRuntime;
+    if (!state) return null;
+    const records = state.records.map(cloneRecord);
+    return Object.freeze({
+      mode: 'bounded-asset-loading-with-procedural-fallbacks',
+      version: VERSION,
+      assetMode: state.options.mode,
+      startedAt: state.startedAt,
+      finishedAt: state.finishedAt,
+      durationMs: state.durationMs,
+      total: state.total,
+      finishCalls: state.finishCalls,
+      networkAttempts: state.networkAttempts,
+      fallbackSurfaceCount: fallbackCache.size,
+      fallbackSurfacePixels: fallbackCache.size * FALLBACK_WIDTH * FALLBACK_HEIGHT,
+      summary: summarizeRecords(records),
+      records
+    });
   }
 
   function finishInstanceOnce(instance) {
@@ -299,50 +309,30 @@
         record.reason = record.lastError.startsWith('attempt-timeout') ? 'attempt-timeout' : 'network-failure';
       }
     }
-
     settleFallback(instance, record, level, record.reason || 'network-failure', record.lastError);
   }
 
-  function buildInstanceSnapshot(instance) {
-    const state = instance?.__smAssetRuntime;
-    if (!state) return null;
-    const records = state.records.map(cloneRecord);
-    return Object.freeze({
-      mode: 'bounded-asset-loading-with-procedural-fallbacks',
-      version: VERSION,
-      assetMode: state.options.mode,
-      startedAt: state.startedAt,
-      finishedAt: state.finishedAt,
-      durationMs: state.durationMs,
-      total: state.total,
-      finishCalls: state.finishCalls,
-      networkAttempts: state.networkAttempts,
-      fallbackSurfaceCount: fallbackCache.size,
-      fallbackSurfacePixels: fallbackCache.size * FALLBACK_WIDTH * FALLBACK_HEIGHT,
-      summary: summarizeRecords(records),
-      records
-    });
-  }
-
   function currentGameInstance() {
-    try {
-      if (typeof game !== 'undefined' && game) return game;
-    } catch (_error) {}
+    try { if (typeof game !== 'undefined' && game) return game; }
+    catch (_error) {}
     return root.game || null;
   }
 
   function install() {
     if (installed) return root.__SEX_MAGICK_ASSETS__ || null;
     const GameClass = (() => {
-      try { return typeof Game !== 'undefined' ? Game : root.Game; } catch (_error) { return root.Game; }
+      try { return typeof Game !== 'undefined' ? Game : root.Game; }
+      catch (_error) { return root.Game; }
     })();
     if (!GameClass?.prototype) return null;
 
     const levels = (() => {
-      try { return typeof MASTER_POOL !== 'undefined' ? MASTER_POOL : root.MASTER_POOL; } catch (_error) { return root.MASTER_POOL; }
+      try { return typeof MASTER_POOL !== 'undefined' ? MASTER_POOL : root.MASTER_POOL; }
+      catch (_error) { return root.MASTER_POOL; }
     })();
     const config = (() => {
-      try { return typeof CONFIG !== 'undefined' ? CONFIG : root.CONFIG; } catch (_error) { return root.CONFIG; }
+      try { return typeof CONFIG !== 'undefined' ? CONFIG : root.CONFIG; }
+      catch (_error) { return root.CONFIG; }
     })();
     if (!Array.isArray(levels) || !config) return null;
     if (GameClass.prototype.__assetResilienceRuntimeInstalled && root.__SEX_MAGICK_ASSETS__) {
@@ -352,7 +342,6 @@
 
     installed = true;
     originalFinishLoading = GameClass.prototype.finishLoading;
-
     GameClass.prototype.finishLoading = function finishLoadingOnce(...args) {
       const state = this.__smAssetRuntime;
       if (state) state.finishCalls += 1;
@@ -368,7 +357,6 @@
 
     GameClass.prototype.preloadAllImages = function preloadAllImagesResilient() {
       if (this.__smAssetRuntime?.started && !this.__smAssetRuntime.finished) return this.__smAssetRuntime.promise;
-
       const options = parseAssetOptions(root.location);
       const manifest = createAssetManifest(levels, {
         baseUrl: config.BASE_URL,
@@ -408,19 +396,20 @@
 
       state.overallTimer = setTimeout(() => {
         for (let index = 0; index < state.records.length; index += 1) {
-          const record = state.records[index];
-          if (!record.settled) settleFallback(this, record, levels[index], 'overall-timeout', record.lastError);
+          if (!state.records[index].settled) {
+            settleFallback(this, state.records[index], levels[index], 'overall-timeout', state.records[index].lastError);
+          }
         }
         finishInstanceOnce(this);
       }, options.overallTimeoutMs);
 
-      const loaders = state.records.map((record, index) => loadRecord(this, record, levels[index], options));
-      state.promise = Promise.allSettled(loaders).then(() => finishInstanceOnce(this));
+      state.promise = Promise.allSettled(
+        state.records.map((record, index) => loadRecord(this, record, levels[index], options))
+      ).then(() => finishInstanceOnce(this));
       return state.promise;
     };
 
     GameClass.prototype.__assetResilienceRuntimeInstalled = true;
-
     root.__SEX_MAGICK_ASSETS__ = Object.freeze({
       mode: 'bounded-asset-loading-with-procedural-fallbacks',
       version: VERSION,
