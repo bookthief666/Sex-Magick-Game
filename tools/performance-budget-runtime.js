@@ -1,10 +1,8 @@
 (function attachSexMagickPerformanceBudget(root, factory) {
   'use strict';
-
   const api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.SexMagickPerformanceBudget = api;
-
   if (typeof window !== 'undefined' && typeof document !== 'undefined') api.scheduleInstall();
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createPerformanceBudgetApi(root) {
   'use strict';
@@ -17,6 +15,7 @@
   const DEFAULT_SAMPLE_LIMIT = 3600;
   const DEFAULT_MAX_SEGMENTS = 12;
   const DEFAULT_UPDATE_INTERVAL_MS = 250;
+  const DEFAULT_CONTEXT_STABILITY_FRAMES = 3;
   const MAX_SUSPENSION_GAP_MS = 250;
 
   let installed = false;
@@ -27,8 +26,8 @@
 
   function finiteNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
-    const resolved = Number(value);
-    return Number.isFinite(resolved) ? resolved : fallback;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
   }
 
   function clamp(value, minimum, maximum) {
@@ -43,24 +42,23 @@
     return fallback;
   }
 
+  function roundMetric(value, digits = 3) {
+    if (!Number.isFinite(value)) return null;
+    const factor = 10 ** digits;
+    return Math.round(value * factor) / factor;
+  }
+
   function percentile(values, fraction) {
     const clean = Array.from(values || [], value => finiteNumber(value, NaN))
       .filter(Number.isFinite)
       .sort((a, b) => a - b);
     if (!clean.length) return null;
-    const p = clamp(fraction, 0, 1);
-    const index = (clean.length - 1) * p;
-    const lower = Math.floor(index);
-    const upper = Math.ceil(index);
+    const position = (clean.length - 1) * clamp(fraction, 0, 1);
+    const lower = Math.floor(position);
+    const upper = Math.ceil(position);
     if (lower === upper) return clean[lower];
-    const weight = index - lower;
+    const weight = position - lower;
     return clean[lower] * (1 - weight) + clean[upper] * weight;
-  }
-
-  function roundMetric(value, digits = 3) {
-    if (!Number.isFinite(value)) return null;
-    const factor = 10 ** digits;
-    return Math.round(value * factor) / factor;
   }
 
   function summarizeSamples(values) {
@@ -91,10 +89,7 @@
         cursor = (cursor + 1) % capacity;
         size = Math.min(capacity, size + 1);
       },
-      clear() {
-        size = 0;
-        cursor = 0;
-      },
+      clear() { size = 0; cursor = 0; },
       values() {
         if (size < capacity) return values.slice(0, size);
         return values.slice(cursor).concat(values.slice(0, cursor));
@@ -109,21 +104,9 @@
     try { params = new URLSearchParams(locationLike?.search || ''); }
     catch (_error) { params = new URLSearchParams(''); }
 
-    const targetFrameMs = clamp(
-      finiteNumber(params.get('perfTargetFrameMs'), DEFAULT_TARGET_FRAME_MS),
-      4,
-      100
-    );
-    const longFrameMs = clamp(
-      finiteNumber(params.get('perfLongFrameMs'), DEFAULT_LONG_FRAME_MS),
-      targetFrameMs,
-      250
-    );
-    const criticalFrameMs = clamp(
-      finiteNumber(params.get('perfCriticalFrameMs'), DEFAULT_CRITICAL_FRAME_MS),
-      longFrameMs,
-      500
-    );
+    const targetFrameMs = clamp(finiteNumber(params.get('perfTargetFrameMs'), DEFAULT_TARGET_FRAME_MS), 4, 100);
+    const longFrameMs = clamp(finiteNumber(params.get('perfLongFrameMs'), DEFAULT_LONG_FRAME_MS), targetFrameMs, 250);
+    const criticalFrameMs = clamp(finiteNumber(params.get('perfCriticalFrameMs'), DEFAULT_CRITICAL_FRAME_MS), longFrameMs, 500);
 
     return Object.freeze({
       enabled: parseBoolean(params.get('perfProbe'), false),
@@ -131,17 +114,12 @@
       targetFrameMs,
       longFrameMs,
       criticalFrameMs,
-      warmupFrames: Math.round(clamp(
-        finiteNumber(params.get('perfWarmupFrames'), DEFAULT_WARMUP_FRAMES), 0, 1200
-      )),
-      sampleLimit: Math.round(clamp(
-        finiteNumber(params.get('perfSampleFrames'), DEFAULT_SAMPLE_LIMIT), 120, 12_000
-      )),
-      maxSegments: Math.round(clamp(
-        finiteNumber(params.get('perfMaxSegments'), DEFAULT_MAX_SEGMENTS), 1, 24
-      )),
-      updateIntervalMs: Math.round(clamp(
-        finiteNumber(params.get('perfUpdateMs'), DEFAULT_UPDATE_INTERVAL_MS), 100, 2000
+      warmupFrames: Math.round(clamp(finiteNumber(params.get('perfWarmupFrames'), DEFAULT_WARMUP_FRAMES), 0, 1200)),
+      sampleLimit: Math.round(clamp(finiteNumber(params.get('perfSampleFrames'), DEFAULT_SAMPLE_LIMIT), 120, 12_000)),
+      maxSegments: Math.round(clamp(finiteNumber(params.get('perfMaxSegments'), DEFAULT_MAX_SEGMENTS), 1, 24)),
+      updateIntervalMs: Math.round(clamp(finiteNumber(params.get('perfUpdateMs'), DEFAULT_UPDATE_INTERVAL_MS), 100, 2000)),
+      contextStabilityFrames: Math.round(clamp(
+        finiteNumber(params.get('perfContextStabilityFrames'), DEFAULT_CONTEXT_STABILITY_FRAMES), 1, 10
       ))
     });
   }
@@ -178,45 +156,50 @@
     const criticalRate = frameCount ? summary.criticalFrames / frameCount : 0;
     const p95 = summary.frameIntervals.p95 ?? Infinity;
     const drawP95 = summary.drawDurations.p95 ?? 0;
-
     if (
-      summary.droppedSimulationMs > 0 ||
-      criticalRate > 0.02 ||
-      p95 > options.criticalFrameMs ||
-      summary.longTasks.totalDurationMs > 500
+      summary.droppedSimulationMs > 0 || criticalRate > 0.02 ||
+      p95 > options.criticalFrameMs || summary.longTasks.totalDurationMs > 500
     ) return 'over-observed-budget';
-
     if (
-      longRate > 0.05 ||
-      p95 > options.longFrameMs ||
-      drawP95 > options.targetFrameMs * 0.75 ||
-      summary.longTasks.count > 0
+      longRate > 0.05 || p95 > options.longFrameMs ||
+      drawP95 > options.targetFrameMs * 0.75 || summary.longTasks.count > 0
     ) return 'watch';
-
     return 'within-observed-budget';
   }
 
   function createCollector(options = {}) {
+    const defaults = parsePerformanceOptions({ search: '' });
     const normalizedOptions = Object.freeze({
-      ...parsePerformanceOptions({ search: '' }),
+      ...defaults,
       ...options,
       targetFrameMs: clamp(finiteNumber(options.targetFrameMs, DEFAULT_TARGET_FRAME_MS), 4, 100),
       longFrameMs: clamp(finiteNumber(options.longFrameMs, DEFAULT_LONG_FRAME_MS), 4, 250),
       criticalFrameMs: clamp(finiteNumber(options.criticalFrameMs, DEFAULT_CRITICAL_FRAME_MS), 4, 500),
       warmupFrames: Math.max(0, Math.floor(finiteNumber(options.warmupFrames, DEFAULT_WARMUP_FRAMES))),
       sampleLimit: Math.max(1, Math.floor(finiteNumber(options.sampleLimit, DEFAULT_SAMPLE_LIMIT))),
-      maxSegments: Math.max(1, Math.floor(finiteNumber(options.maxSegments, DEFAULT_MAX_SEGMENTS)))
+      maxSegments: Math.max(1, Math.floor(finiteNumber(options.maxSegments, DEFAULT_MAX_SEGMENTS))),
+      contextStabilityFrames: Math.max(1, Math.floor(finiteNumber(
+        options.contextStabilityFrames, DEFAULT_CONTEXT_STABILITY_FRAMES
+      )))
     });
 
     const segments = [];
     let current = null;
     let nextSegmentId = 1;
     let active = false;
-    let startup = {
-      navigation: null,
-      assets: null,
-      probeInstalledAtMs: null
-    };
+    let suppressCurrentFrame = false;
+    let pendingContext = null;
+    let pendingContextKey = null;
+    let pendingContextFrames = 0;
+    let pendingContextStartedAtMs = null;
+    let startup = { navigation: null, assets: null, probeInstalledAtMs: null };
+
+    function clearPendingContext() {
+      pendingContext = null;
+      pendingContextKey = null;
+      pendingContextFrames = 0;
+      pendingContextStartedAtMs = null;
+    }
 
     function newSegment(context, nowMs = 0) {
       const normalized = normalizeContext(context);
@@ -231,6 +214,7 @@
         observedRafCallbacks: 0,
         sampledFrames: 0,
         suspensionGaps: 0,
+        contextTransitionFramesIgnored: 0,
         longFrames: 0,
         criticalFrames: 0,
         frameIntervals: createRingBuffer(normalizedOptions.sampleLimit),
@@ -249,25 +233,80 @@
       };
     }
 
-    function finalizeCurrent(nowMs = 0) {
-      if (!current) return;
-      current.endedAtMs = roundMetric(nowMs);
-      current = null;
-    }
-
-    function ensureSegment(context, nowMs = 0) {
-      const key = contextKey(context);
-      if (current?.key === key) return current;
-      finalizeCurrent(nowMs);
+    function appendSegment(context, nowMs) {
       current = newSegment(context, nowMs);
       segments.push(current);
       while (segments.length > normalizedOptions.maxSegments) segments.shift();
       return current;
     }
 
+    function finalizeCurrent(nowMs = 0) {
+      if (!current) return;
+      current.endedAtMs = roundMetric(nowMs);
+      current = null;
+    }
+
+    function resolveSegment(context, nowMs = 0) {
+      const normalized = normalizeContext(context);
+      const key = contextKey(normalized);
+      suppressCurrentFrame = false;
+
+      if (!current) {
+        clearPendingContext();
+        return { segment: appendSegment(normalized, nowMs), pending: false, switched: true };
+      }
+
+      if (current.key === key) {
+        if (pendingContextKey !== null) {
+          current.previousFrameTimestamp = nowMs;
+          current.contextTransitionFramesIgnored += 1;
+          suppressCurrentFrame = true;
+          clearPendingContext();
+          return { segment: null, pending: false, switched: false, reverted: true };
+        }
+        return { segment: current, pending: false, switched: false };
+      }
+
+      if (normalizedOptions.contextStabilityFrames === 1) {
+        finalizeCurrent(nowMs);
+        clearPendingContext();
+        return { segment: appendSegment(normalized, nowMs), pending: false, switched: true };
+      }
+
+      if (pendingContextKey === key) {
+        pendingContextFrames += 1;
+      } else {
+        pendingContext = normalized;
+        pendingContextKey = key;
+        pendingContextFrames = 1;
+        pendingContextStartedAtMs = nowMs;
+      }
+
+      if (pendingContextFrames < normalizedOptions.contextStabilityFrames) {
+        current.previousFrameTimestamp = nowMs;
+        current.contextTransitionFramesIgnored += 1;
+        suppressCurrentFrame = true;
+        return { segment: null, pending: true, switched: false };
+      }
+
+      const stableContext = pendingContext;
+      const stableStartedAt = pendingContextStartedAtMs;
+      finalizeCurrent(stableStartedAt);
+      clearPendingContext();
+      return { segment: appendSegment(stableContext, nowMs), pending: false, switched: true };
+    }
+
+    function ensureSegment(context, nowMs = 0) {
+      const resolution = resolveSegment(context, nowMs);
+      return resolution.segment || current;
+    }
+
     function recordFrameTimestamp(timestampMs, context, game = {}) {
       if (!active || !Number.isFinite(timestampMs)) return null;
-      const segment = ensureSegment(context, timestampMs);
+      const resolution = resolveSegment(context, timestampMs);
+      const segment = resolution.segment;
+      if (!segment) return null;
+
       segment.observedRafCallbacks += 1;
       if (segment.gameFramesStart === null && Number.isFinite(game.frames)) segment.gameFramesStart = game.frames;
       if (segment.scoreStart === null && Number.isFinite(game.score)) segment.scoreStart = game.score;
@@ -289,7 +328,6 @@
         segment.warmupRemaining -= 1;
         return null;
       }
-
       segment.frameIntervals.push(delta);
       segment.sampledFrames += 1;
       if (delta >= normalizedOptions.longFrameMs) segment.longFrames += 1;
@@ -298,12 +336,12 @@
     }
 
     function recordCallbackDuration(durationMs) {
-      if (!active || !current || !Number.isFinite(durationMs) || current.warmupRemaining > 0) return;
+      if (!active || suppressCurrentFrame || !current || !Number.isFinite(durationMs) || current.warmupRemaining > 0) return;
       current.callbackDurations.push(Math.max(0, durationMs));
     }
 
     function recordDrawDuration(durationMs) {
-      if (!active || !current || !Number.isFinite(durationMs) || current.warmupRemaining > 0) return;
+      if (!active || suppressCurrentFrame || !current || !Number.isFinite(durationMs) || current.warmupRemaining > 0) return;
       current.drawDurations.push(Math.max(0, durationMs));
     }
 
@@ -318,7 +356,7 @@
     }
 
     function recordClock(clock = {}) {
-      if (!active || !current) return;
+      if (!active || suppressCurrentFrame || !current) return;
       const dropped = Math.max(0, finiteNumber(clock.droppedMs, 0));
       const resets = Math.max(0, Math.floor(finiteNumber(clock.suspensionResets, 0)));
       if (current.lastClockDroppedMs !== null && dropped >= current.lastClockDroppedMs) {
@@ -346,6 +384,7 @@
         observedRafCallbacks: segment.observedRafCallbacks,
         sampledFrames: segment.sampledFrames,
         suspensionGaps: segment.suspensionGaps,
+        contextTransitionFramesIgnored: segment.contextTransitionFramesIgnored,
         longFrames: segment.longFrames,
         criticalFrames: segment.criticalFrames,
         longFrameRate: frameIntervals.count ? roundMetric(segment.longFrames / frameIntervals.count, 5) : null,
@@ -362,9 +401,7 @@
         longTasks: {
           count: longTaskValues.length,
           totalDurationMs: roundMetric(segment.longTaskTotalDurationMs),
-          maxDurationMs: longTaskValues.length
-            ? roundMetric(Math.max(...longTaskValues.map(task => task.durationMs)))
-            : null,
+          maxDurationMs: longTaskValues.length ? roundMetric(Math.max(...longTaskValues.map(task => task.durationMs))) : null,
           recent: longTaskValues.slice(-20)
         }
       };
@@ -379,6 +416,7 @@
         longFrames: 0,
         criticalFrames: 0,
         suspensionGaps: 0,
+        contextTransitionFramesIgnored: 0,
         droppedSimulationMs: 0,
         suspensionResets: 0,
         longTaskCount: 0,
@@ -389,17 +427,14 @@
         aggregate.longFrames += segment.longFrames;
         aggregate.criticalFrames += segment.criticalFrames;
         aggregate.suspensionGaps += segment.suspensionGaps;
+        aggregate.contextTransitionFramesIgnored += segment.contextTransitionFramesIgnored || 0;
         aggregate.droppedSimulationMs += segment.droppedSimulationMs || 0;
         aggregate.suspensionResets += segment.suspensionResets;
         aggregate.longTaskCount += segment.longTasks.count;
         aggregate.longTaskDurationMs += segment.longTasks.totalDurationMs || 0;
       }
-      aggregate.longFrameRate = aggregate.sampledFrames
-        ? roundMetric(aggregate.longFrames / aggregate.sampledFrames, 5)
-        : null;
-      aggregate.criticalFrameRate = aggregate.sampledFrames
-        ? roundMetric(aggregate.criticalFrames / aggregate.sampledFrames, 5)
-        : null;
+      aggregate.longFrameRate = aggregate.sampledFrames ? roundMetric(aggregate.longFrames / aggregate.sampledFrames, 5) : null;
+      aggregate.criticalFrameRate = aggregate.sampledFrames ? roundMetric(aggregate.criticalFrames / aggregate.sampledFrames, 5) : null;
       aggregate.droppedSimulationMs = roundMetric(aggregate.droppedSimulationMs);
       aggregate.longTaskDurationMs = roundMetric(aggregate.longTaskDurationMs);
       return Object.freeze(aggregate);
@@ -412,12 +447,15 @@
       },
       stop(nowMs = 0) {
         active = false;
+        clearPendingContext();
         finalizeCurrent(nowMs);
       },
       reset() {
         segments.length = 0;
         current = null;
         nextSegmentId = 1;
+        suppressCurrentFrame = false;
+        clearPendingContext();
         startup = { navigation: null, assets: null, probeInstalledAtMs: null };
       },
       setNavigationSnapshot(snapshot) { startup.navigation = snapshot ? Object.freeze({ ...snapshot }) : null; },
@@ -438,6 +476,12 @@
           generatedAtMs: roundMetric(nowMs),
           options: normalizedOptions,
           startup: Object.freeze({ ...startup }),
+          contextStability: Object.freeze({
+            requiredFrames: normalizedOptions.contextStabilityFrames,
+            pendingFrames: pendingContextFrames,
+            pendingContext,
+            pendingSinceMs: Number.isFinite(pendingContextStartedAtMs) ? roundMetric(pendingContextStartedAtMs) : null
+          }),
           aggregate: aggregateSnapshot(segmentSnapshots),
           currentSegmentId: current?.id || null,
           segments: segmentSnapshots
@@ -503,8 +547,7 @@
   }
 
   function currentGameInstance() {
-    try { if (typeof game !== 'undefined' && game) return game; }
-    catch (_error) {}
+    try { if (typeof game !== 'undefined' && game) return game; } catch (_error) {}
     return root.game || null;
   }
 
@@ -532,21 +575,11 @@
     panel.dataset.gameControl = 'true';
     panel.setAttribute('aria-label', 'Local performance probe');
     Object.assign(panel.style, {
-      position: 'fixed',
-      zIndex: '99999',
-      right: '8px',
-      bottom: '8px',
-      width: 'min(300px, calc(100vw - 16px))',
-      maxHeight: '46vh',
-      overflow: 'auto',
-      background: 'rgba(2, 4, 10, 0.9)',
-      border: '1px solid rgba(0, 229, 255, 0.7)',
-      color: '#f8fbff',
-      font: '10px/1.35 monospace',
-      padding: '8px',
-      boxSizing: 'border-box',
-      backdropFilter: 'blur(6px)',
-      pointerEvents: 'auto'
+      position: 'fixed', zIndex: '99999', right: '8px', bottom: '8px',
+      width: 'min(300px, calc(100vw - 16px))', maxHeight: '46vh', overflow: 'auto',
+      background: 'rgba(2, 4, 10, 0.9)', border: '1px solid rgba(0, 229, 255, 0.7)',
+      color: '#f8fbff', font: '10px/1.35 monospace', padding: '8px', boxSizing: 'border-box',
+      backdropFilter: 'blur(6px)', pointerEvents: 'auto'
     });
     panel.innerHTML = `
       <div style="display:flex;gap:6px;align-items:center;justify-content:space-between">
@@ -556,8 +589,7 @@
           <button type="button" data-sm-perf-toggle style="font:inherit;padding:3px 6px">HIDE</button>
         </span>
       </div>
-      <pre data-sm-perf-body style="white-space:pre-wrap;margin:6px 0 0">WAITING FOR FRAMES</pre>
-    `;
+      <pre data-sm-perf-body style="white-space:pre-wrap;margin:6px 0 0">WAITING FOR FRAMES</pre>`;
     panel.querySelector('[data-sm-perf-export]')?.addEventListener('click', event => {
       event.stopPropagation();
       runtime?.downloadReport?.();
@@ -583,6 +615,7 @@
       `DRAW p95 ${segment.drawDurations.p95 ?? '-'} · CALLBACK p95 ${segment.callbackDurations.p95 ?? '-'} ms`,
       `LONG ${segment.longFrames} · CRITICAL ${segment.criticalFrames}`,
       `DROPPED SIM ${segment.droppedSimulationMs} ms · RESETS ${segment.suspensionResets}`,
+      `TRANSITION FRAMES ${snapshot.aggregate.contextTransitionFramesIgnored}`,
       `LONG TASKS ${segment.longTasks.count} / ${segment.longTasks.totalDurationMs} ms`,
       `SEGMENTS ${snapshot.aggregate.segmentCount} · ALL SAMPLES ${snapshot.aggregate.sampledFrames}`
     ].join('\n');
@@ -598,9 +631,7 @@
       });
       observer.observe({ type: 'longtask', buffered: true });
       return observer;
-    } catch (_error) {
-      return null;
-    }
+    } catch (_error) { return null; }
   }
 
   function downloadJson(snapshot, filename = 'sex-magick-performance-report.json') {
@@ -622,10 +653,8 @@
     if (installed) return runtime;
     const options = parsePerformanceOptions(root.location);
     if (!options.enabled) return null;
-
     const GameClass = (() => {
-      try { return typeof Game !== 'undefined' ? Game : root.Game; }
-      catch (_error) { return root.Game; }
+      try { return typeof Game !== 'undefined' ? Game : root.Game; } catch (_error) { return root.Game; }
     })();
     if (!root.__SEX_MAGICK_TIMING__) return null;
     if (!GameClass?.prototype?.gameLoop || !GameClass.prototype.drawScene) return null;
@@ -648,9 +677,8 @@
 
     GameClass.prototype.drawScene = function drawSceneWithPerformanceProbe(...args) {
       const start = root.performance?.now?.() || Date.now();
-      try {
-        return originalDrawScene.apply(this, args);
-      } finally {
+      try { return originalDrawScene.apply(this, args); }
+      finally {
         const end = root.performance?.now?.() || Date.now();
         collector.recordDrawDuration(Math.max(0, end - start));
       }
@@ -659,14 +687,10 @@
     GameClass.prototype.gameLoop = function gameLoopWithPerformanceProbe(currentTime, ...args) {
       const callbackStart = root.performance?.now?.() || Date.now();
       if (Number.isFinite(currentTime)) {
-        collector.recordFrameTimestamp(currentTime, collectContext(this), {
-          frames: this.frames,
-          score: this.score
-        });
+        collector.recordFrameTimestamp(currentTime, collectContext(this), { frames: this.frames, score: this.score });
       }
-      try {
-        return originalGameLoop.call(this, currentTime, ...args);
-      } finally {
+      try { return originalGameLoop.call(this, currentTime, ...args); }
+      finally {
         const callbackEnd = root.performance?.now?.() || Date.now();
         collector.recordCallbackDuration(Math.max(0, callbackEnd - callbackStart));
         const clock = this.fixedStepClock?.snapshot?.() || this.fixedStepLastResult || null;
@@ -681,12 +705,10 @@
     };
 
     GameClass.prototype.__performanceBudgetRuntimeInstalled = true;
-
     const onAssetsReady = event => collector.setAssetSnapshot(compactAssetSnapshot(event.detail || null));
     root.addEventListener?.('sex-magick:assets-ready', onAssetsReady);
     const existingAssets = root.__SEX_MAGICK_ASSETS__?.getSnapshot?.(currentGameInstance());
     if (existingAssets) collector.setAssetSnapshot(compactAssetSnapshot(existingAssets));
-
     const refreshNavigation = () => collector.setNavigationSnapshot(navigationSnapshot(root.performance));
     if (document.readyState === 'complete') refreshNavigation();
     else root.addEventListener?.('load', refreshNavigation, { once: true });
@@ -734,8 +756,7 @@
     if (options.panel) runtime.showPanel();
     root.addEventListener?.('keydown', event => {
       if (event.key?.toLowerCase() !== 'p' || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (!panel || panel.hidden) runtime.showPanel();
-      else runtime.hidePanel();
+      if (!panel || panel.hidden) runtime.showPanel(); else runtime.hidePanel();
     });
     root.dispatchEvent?.(new CustomEvent('sex-magick:performance-ready', { detail: runtime.getSnapshot() }));
     return runtime;
@@ -765,6 +786,7 @@
     DEFAULT_WARMUP_FRAMES,
     DEFAULT_SAMPLE_LIMIT,
     DEFAULT_MAX_SEGMENTS,
+    DEFAULT_CONTEXT_STABILITY_FRAMES,
     percentile,
     summarizeSamples,
     createRingBuffer,
