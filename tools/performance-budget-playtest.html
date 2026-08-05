@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>SEX MAGICK · Performance Budget Playtest</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #10182a, #020306 65%); color: #f8fbff; }
+    main { width: min(980px, calc(100% - 24px)); margin: 0 auto; padding: max(18px, env(safe-area-inset-top)) 0 40px; }
+    h1 { font-size: clamp(20px, 5vw, 34px); letter-spacing: .08em; color: #00e5ff; margin: 0 0 8px; }
+    h2 { font-size: 16px; color: #ffd700; margin: 0 0 10px; }
+    p, li { line-height: 1.55; color: #cbd5e1; }
+    section { margin-top: 16px; padding: 14px; border: 1px solid #26344e; background: rgba(4, 8, 18, .82); border-radius: 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+    a.launch, button, label.file { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 12px; border: 1px solid #00e5ff; border-radius: 8px; background: #08131f; color: #f8fbff; font: inherit; text-decoration: none; cursor: pointer; }
+    a.launch:hover, button:hover, label.file:hover { background: #10253b; }
+    label.file input { display: none; }
+    .note { border-left: 3px solid #ff2f6d; padding-left: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 900px; }
+    th, td { border-bottom: 1px solid #243049; padding: 8px 6px; text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    .table-wrap { overflow-x: auto; }
+    #status { color: #00ff9d; min-height: 1.4em; }
+    code { color: #d4ff00; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>PERFORMANCE BUDGET PLAYTEST</h1>
+  <p>Local Fold 6 measurement surface for Milestone 11. Reports stay in the browser until you explicitly export a JSON file.</p>
+
+  <section>
+    <h2>1 · Run controlled profiles</h2>
+    <div class="grid">
+      <a class="launch" data-preset="closed-native" href="../index.html?assetMode=offline&renderDpr=native&perfProbe=1&perfPanel=1&viewportProfile=fold-closed">Fold closed · native DPR</a>
+      <a class="launch" data-preset="closed-2x" href="../index.html?assetMode=offline&renderDpr=2&perfProbe=1&perfPanel=1&viewportProfile=fold-closed">Fold closed · 2× DPR</a>
+      <a class="launch" data-preset="closed-css" href="../index.html?assetMode=offline&renderDpr=css&perfProbe=1&perfPanel=1&viewportProfile=fold-closed">Fold closed · CSS 1×</a>
+      <a class="launch" data-preset="open-native" href="../index.html?assetMode=offline&renderDpr=native&perfProbe=1&perfPanel=1&viewportProfile=fold-open">Fold open · native DPR</a>
+      <a class="launch" data-preset="open-2x" href="../index.html?assetMode=offline&renderDpr=2&perfProbe=1&perfPanel=1&viewportProfile=fold-open">Fold open · 2× DPR</a>
+      <a class="launch" data-preset="open-css" href="../index.html?assetMode=offline&renderDpr=css&perfProbe=1&perfPanel=1&viewportProfile=fold-open">Fold open · CSS 1×</a>
+    </div>
+    <ol>
+      <li>Keep the game active for at least 60 seconds after the warm-up period.</li>
+      <li>Play normally; do not rapidly switch apps during a measured segment.</li>
+      <li>Use <code>EXPORT</code> in the probe panel after each run.</li>
+      <li>Repeat each profile at least three times before interpreting differences.</li>
+    </ol>
+    <p class="note">Offline assets isolate rendering and gameplay cost. A later network-assets pass is separate and should not be mixed into the DPR comparison.</p>
+  </section>
+
+  <section>
+    <h2>2 · Compare exported reports</h2>
+    <div class="grid">
+      <label class="file">Load report JSON<input id="reports" type="file" accept="application/json,.json" multiple></label>
+      <button id="clear" type="button">Clear comparison</button>
+    </div>
+    <p id="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>File / segment</th><th>Profile</th><th>DPR</th><th>Backing</th><th>Samples</th><th>Frame p50</th><th>Frame p95</th><th>Frame p99</th><th>Draw p95</th><th>Long %</th><th>Critical %</th><th>Dropped sim</th><th>Long tasks</th><th>Classification</th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="14">No reports loaded.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Interpretation boundary</h2>
+    <p>The classifications are provisional diagnostics, not release gates. Headless Chrome results are regression evidence only. Physical Fold measurements can compare tested configurations, but they do not measure battery drain, thermal throttling over long sessions, Samsung Internet, Safari, broad player hardware, or fun.</p>
+  </section>
+</main>
+<script>
+(() => {
+  'use strict';
+  const reportsInput = document.getElementById('reports');
+  const rows = document.getElementById('rows');
+  const status = document.getElementById('status');
+  const clear = document.getElementById('clear');
+  const loadedRows = [];
+
+  function number(value, digits = 2) {
+    return Number.isFinite(value) ? Number(value).toFixed(digits) : '—';
+  }
+
+  function percent(value) {
+    return Number.isFinite(value) ? `${(value * 100).toFixed(2)}%` : '—';
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>'"]/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[character]);
+  }
+
+  function render() {
+    if (!loadedRows.length) {
+      rows.innerHTML = '<tr><td colspan="14">No reports loaded.</td></tr>';
+      return;
+    }
+    rows.innerHTML = loadedRows.map(item => {
+      const segment = item.segment;
+      const context = segment.context || {};
+      return `<tr>
+        <td>${escapeHtml(item.label)}</td>
+        <td>${escapeHtml(context.profile || 'unknown')}</td>
+        <td>${number(context.effectiveDpr, 3)}</td>
+        <td>${escapeHtml(`${context.backingWidth || 0}×${context.backingHeight || 0}`)}</td>
+        <td>${segment.frameIntervals?.count || 0}</td>
+        <td>${number(segment.frameIntervals?.p50)}</td>
+        <td>${number(segment.frameIntervals?.p95)}</td>
+        <td>${number(segment.frameIntervals?.p99)}</td>
+        <td>${number(segment.drawDurations?.p95)}</td>
+        <td>${percent(segment.longFrameRate)}</td>
+        <td>${percent(segment.criticalFrameRate)}</td>
+        <td>${number(segment.droppedSimulationMs)} ms</td>
+        <td>${segment.longTasks?.count || 0}</td>
+        <td>${escapeHtml(segment.classification || 'unknown')}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  reportsInput.addEventListener('change', async () => {
+    const files = Array.from(reportsInput.files || []);
+    let accepted = 0;
+    let rejected = 0;
+    for (const file of files) {
+      try {
+        const report = JSON.parse(await file.text());
+        if (report?.mode !== 'local-opt-in-performance-budget-probe' || !Array.isArray(report.segments)) {
+          throw new Error('not a Milestone 11 report');
+        }
+        report.segments.forEach((segment, index) => {
+          loadedRows.push({ label: `${file.name} · S${segment.id || index + 1}`, segment });
+        });
+        accepted += 1;
+      } catch (_error) {
+        rejected += 1;
+      }
+    }
+    status.textContent = `Loaded ${accepted} report(s)${rejected ? `; rejected ${rejected}` : ''}.`;
+    reportsInput.value = '';
+    render();
+  });
+
+  clear.addEventListener('click', () => {
+    loadedRows.length = 0;
+    status.textContent = 'Comparison cleared.';
+    render();
+  });
+
+  document.querySelectorAll('a[data-preset]').forEach(link => {
+    link.addEventListener('click', () => {
+      const url = new URL(link.href, location.href);
+      url.searchParams.set('perfSession', `${link.dataset.preset}-${Date.now()}`);
+      link.href = url.href;
+    });
+  });
+})();
+</script>
+</body>
+</html>
