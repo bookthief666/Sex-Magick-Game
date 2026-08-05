@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - develop/sex-magick-2.0
+      - develop/m9-runtime-hardening
   push:
     branches:
       - develop/sex-magick-2.0
       - develop/m9-runtime-hardening
+      - develop/m10-render-resilience
 
 permissions:
   contents: read
@@ -16,7 +18,7 @@ permissions:
 jobs:
   fast-gameplay-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
@@ -36,6 +38,8 @@ jobs:
           node --check tools/gate-slice-runtime.js
           node --check tools/gate-evidence-runtime.js
           node --check tools/viewport-runtime.js
+          node --check tools/canvas-render-runtime.js
+          node --check tools/asset-resilience-runtime.js
           node --check tools/run-telemetry.js
           node --check tools/obstacle-grammar.js
           node --check tools/player-reachability.js
@@ -53,6 +57,8 @@ jobs:
           node --check tools/test-gate-slice-playtest-v2-harness.js
           node --check tools/test-gate-evidence-runtime.js
           node --check tools/test-viewport-runtime.js
+          node --check tools/test-canvas-render-runtime.js
+          node --check tools/test-asset-resilience-runtime.js
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
           node --check tools/test-player-reachability.js
@@ -63,6 +69,7 @@ jobs:
           node --check tools/browser-policy-fail-closed-test.mjs
           node --check tools/browser-gate-slice-test.mjs
           node --check tools/browser-m9-runtime-hardening-test.mjs
+          node --check tools/browser-m10-render-resilience-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -82,6 +89,8 @@ jobs:
           node tools/test-gate-slice-playtest-v2-harness.js
           node tools/test-gate-evidence-runtime.js
           node tools/test-viewport-runtime.js
+          node tools/test-canvas-render-runtime.js
+          node tools/test-asset-resilience-runtime.js
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
           node tools/test-m7-review-diagnostics.js
@@ -100,6 +109,9 @@ jobs:
 
       - name: Run M9 runtime hardening Chrome integration
         run: node tools/browser-m9-runtime-hardening-test.mjs
+
+      - name: Run M10 render and asset resilience Chrome integration
+        run: node tools/browser-m10-render-resilience-test.mjs
 
       - name: Run telemetry and fast-retry Chrome integration
         run: node tools/run-browser-telemetry-test.mjs
