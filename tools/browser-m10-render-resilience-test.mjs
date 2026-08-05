@@ -185,6 +185,9 @@ async function main() {
       !!globalThis.__SEX_MAGICK_VIEWPORT__ &&
       globalThis.__SEX_MAGICK_ASSETS__.getSnapshot()?.summary?.pending === 0
     `);
+    await waitForExpression(client, `
+      !document.getElementById('menuButtons')?.classList.contains('hidden')
+    `);
 
     const closed = await evaluate(client, `
       (() => {
