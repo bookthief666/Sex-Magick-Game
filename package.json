@@ -1,0 +1,17 @@
+{
+  "name": "sex-magick-cross-screen-qa",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Cross-screen and real-device QA tooling for the existing static game.",
+  "scripts": {
+    "serve:test": "http-server . -a 127.0.0.1 -p 8099 -c-1",
+    "test:cross-screen": "playwright test --config=playwright.config.ts",
+    "test:cross-screen:update": "playwright test --config=playwright.config.ts --update-snapshots",
+    "test:browserstack": "browserstack-node-sdk playwright test --config=playwright.browserstack.config.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.0",
+    "browserstack-node-sdk": "1.65.2",
+    "http-server": "14.1.1"
+  }
+}
