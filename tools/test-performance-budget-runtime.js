@@ -48,9 +48,10 @@ function nearlyEqual(actual, expected, epsilon = 1e-6) {
   assert.equal(defaults.criticalFrameMs, 50);
   assert.equal(defaults.warmupFrames, 120);
   assert.equal(defaults.sampleLimit, 3600);
+  assert.equal(defaults.contextStabilityFrames, 3);
 
   const explicit = perf.parsePerformanceOptions({
-    search: '?perfProbe=1&perfPanel=true&perfTargetFrameMs=8.33&perfLongFrameMs=20&perfCriticalFrameMs=40&perfWarmupFrames=0&perfSampleFrames=240&perfMaxSegments=4'
+    search: '?perfProbe=1&perfPanel=true&perfTargetFrameMs=8.33&perfLongFrameMs=20&perfCriticalFrameMs=40&perfWarmupFrames=0&perfSampleFrames=240&perfMaxSegments=4&perfContextStabilityFrames=2'
   });
   assert.equal(explicit.enabled, true);
   assert.equal(explicit.panel, true);
@@ -60,6 +61,7 @@ function nearlyEqual(actual, expected, epsilon = 1e-6) {
   assert.equal(explicit.warmupFrames, 0);
   assert.equal(explicit.sampleLimit, 240);
   assert.equal(explicit.maxSegments, 4);
+  assert.equal(explicit.contextStabilityFrames, 2);
 })();
 
 (function testContextNormalizationAndKeying() {
@@ -138,6 +140,7 @@ function nearlyEqual(actual, expected, epsilon = 1e-6) {
     warmupFrames: 2,
     sampleLimit: 5,
     maxSegments: 2,
+    contextStabilityFrames: 1,
     targetFrameMs: 16.667,
     longFrameMs: 25,
     criticalFrameMs: 50
@@ -170,6 +173,79 @@ function nearlyEqual(actual, expected, epsilon = 1e-6) {
   snapshot = collector.getSnapshot(448);
   assert.equal(snapshot.segments.length, 2);
   assert.deepEqual(snapshot.segments.map(segment => segment.context.profile), ['b', 'c']);
+})();
+
+(function testContextStabilitySuppressesTransientResizeSegments() {
+  const collector = perf.createCollector({
+    warmupFrames: 0,
+    sampleLimit: 20,
+    maxSegments: 4,
+    contextStabilityFrames: 3,
+    targetFrameMs: 16.667,
+    longFrameMs: 25,
+    criticalFrameMs: 50
+  });
+  const context = (profile, width, height) => ({
+    profile,
+    logicalWidth: width,
+    logicalHeight: height,
+    effectiveDpr: 1,
+    backingWidth: width,
+    backingHeight: height,
+    backingPixels: width * height,
+    assetMode: 'offline'
+  });
+
+  collector.start(0);
+  collector.recordFrameTimestamp(0, context('fold-closed', 368, 869));
+  collector.recordFrameTimestamp(16, context('fold-closed', 368, 869));
+  collector.recordFrameTimestamp(32, context('fold-closed', 884, 1104));
+  collector.recordFrameTimestamp(48, context('fold-open', 884, 1104));
+  collector.recordFrameTimestamp(64, context('fold-open', 884, 1104));
+  collector.recordFrameTimestamp(80, context('fold-open', 884, 1104));
+  collector.recordFrameTimestamp(96, context('fold-open', 884, 1104));
+
+  const snapshot = collector.getSnapshot(96);
+  assert.deepEqual(snapshot.segments.map(segment => segment.context.profile), ['fold-closed', 'fold-open']);
+  assert.equal(snapshot.segments[0].contextTransitionFramesIgnored, 3);
+  assert.equal(snapshot.segments[1].frameIntervals.count, 1);
+  assert.equal(snapshot.aggregate.contextTransitionFramesIgnored, 3);
+  assert.equal(snapshot.contextStability.pendingFrames, 0);
+})();
+
+(function testContextStabilityDiscardsRevertedTransition() {
+  const collector = perf.createCollector({
+    warmupFrames: 0,
+    sampleLimit: 20,
+    maxSegments: 4,
+    contextStabilityFrames: 3,
+    targetFrameMs: 16.667,
+    longFrameMs: 25,
+    criticalFrameMs: 50
+  });
+  const context = profile => ({
+    profile,
+    logicalWidth: 100,
+    logicalHeight: 200,
+    effectiveDpr: 1,
+    backingWidth: 100,
+    backingHeight: 200,
+    backingPixels: 20000,
+    assetMode: 'offline'
+  });
+
+  collector.start(0);
+  collector.recordFrameTimestamp(0, context('a'));
+  collector.recordFrameTimestamp(16, context('a'));
+  collector.recordFrameTimestamp(32, context('transient'));
+  collector.recordFrameTimestamp(48, context('a'));
+  collector.recordFrameTimestamp(64, context('a'));
+
+  const snapshot = collector.getSnapshot(64);
+  assert.deepEqual(snapshot.segments.map(segment => segment.context.profile), ['a']);
+  assert.equal(snapshot.segments[0].contextTransitionFramesIgnored, 2);
+  assert.equal(snapshot.segments[0].frameIntervals.count, 2);
+  assert.equal(snapshot.contextStability.pendingFrames, 0);
 })();
 
 (function testBudgetClasses() {
