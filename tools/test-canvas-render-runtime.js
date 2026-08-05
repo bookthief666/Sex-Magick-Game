@@ -11,7 +11,6 @@ const foldClosed = render.computeRenderMetrics({
   maxDpr: 3,
   maxBackingPixels: 8_000_000
 });
-
 assert.equal(foldClosed.logicalWidth, 368);
 assert.equal(foldClosed.logicalHeight, 869);
 assert.equal(foldClosed.effectiveDpr, 2.625);
@@ -28,7 +27,6 @@ const foldOpen = render.computeRenderMetrics({
   maxDpr: 3,
   maxBackingPixels: 8_000_000
 });
-
 assert.equal(foldOpen.logicalWidth, 884);
 assert.equal(foldOpen.logicalHeight, 1104);
 assert.equal(foldOpen.effectiveDpr, 2.625);
@@ -44,7 +42,6 @@ const budgetedDesktop = render.computeRenderMetrics({
   maxDpr: 3,
   maxBackingPixels: 8_000_000
 });
-
 assert.equal(budgetedDesktop.effectiveDpr, 1.875);
 assert.ok(budgetedDesktop.backingPixels <= 8_000_000);
 assert.equal(budgetedDesktop.cappedByPixels, true);
@@ -69,6 +66,12 @@ assert.equal(parsed.requestedDpr, '2');
 assert.equal(parsed.maxDpr, 2.5);
 assert.equal(parsed.maxBackingPixels, 6_000_000);
 assert.equal(parsed.devicePixelRatio, 3);
+
+const defaults = render.parseRenderOptions({ search: '' }, { devicePixelRatio: 2.625 });
+assert.equal(defaults.requestedDpr, 'native');
+assert.equal(defaults.maxDpr, 3);
+assert.equal(defaults.maxBackingPixels, 8_000_000);
+assert.equal(defaults.devicePixelRatio, 2.625);
 
 assert.equal(render.quantizeDpr(2.74), 2.625);
 assert.equal(render.normalizeRequestedDpr('native', 2.625), 2.625);
