@@ -229,3 +229,16 @@ State deduplication also discarded all but one representative `initialStateId` w
 **Consequences:** Fold-closed and Fold-open Chrome cases retain logical dimensions while using bounded DPR backing stores; managed RGB-split rendering uses logical scratch blits instead of `getImageData`; explicit offline mode produces no catalog requests; parser-time `document.write` is accepted only as a contained bridge for the current single-file architecture.
 
 **Full record:** `docs/decisions/d020-bounded-dpr-and-asset-fallbacks.md`
+
+## D-021 — Keep performance evidence opt-in, bounded, local, and context-stable
+
+**Date:** 2026-08-04  
+**Status:** Accepted on stacked development branch; physical thresholds remain unresolved
+
+**Decision:** Load performance instrumentation only for explicit `?perfProbe=1` sessions. Keep frame, draw, callback, fixed-step, Long Task, startup, DPR, backing-store, and viewport evidence in bounded memory; transmit and persist nothing automatically; export JSON only after a user action; and require a new Fold/render context to remain identical for three consecutive RAF callbacks before opening a measurement segment.
+
+**Rationale:** Milestone 10 established bounded high-DPR rendering but not its physical Fold cost. Owner-operated comparison needs stable local evidence without converting every game session into analytics. Real resize testing also showed that new dimensions can appear before the viewport profile settles, so immediate segmentation creates false intermediate contexts.
+
+**Consequences:** Ordinary sessions do not load the probe. Transitional callbacks are excluded and counted separately. The Fold playtest harness compares closed/open native, 2×, and CSS-pixel modes locally. Headless classifications remain detector diagnostics—not physical-device verdicts or release gates. The existing ordinary-startup LootLocker guest-session request is recorded separately and is neither created nor expanded by M11.
+
+**Full record:** `docs/decisions/d021-local-performance-budget-probe.md`
