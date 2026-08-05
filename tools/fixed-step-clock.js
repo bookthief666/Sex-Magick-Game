@@ -101,3 +101,32 @@
 
   return Object.freeze({ FixedStepClock });
 });
+
+(function parserOrderedM10Bootstrap() {
+  'use strict';
+
+  if (typeof document === 'undefined' || document.readyState !== 'loading') return;
+  const source = document.currentScript?.src;
+  if (!source) return;
+
+  const scripts = [
+    {
+      path: './canvas-render-runtime.js',
+      selector: 'script[data-sex-magick-canvas-render-runtime]',
+      attribute: 'data-sex-magick-canvas-render-runtime',
+      globalName: 'SexMagickCanvasRender'
+    },
+    {
+      path: './asset-resilience-runtime.js',
+      selector: 'script[data-sex-magick-asset-resilience-runtime]',
+      attribute: 'data-sex-magick-asset-resilience-runtime',
+      globalName: 'SexMagickAssetResilience'
+    }
+  ];
+
+  for (const script of scripts) {
+    if (globalThis[script.globalName] || document.querySelector(script.selector)) continue;
+    const url = new URL(script.path, source).href.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    document.write(`<script src="${url}" ${script.attribute}="true"><\/script>`);
+  }
+})();
