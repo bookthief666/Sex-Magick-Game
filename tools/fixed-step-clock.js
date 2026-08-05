@@ -121,10 +121,24 @@
       selector: 'script[data-sex-magick-asset-resilience-runtime]',
       attribute: 'data-sex-magick-asset-resilience-runtime',
       globalName: 'SexMagickAssetResilience'
+    },
+    {
+      path: './performance-budget-runtime.js',
+      selector: 'script[data-sex-magick-performance-budget-runtime]',
+      attribute: 'data-sex-magick-performance-budget-runtime',
+      globalName: 'SexMagickPerformanceBudget',
+      conditionalQuery: 'perfProbe'
     }
   ];
 
+  let params;
+  try { params = new URLSearchParams(globalThis.location?.search || ''); }
+  catch (_error) { params = new URLSearchParams(''); }
+
   for (const script of scripts) {
+    if (script.conditionalQuery && !['1', 'true', 'yes', 'on'].includes(
+      String(params.get(script.conditionalQuery) || '').trim().toLowerCase()
+    )) continue;
     if (globalThis[script.globalName] || document.querySelector(script.selector)) continue;
     const url = new URL(script.path, source).href.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
     document.write(`<script src="${url}" ${script.attribute}="true"><\/script>`);
