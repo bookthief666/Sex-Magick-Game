@@ -1,0 +1,70 @@
+name: M13 Real-device QA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browserstack-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: BrowserStack environment
+        uses: browserstack/github-actions/setup-env@master
+        with:
+          username: ${{ secrets.BROWSERSTACK_USERNAME }}
+          access-key: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          build-name: 'M13 real-device - BUILD_INFO'
+          project-name: 'Sex-Magick-Game'
+
+      - name: Start BrowserStack Local
+        uses: browserstack/github-actions/setup-local@master
+        with:
+          local-testing: start
+          local-identifier: random
+          local-logging-level: all-logs
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install pinned test dependencies
+        run: npm install --ignore-scripts
+
+      - name: Start static game server
+        run: |
+          nohup npx http-server . -a 0.0.0.0 -p 8099 -c-1 > /tmp/sex-magick-http.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8099/index.html > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/sex-magick-http.log
+          exit 1
+
+      - name: Run BrowserStack real-device smoke set
+        run: node tools/browserstack-real-device-smoke.mjs
+
+      - name: Upload local server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m13-real-device-server-log
+          path: /tmp/sex-magick-http.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop BrowserStack Local
+        if: always()
+        uses: browserstack/github-actions/setup-local@master
+        with:
+          local-testing: stop
