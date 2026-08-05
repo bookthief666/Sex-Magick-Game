@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 const expectedProfiles: Record<string, string> = {
   'chromium-small-phone': 'compact-phone',
-  'chromium-android-phone': 'compact-phone',
+  'chromium-android-phone': 'tall-phone',
   'chromium-modern-phone': 'tall-phone',
   'chromium-fold-cover': 'fold-closed',
   'chromium-fold-inner': 'fold-open',
@@ -20,6 +20,7 @@ async function openGame(page: import('@playwright/test').Page) {
   await page.locator('#game-container').waitFor({ state: 'visible' });
   await page.locator('canvas').first().waitFor({ state: 'visible' });
   await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VIEWPORT__?.getSnapshot?.()));
+  await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_TOUCH_TARGETS__));
   await page.waitForFunction(() => {
     const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
     return Boolean(canvas?.dataset.smBackingWidth && canvas?.dataset.smBackingHeight);
@@ -31,6 +32,7 @@ test('layout, profile, touch targets, and DPR budget remain valid', async ({ pag
   const pageErrors = await openGame(page);
   const result = await page.evaluate(() => {
     const viewport = (window as any).__SEX_MAGICK_VIEWPORT__?.getSnapshot?.();
+    const touchTargets = (window as any).__SEX_MAGICK_TOUCH_TARGETS__;
     const canvas = document.querySelector('canvas') as HTMLCanvasElement;
     const body = document.body;
     const html = document.documentElement;
@@ -49,6 +51,7 @@ test('layout, profile, touch targets, and DPR budget remain valid', async ({ pag
     const backingHeight = Number(canvas.dataset.smBackingHeight);
     return {
       profile: viewport?.profile,
+      touchTargetMinimum: touchTargets?.minimumCssPixels,
       viewportWidth: innerWidth,
       viewportHeight: innerHeight,
       bodyScrollWidth: body.scrollWidth,
@@ -61,6 +64,7 @@ test('layout, profile, touch targets, and DPR budget remain valid', async ({ pag
   });
 
   expect(result.profile).toBe(expectedProfiles[testInfo.project.name]);
+  expect(result.touchTargetMinimum).toBe(44);
   expect(result.bodyScrollWidth).toBeLessThanOrEqual(result.viewportWidth + 1);
   expect(result.htmlScrollWidth).toBeLessThanOrEqual(result.viewportWidth + 1);
   expect(result.canvasRect.left).toBeGreaterThanOrEqual(-1);
