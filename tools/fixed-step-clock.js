@@ -111,6 +111,12 @@
 
   const scripts = [
     {
+      path: './touch-target-runtime.js',
+      selector: 'script[data-sex-magick-touch-target-runtime]',
+      attribute: 'data-sex-magick-touch-target-runtime',
+      globalName: '__SEX_MAGICK_TOUCH_TARGETS__'
+    },
+    {
       path: './canvas-render-runtime.js',
       selector: 'script[data-sex-magick-canvas-render-runtime]',
       attribute: 'data-sex-magick-canvas-render-runtime',
