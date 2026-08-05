@@ -21,6 +21,7 @@
   let installTimer = null;
   let originalResizeCanvas = null;
   let originalDrawScene = null;
+  let originalGlitchRgbSplit = null;
 
   function finiteNumber(value, fallback = 0) {
     const resolved = Number(value);
@@ -226,6 +227,60 @@
     return state.metrics;
   }
 
+  function installDprSafeGlitch() {
+    const glitch = (() => {
+      try { return typeof GlitchFX !== 'undefined' ? GlitchFX : root.GlitchFX; } catch (_error) { return root.GlitchFX; }
+    })();
+    if (!glitch?.rgbSplit || glitch.__dprSafeRgbSplitInstalled) return false;
+
+    originalGlitchRgbSplit = glitch.rgbSplit;
+    glitch.rgbSplit = function dprSafeRgbSplit(ctx, intensity) {
+      const state = canvasStates.get(ctx?.canvas);
+      if (!state?.metrics) return originalGlitchRgbSplit.call(this, ctx, intensity);
+
+      const offset = Math.floor(Math.random() * 3 * intensity);
+      const rOffset = Math.random() > 0.5 ? offset : -offset;
+      const gOffset = Math.random() > 0.5 ? offset : -offset;
+      const bOffset = Math.random() > 0.5 ? offset : -offset;
+      if (Math.random() > 0.3) return null;
+
+      const scratch = document.createElement('canvas');
+      scratch.width = state.metrics.logicalWidth;
+      scratch.height = state.metrics.logicalHeight;
+      const scratchCtx = scratch.getContext('2d');
+      scratchCtx.drawImage(
+        ctx.canvas,
+        0,
+        0,
+        state.metrics.backingWidth,
+        state.metrics.backingHeight,
+        0,
+        0,
+        state.metrics.logicalWidth,
+        state.metrics.logicalHeight
+      );
+
+      return {
+        rOffset,
+        gOffset,
+        bOffset,
+        draw(targetCtx, width, height) {
+          targetCtx.save();
+          targetCtx.globalCompositeOperation = 'screen';
+          targetCtx.globalAlpha = 0.8;
+          targetCtx.drawImage(scratch, rOffset, 0, width, height);
+          targetCtx.globalAlpha = 0.8;
+          targetCtx.drawImage(scratch, 0, gOffset, width, height);
+          targetCtx.globalAlpha = 0.8;
+          targetCtx.drawImage(scratch, bOffset, bOffset, width, height);
+          targetCtx.restore();
+        }
+      };
+    };
+    glitch.__dprSafeRgbSplitInstalled = true;
+    return true;
+  }
+
   function getStateSnapshot(state) {
     if (!state) return null;
     return Object.freeze({
@@ -234,6 +289,7 @@
       ...state.metrics,
       resizeCount: state.resizeCount,
       drawCount: state.drawCount,
+      readbackMode: 'logical-scratch-blit',
       activatedAt: state.activatedAt
     });
   }
@@ -255,6 +311,10 @@
       try { return typeof Game !== 'undefined' ? Game : root.Game; } catch (_error) { return root.Game; }
     })();
     if (!GameClass?.prototype) return null;
+    if (GameClass.prototype.__canvasRenderRuntimeInstalled && root.__SEX_MAGICK_RENDER__) {
+      installed = true;
+      return root.__SEX_MAGICK_RENDER__;
+    }
 
     installed = true;
     originalResizeCanvas = GameClass.prototype.resizeCanvas;
@@ -282,6 +342,7 @@
       return originalDrawScene.apply(this, args);
     };
 
+    installDprSafeGlitch();
     GameClass.prototype.__canvasRenderRuntimeInstalled = true;
 
     root.__SEX_MAGICK_RENDER__ = Object.freeze({
