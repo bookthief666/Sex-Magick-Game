@@ -1,0 +1,55 @@
+name: M13 Cross-screen QA
+
+on:
+  pull_request:
+    branches:
+      - develop/m12-physical-performance-evidence
+  push:
+    branches:
+      - develop/m13-cross-screen-automation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install pinned test dependencies
+        run: npm install --ignore-scripts
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run cross-screen matrix
+        run: npm run test:cross-screen
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m13-playwright-report
+          path: playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload traces, videos, screenshots, and JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m13-test-results
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 14
