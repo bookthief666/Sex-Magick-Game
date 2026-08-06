@@ -11,7 +11,7 @@ const visualReferenceProjects = new Set([
   'chromium-desktop'
 ]);
 
-const standardStates = ['menu', 'gameplay', 'death', 'retry'] as const;
+const standardStates = ['gameplay', 'menu', 'death', 'retry'] as const;
 const gateStates = ['gate-offer', 'gate-bank', 'void'] as const;
 const expectedLayers: Record<string, string> = {
   menu: 'startScreen',
@@ -30,6 +30,8 @@ function baselineData(): Record<string, Record<string, string>> | null {
 
 async function seedPage(page: Page) {
   await page.addInitScript(() => {
+    const fixedWallClock = 1_782_000_000_000;
+    Date.now = () => fixedWallClock;
     let state = 0x93c0ffee >>> 0;
     Math.random = () => {
       state += 0x6d2b79f5;
