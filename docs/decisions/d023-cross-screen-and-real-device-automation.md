@@ -44,7 +44,7 @@ Separating the transport implementations preserves the exact path that each plat
 ## Consequences
 
 - `@playwright/test` remains pinned to `1.59.1` for the validated shared BrowserStack support window.
-- `browserstack-node-sdk` remains pinned to `1.64.2`.
+- M13 validated `browserstack-node-sdk` at `1.64.2`; D-025 supersedes that exact pin with the separately audited and revalidated `1.65.3` release.
 - Visible interactive controls must satisfy a `44 × 44` CSS-pixel minimum.
 - The local matrix remains the required precondition for a BrowserStack run.
 - Desktop Chrome uses `tools/browserstack-real-device-smoke.mjs` with explicit BrowserStack Local lifecycle.
@@ -59,6 +59,16 @@ Separating the transport implementations preserves the exact path that each plat
 - Desktop Chrome: `M13 Real-device QA #3`, commit `b2e140ace455f0c0e992c7bee8561afb74b9d145` — passed.
 - Samsung Galaxy S23 Ultra, Android 13, Chrome: `M13 Real-device QA #6`, commit `3a161fa8f389689401eb1da49b346c021abba127` — passed.
 - iPhone 13, iOS 15, Safari: `M13 Real-device QA #8`, commit `c6c7c5468eab3ba5950d10c1b9200efcc7c711a2` — passed.
+
+## M15 supply-chain revalidation
+
+D-025 supersedes only the exact BrowserStack SDK dependency pin in this decision. The desktop/raw-Playwright and mobile/SDK transport split remains unchanged. BrowserStack SDK `1.65.3`, immutable BrowserStack Action commit `1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a`, and the locked `npm ci` path were revalidated on M15 head `012cebd40fb4d9935b0e98fe074a5a5156a5d381`:
+
+- Windows 11 Chrome desktop smoke — job `92534243795`, success
+- Samsung Galaxy S23 Ultra Android 13 Chrome — mobile job `92534246896`, passed
+- iPhone 13 iOS 15 Safari — mobile job `92534246896`, passed
+
+Workflow run: `31076059515`.
 
 ## Revisit when
 

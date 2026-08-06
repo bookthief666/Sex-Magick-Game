@@ -4,7 +4,7 @@ This log records consequential project decisions. Trivial implementation details
 
 ## D-001 — Protect the shipped baseline
 
-**Date:** 2026-08-04  
+**Date:** 2026-08-04
 **Status:** Accepted
 
 **Decision:** Preserve `main` at commit `d3760aaea9c7322d48e471389a67c4e579743e2a` and perform 2.0 work on `develop/sex-magick-2.0`.
@@ -242,3 +242,47 @@ State deduplication also discarded all but one representative `initialStateId` w
 **Consequences:** Ordinary sessions do not load the probe. Transitional callbacks are excluded and counted separately. The Fold playtest harness compares closed/open native, 2×, and CSS-pixel modes locally. Headless classifications remain detector diagnostics—not physical-device verdicts or release gates. The existing ordinary-startup LootLocker guest-session request is recorded separately and is neither created nor expanded by M11.
 
 **Full record:** `docs/decisions/d021-local-performance-budget-probe.md`
+
+## D-022 — Require complete physical evidence before selecting a Fold render DPR
+
+**Date:** 2026-08-04
+**Status:** Accepted on stacked development branch; physical recommendation pending owner evidence
+
+**Decision:** Require versioned, same-origin, repeated Fold-closed and Fold-open evidence across CSS 1x, 2x, and native DPR before making a render recommendation. Exclude incomplete or mismatched runs explicitly and aggregate eligible repeats with medians and median absolute deviation.
+
+**Consequences:** At least three eligible repeats per preset are required; automated fixtures prove the selection mechanism only; no physical Fold 6 DPR recommendation exists without owner evidence.
+
+**Full record:** `docs/decisions/d022-physical-performance-evidence-gate.md`
+
+## D-023 — Separate emulated breadth from real-device transport truth
+
+**Date:** 2026-08-05
+**Status:** Accepted on stacked development branch
+
+**Decision:** Use pinned Playwright projects for broad repeatable screen coverage and a manually invoked BrowserStack workflow for bounded desktop, Android, and iOS transport truth. Preserve raw Playwright desktop transport and BrowserStack SDK mobile transport rather than forcing one connection path across platforms.
+
+**Consequences:** Local automation remains the prerequisite for paid real-device smoke; BrowserStack runs do not establish performance, physical Fold ergonomics, gameplay quality, or release readiness. D-025 supersedes the exact SDK pin while retaining this topology.
+
+**Full record:** `docs/decisions/d023-cross-screen-and-real-device-automation.md`
+
+## D-024 — Use deterministic visual-state construction and separate transition truth from screenshot truth
+
+**Date:** 2026-08-05
+**Status:** Accepted on stacked development branch
+
+**Decision:** Use a query-gated deterministic controller and 28 exact Chromium signatures for seven named states on four reference geometries. Test the real retry transition independently from the normalized retry screenshot and require every named state, including menu-first, to satisfy its own renderer preconditions.
+
+**Consequences:** Firefox and WebKit retain structural coverage without inheriting Chromium hashes; zero LootLocker initiation is enforced in visual QA; baseline changes require explicit review; screenshot stability does not establish subjective quality or release readiness.
+
+**Full record:** `docs/decisions/d024-deterministic-visual-state-regression.md`
+
+## D-025 — Lock and review the QA supply chain without CI-side branch mutation
+
+**Date:** 2026-08-05
+**Status:** Accepted on stacked development branch
+
+**Decision:** Commit the exact npm QA graph, pin reviewed external Actions to immutable SHAs, install with lifecycle scripts disabled, and enforce audit and drift policy from a read-only workflow that never pushes to its source branch.
+
+**Consequences:** Production findings and high/critical QA findings fail CI; current moderate BrowserStack-chain findings remain explicit and provisional; dependency and Action updates require the full visual matrix and bounded BrowserStack revalidation when transport changes.
+
+**Full record:** `docs/decisions/d025-reproducible-qa-supply-chain.md`
