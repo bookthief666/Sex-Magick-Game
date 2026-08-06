@@ -10,7 +10,7 @@
     "test:browserstack": "node tools/browserstack-real-device-smoke.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.60.0",
+    "@playwright/test": "1.59.1",
     "http-server": "14.1.1"
   }
 }
