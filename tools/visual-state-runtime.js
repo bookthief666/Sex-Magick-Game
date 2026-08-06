@@ -115,6 +115,12 @@
     return game.gameLevels[game.currentLevelIdx];
   }
 
+  function ensurePlayer() {
+    if (!game.player) prepareGameplay({ score: 0 });
+    if (!game.player) throw new Error('Visual QA could not establish a player.');
+    return game.player;
+  }
+
   function stabilizeGame() {
     silenceRuntime();
     ensureLevel();
@@ -212,6 +218,7 @@
   }
 
   function showMenu() {
+    ensurePlayer();
     resetUi();
     ensureLevel();
     game.state = GameState.START;
@@ -348,6 +355,7 @@
       frames: Number(game.frames || 0),
       viewport: [root.innerWidth, root.innerHeight],
       logicalCanvas: [Number(canvas?.dataset.smLogicalWidth || canvas?.width || 0), Number(canvas?.dataset.smLogicalHeight || canvas?.height || 0)],
+      playerReady: Boolean(game.player),
       gate: gate ? {
         active: gate.active,
         offer: Boolean(gate.offer),
