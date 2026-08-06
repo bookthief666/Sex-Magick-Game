@@ -25,13 +25,6 @@ jobs:
           build-name: 'M13 real-device - BUILD_INFO'
           project-name: 'Sex-Magick-Game'
 
-      - name: Start BrowserStack Local
-        uses: browserstack/github-actions/setup-local@master
-        with:
-          local-testing: start
-          local-identifier: random
-          local-logging-level: all-logs
-
       - name: Check out repository
         uses: actions/checkout@v4
 
@@ -55,10 +48,10 @@ jobs:
           cat /tmp/sex-magick-http.log
           exit 1
 
-      - name: Run BrowserStack real-device smoke set
+      - name: Run BrowserStack SDK real-mobile canary
         env:
-          BROWSERSTACK_TARGET_FILTER: Samsung Galaxy S23 Ultra smoke,iPhone 13 Safari smoke
-        run: node tools/browserstack-real-device-smoke.mjs
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: npm run test:browserstack-mobile
 
       - name: Upload local server log
         if: always()
@@ -69,8 +62,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Stop BrowserStack Local
+      - name: Upload BrowserStack SDK logs
         if: always()
-        uses: browserstack/github-actions/setup-local@master
+        uses: actions/upload-artifact@v4
         with:
-          local-testing: stop
+          name: m13-browserstack-sdk-logs
+          path: |
+            logs
+            .browserstack
+          if-no-files-found: ignore
+          retention-days: 14
