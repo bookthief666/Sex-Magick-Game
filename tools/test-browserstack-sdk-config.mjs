@@ -10,7 +10,9 @@ const expect = (condition, message) => {
 };
 
 expect(/framework:\s*playwright/.test(yaml), 'browserstack.yml must declare framework: playwright');
-expect(/deviceName:\s*Samsung Galaxy S23 Ultra/.test(yaml), 'Samsung Android canary platform is missing');
+expect(/browserName:\s*safari/.test(yaml), 'iPhone Safari browser is missing');
+expect(/osVersion:\s*["']15["']/.test(yaml), 'iPhone iOS 15 platform is missing');
+expect(/deviceName:\s*iPhone 13/.test(yaml), 'iPhone 13 canary platform is missing');
 expect(/testDir:\s*\.\/tests/.test(yaml), 'testDir must be owned by playwrightConfigOptions in browserstack.yml');
 expect(/testMatch:\s*["']\*\*\/browserstack-mobile\.spec\.ts["']/.test(yaml), 'testMatch must be a quoted string glob in browserstack.yml');
 expect(!/testMatch\s*:\s*\//.test(playwrightConfig), 'Playwright config must not serialize a RegExp testMatch through the BrowserStack SDK');
