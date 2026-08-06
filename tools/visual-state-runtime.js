@@ -192,6 +192,25 @@
     return snapshot();
   }
 
+  function configureRetryFrame(label = 'retry') {
+    game.state = GameState.PLAYING;
+    stabilizeGame();
+    const gap = Math.max(145, Math.min(220, Math.round(game.canvas.height * .28)));
+    game.obstacles = [createPillar(.72, .28, gap, .42)];
+    game.score = 0;
+    document.getElementById('scoreUi').textContent = '0';
+    setHidden('startScreen', true);
+    setHidden('gameOverScreen', true);
+    setHidden('pauseScreen', true);
+    setHidden('settingsScreen', true);
+    setHidden('scoreUi', false);
+    setHidden('pauseBtn', false);
+    setHidden('instructions', false);
+    setHidden('mobileControls', true);
+    drawNow();
+    return snapshot(label);
+  }
+
   function showMenu() {
     resetUi();
     ensureLevel();
@@ -226,20 +245,30 @@
   }
 
   function showRetry() {
+    prepareGameplay({ score: 0 });
+    return configureRetryFrame('retry');
+  }
+
+  function exerciseRetryTransition() {
     showDeath();
+    const before = {
+      state: game.state,
+      score: Number(game.score || 0),
+      layer: visibleLayer()
+    };
+
     game.restartGame();
-    game.state = GameState.PLAYING;
-    stabilizeGame();
-    const gap = Math.max(145, Math.min(220, Math.round(game.canvas.height * .28)));
-    game.obstacles = [createPillar(.72, .28, gap, .42)];
-    game.score = 0;
-    document.getElementById('scoreUi').textContent = '0';
-    setHidden('gameOverScreen', true);
-    setHidden('scoreUi', false);
-    setHidden('pauseBtn', false);
-    setHidden('instructions', false);
-    drawNow();
-    return snapshot('retry');
+
+    const rawAfter = {
+      state: game.state,
+      score: Number(game.score || 0),
+      layer: visibleLayer(),
+      isPlaying: game.state === GameState.PLAYING,
+      gameOverHidden: document.getElementById('gameOverScreen')?.classList.contains('hidden') === true
+    };
+
+    const normalized = configureRetryFrame('retry-transition');
+    return { before, rawAfter, normalized };
   }
 
   function requireGateSlice() {
@@ -340,13 +369,14 @@
 
     root.__SEX_MAGICK_VISUAL_QA__ = Object.freeze({
       mode: 'deterministic-visual-state-controller',
-      version: 1,
+      version: 2,
       states: Object.freeze(['menu', 'gameplay', 'death', 'retry', 'gate-offer', 'gate-bank', 'void']),
       showState,
       showMenu,
       showGameplay,
       showDeath,
       showRetry,
+      exerciseRetryTransition,
       showGateOffer,
       showGateBank,
       showVoid,
