@@ -1,5 +1,9 @@
 M13 real-device smoke request
-Requested: 2026-08-05
+Requested: 2026-08-05T17:14-07:00
+Attempt: 2
 Purpose: validate BrowserStack Local connectivity and responsive smoke contracts on desktop Chrome, Samsung Galaxy S23 Ultra Chrome, and iPhone 13 Safari.
 Source branch: develop/m13-cross-screen-automation
-Precondition: local M13 Cross-screen QA run 31058094761 succeeded.
+Playwright client: 1.59.1
+BrowserStack capability version: 1.59
+Precondition: local M13 Cross-screen QA run 31058978135 succeeded.
+Previous attempt: rejected before device allocation because Playwright 1.60 was not supported across the shared desktop/Android/iOS matrix.
