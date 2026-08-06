@@ -36,8 +36,12 @@ for (const file of workflowFiles) {
     }
   }
 
-  if (/npm\s+(?:install|i)(?:\s|$)/.test(source) && !/npm install --package-lock-only/.test(source)) {
-    failures.push(`${file}: workflow contains unlocked npm install`);
+  const installCommands = [...source.matchAll(/\bnpm\s+(?:install|i)\b[^\r\n]*/g)]
+    .map(match => match[0].trim());
+  for (const command of installCommands) {
+    if (command !== 'npm install --package-lock-only --ignore-scripts') {
+      failures.push(`${file}: workflow contains unlocked or unapproved npm install command: ${command}`);
+    }
   }
 }
 
@@ -53,6 +57,10 @@ expect(rootLock['browserstack-node-sdk'] === packageJson.devDependencies['browse
 expect(rootLock['http-server'] === packageJson.devDependencies['http-server'], 'http-server lockfile root does not match package.json');
 
 const auditWorkflow = fs.readFileSync('.github/workflows/m15-supply-chain-audit.yml', 'utf8');
+expect(/permissions:\s*\n\s+contents: read/.test(auditWorkflow), 'Audit workflow must use a read-only repository token');
+expect(!/contents:\s*write/.test(auditWorkflow), 'Audit workflow must not request repository write permission');
+expect(!/\bgit push\b/.test(auditWorkflow), 'Audit workflow must verify committed state without mutating its branch');
+expect(!/github\.head_ref|github\.ref_name/.test(auditWorkflow), 'Pull-request audit must test the checked-out merge ref, not force the stale head ref');
 expect(/production\.total !== 0/.test(auditWorkflow), 'Audit workflow must reject any production dependency vulnerability');
 expect(/full\.high/.test(auditWorkflow) && /full\.critical/.test(auditWorkflow), 'Audit workflow must reject high and critical QA vulnerabilities');
 expect(/git diff --exit-code -- package-lock\.json/.test(auditWorkflow), 'Audit workflow must verify lockfile drift');
