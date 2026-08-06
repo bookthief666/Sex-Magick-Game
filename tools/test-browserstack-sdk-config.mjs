@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const yaml = fs.readFileSync('browserstack.yml', 'utf8');
 const playwrightConfig = fs.readFileSync('playwright.browserstack.config.ts', 'utf8');
 const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
 const workflow = fs.readFileSync('.github/workflows/real-device-qa.yml', 'utf8');
 const mobileSpec = fs.readFileSync('tests/browserstack-mobile.spec.ts', 'utf8');
 
@@ -37,11 +38,16 @@ expect(/http:\/\/127\.0\.0\.1:8099\/index\.html/.test(workflow), 'Desktop workfl
 expect(/http-server \. -a 0\.0\.0\.0 -p 3000/.test(workflow), 'Real-mobile workflow must use the iOS-compatible local server port 3000');
 expect(/http:\/\/127\.0\.0\.1:3000\/index\.html/.test(workflow), 'Real-mobile workflow must health-check port 3000');
 expect(/npm run test:browserstack-mobile/.test(workflow), 'Real-mobile workflow must run the BrowserStack SDK matrix');
+expect((workflow.match(/npm ci --ignore-scripts/g) || []).length === 2, 'Both BrowserStack jobs must install from the committed lockfile with npm ci');
+expect(!/npm install --ignore-scripts/.test(workflow), 'BrowserStack workflow must not use unlocked npm install');
 expect(/http:\/\/bs-local\.com:3000\/index\.html/.test(mobileSpec), 'Real-mobile test must navigate directly to bs-local.com');
 expect(/navigationEvidence/.test(mobileSpec) && /responseStatus/.test(mobileSpec) && /bodyText/.test(mobileSpec), 'Real-mobile test must retain navigation diagnostics');
-expect(packageJson.devDependencies?.['browserstack-node-sdk'] === '1.64.2', 'BrowserStack Node SDK must remain pinned');
+expect(packageJson.devDependencies?.['browserstack-node-sdk'] === '1.65.3', 'BrowserStack Node SDK must remain pinned to the audited patch release');
 expect(packageJson.devDependencies?.['@playwright/test'] === '1.59.1', 'Playwright must remain pinned to the validated client version');
 expect(packageJson.scripts?.['test:browserstack-mobile'] === 'browserstack-node-sdk playwright test --config=playwright.browserstack.config.ts', 'Mobile SDK command changed unexpectedly');
+expect(packageLock.lockfileVersion === 3, 'npm lockfile version must remain 3');
+expect(packageLock.packages?.['']?.devDependencies?.['browserstack-node-sdk'] === '1.65.3', 'Lockfile root must match the audited BrowserStack SDK version');
+expect(packageLock.packages?.['']?.devDependencies?.['@playwright/test'] === '1.59.1', 'Lockfile root must match the validated Playwright version');
 
 if (failures.length) {
   console.error('BrowserStack SDK configuration contract failed:');
