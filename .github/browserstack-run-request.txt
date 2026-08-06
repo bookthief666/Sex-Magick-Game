@@ -1,10 +1,11 @@
 M13 real-device smoke request
-Requested: 2026-08-05T17:26-07:00
-Attempt: 3
-Mode: Desktop Chrome handshake canary only
-Purpose: validate BrowserStack automatic Playwright server selection using the exact installed client version before allocating mobile devices.
+Requested: 2026-08-05T17:30-07:00
+Attempt: 4
+Mode: Android and iOS mobile sessions only
+Purpose: validate the responsive smoke contract on Samsung Galaxy S23 Ultra Chrome and iPhone 13 Safari after the desktop BrowserStack handshake canary passed.
 Source branch: develop/m13-cross-screen-automation
 Playwright client: 1.59.1
-BrowserStack server version: automatic selection from client and browser capabilities
-Precondition: local M13 Cross-screen QA run 31059476837 succeeded.
-Previous attempts: both rejected before device allocation because the workflow forced unsupported server/client capability strings.
+BrowserStack server version: automatic selection from exact client version and browser/device capabilities
+Targets: Samsung Galaxy S23 Ultra smoke, iPhone 13 Safari smoke
+Precondition: local M13 Cross-screen QA run 31059828963 succeeded.
+Desktop canary: M13 Real-device QA #3 succeeded.
