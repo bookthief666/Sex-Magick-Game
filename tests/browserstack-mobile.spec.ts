@@ -1,14 +1,39 @@
 import { test, expect } from '@playwright/test';
 
+const IOS_LOCAL_URL = 'http://bs-local.com:3000/index.html?assetMode=offline&renderDpr=native';
+
 test('real mobile responsive smoke contract', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', error => pageErrors.push(error.message));
 
-  await page.goto('/index.html?assetMode=offline&renderDpr=native', {
+  const response = await page.goto(IOS_LOCAL_URL, {
     waitUntil: 'domcontentloaded'
   });
 
-  await page.locator('#game-container').waitFor({ state: 'visible' });
+  const navigationEvidence = await page.evaluate(() => ({
+    url: location.href,
+    title: document.title,
+    readyState: document.readyState,
+    bodyText: document.body?.innerText?.slice(0, 1000) || ''
+  }));
+
+  console.log(JSON.stringify({
+    navigationEvidence: {
+      ...navigationEvidence,
+      responseStatus: response?.status() ?? null
+    }
+  }, null, 2));
+
+  const gameContainer = page.locator('#game-container');
+  try {
+    await gameContainer.waitFor({ state: 'visible', timeout: 30_000 });
+  } catch (error) {
+    throw new Error(`Game page did not load through BrowserStack Local: ${JSON.stringify({
+      ...navigationEvidence,
+      responseStatus: response?.status() ?? null
+    })}`);
+  }
+
   await page.locator('canvas').first().waitFor({ state: 'visible' });
   await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VIEWPORT__?.getSnapshot?.()));
   await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_TOUCH_TARGETS__));
@@ -39,6 +64,7 @@ test('real mobile responsive smoke contract', async ({ page }) => {
 
     return {
       title: document.title,
+      url: location.href,
       profile: viewport?.profile,
       viewport: [innerWidth, innerHeight],
       overflow: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) - innerWidth,
@@ -50,6 +76,7 @@ test('real mobile responsive smoke contract', async ({ page }) => {
   });
 
   expect(evidence.title).toBe('93 PROTOCOL: DUALITY');
+  expect(evidence.url).toContain('bs-local.com:3000');
   expect(evidence.profile).toBeTruthy();
   expect(evidence.overflow).toBeLessThanOrEqual(1);
   expect(evidence.canvas[0]).toBeGreaterThanOrEqual(evidence.viewport[0] - 2);
