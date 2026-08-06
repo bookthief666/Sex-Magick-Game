@@ -4,7 +4,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8099';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: [/cross-screen\.spec\.ts/, /visual-state\.spec\.ts/],
+  testMatch: [/cross-screen\.spec\.ts/, /visual-state\.spec\.ts/, /retry-transition\.spec\.ts/],
   fullyParallel: true,
   timeout: 60_000,
   expect: { timeout: 10_000 },
