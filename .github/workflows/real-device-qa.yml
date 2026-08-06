@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - develop/m13-cross-screen-automation
+      - develop/m15-qa-supply-chain
     paths:
       - .github/browserstack-run-request.txt
 
@@ -22,7 +22,7 @@ jobs:
         with:
           username: ${{ secrets.BROWSERSTACK_USERNAME }}
           access-key: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
-          build-name: 'M13 desktop smoke - BUILD_INFO'
+          build-name: 'M15 desktop smoke - BUILD_INFO'
           project-name: 'Sex-Magick-Game'
 
       - name: Start BrowserStack Local
@@ -39,9 +39,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
 
-      - name: Install pinned test dependencies
-        run: npm install --ignore-scripts
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
 
       - name: Start desktop smoke server
         run: |
@@ -64,7 +65,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m13-desktop-server-log
+          name: m15-desktop-server-log
           path: /tmp/sex-magick-desktop-http.log
           if-no-files-found: ignore
           retention-days: 14
@@ -85,7 +86,7 @@ jobs:
         with:
           username: ${{ secrets.BROWSERSTACK_USERNAME }}
           access-key: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
-          build-name: 'M13 real-mobile matrix - BUILD_INFO'
+          build-name: 'M15 real-mobile matrix - BUILD_INFO'
           project-name: 'Sex-Magick-Game'
 
       - name: Check out repository
@@ -95,9 +96,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
 
-      - name: Install pinned test dependencies
-        run: npm install --ignore-scripts
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
 
       - name: Start real-mobile server
         run: |
@@ -120,7 +122,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m13-mobile-server-log
+          name: m15-mobile-server-log
           path: /tmp/sex-magick-mobile-http.log
           if-no-files-found: ignore
           retention-days: 14
@@ -129,7 +131,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m13-browserstack-sdk-evidence
+          name: m15-browserstack-sdk-evidence
           path: |
             logs
             .browserstack
