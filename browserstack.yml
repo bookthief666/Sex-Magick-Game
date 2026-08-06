@@ -10,11 +10,15 @@ platforms:
       name: browserstack-mobile
       testDir: ./tests
       testMatch: "**/browserstack-mobile.spec.ts"
+      use:
+        baseURL: "http://bs-local.com:3000"
 
 projectName: Sex-Magick-Game
 buildName: M13 real-mobile SDK canary
 buildIdentifier: ${BUILD_NUMBER}
 browserstackLocal: true
+browserStackLocalOptions:
+  forcelocal: true
 debug: true
 networkLogs: true
 video: true
