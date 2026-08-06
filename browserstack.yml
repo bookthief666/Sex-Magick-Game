@@ -8,6 +8,8 @@ platforms:
     deviceName: Samsung Galaxy S23 Ultra
     playwrightConfigOptions:
       name: browserstack-mobile
+      testDir: ./tests
+      testMatch: "**/browserstack-mobile.spec.ts"
 
 projectName: Sex-Magick-Game
 buildName: M13 real-mobile SDK canary
