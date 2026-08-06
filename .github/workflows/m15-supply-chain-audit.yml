@@ -1,6 +1,9 @@
 name: M15 QA Supply-chain Audit
 
 on:
+  pull_request:
+    branches:
+      - develop/m14-visual-state-regression
   push:
     branches:
       - develop/m15-qa-supply-chain
