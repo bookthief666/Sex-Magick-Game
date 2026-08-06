@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
 
 const expectedProfiles: Record<string, string> = {
   'chromium-small-phone': 'compact-phone',
@@ -27,6 +28,17 @@ async function openGame(page: import('@playwright/test').Page) {
   });
   return pageErrors;
 }
+
+test('BrowserStack SDK configuration remains serializable', async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop', 'Configuration contract runs once.');
+  const yaml = fs.readFileSync('browserstack.yml', 'utf8');
+  const sdkConfig = fs.readFileSync('playwright.browserstack.config.ts', 'utf8');
+  expect(yaml).toMatch(/framework:\s*playwright/);
+  expect(yaml).toMatch(/testDir:\s*\.\/tests/);
+  expect(yaml).toMatch(/testMatch:\s*["']\*\*\/browserstack-mobile\.spec\.ts["']/);
+  expect(sdkConfig).not.toMatch(/testMatch\s*:\s*\//);
+  expect(sdkConfig).not.toMatch(/projects\s*:/);
+});
 
 test('layout, profile, touch targets, and DPR budget remain valid', async ({ page }, testInfo) => {
   const pageErrors = await openGame(page);
