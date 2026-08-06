@@ -8,6 +8,7 @@ const build = process.env.BROWSERSTACK_BUILD_NAME || `sex-magick-m13-${Date.now(
 const project = process.env.BROWSERSTACK_PROJECT_NAME || 'Sex-Magick-Game';
 const installedVersion = execSync('npx playwright --version', { encoding: 'utf8' }).trim().split(/\s+/).pop();
 const supportedMinor = installedVersion.split('.').slice(0, 2).join('.');
+const requestedTarget = String(process.env.BROWSERSTACK_TARGET_FILTER || '').trim();
 
 if (!username || !accessKey) throw new Error('BrowserStack repository secrets are unavailable.');
 if (!localIdentifier) throw new Error('BrowserStack Local identifier is unavailable.');
@@ -21,7 +22,7 @@ const targets = [
     supportsConsole: true,
     caps: {
       os: 'Windows',
-      osVersion: '11',
+      os_version: '11',
       browser: 'chrome',
       browser_version: 'latest',
       resolution: '1440x900'
@@ -49,6 +50,14 @@ const targets = [
   }
 ];
 
+const selectedTargets = requestedTarget
+  ? targets.filter(target => target.name === requestedTarget)
+  : targets;
+
+if (!selectedTargets.length) {
+  throw new Error(`Unknown BrowserStack target filter: ${requestedTarget}`);
+}
+
 async function mark(page, status, reason) {
   try {
     await page.evaluate(
@@ -68,8 +77,10 @@ function createCapabilities(target) {
     'browserstack.accessKey': accessKey,
     'browserstack.local': 'true',
     'browserstack.localIdentifier': localIdentifier,
-    'browserstack.playwrightVersion': supportedMinor,
-    'client.playwrightVersion': supportedMinor,
+    // BrowserStack's documented automatic-selection path uses the exact
+    // installed client version and chooses a compatible server runtime from
+    // the browser/device capabilities. Do not force browserstack.playwrightVersion.
+    'client.playwrightVersion': installedVersion,
     'browserstack.debug': 'true',
     'browserstack.networkLogs': 'true',
     'browserstack.video': 'true'
@@ -131,7 +142,7 @@ async function runTarget(target) {
     }
     if (errors.length) throw new Error(`Browser exceptions: ${errors.join(' | ')}`);
 
-    console.log(JSON.stringify({ target: target.name, installedVersion, supportedMinor, evidence }, null, 2));
+    console.log(JSON.stringify({ target: target.name, installedVersion, evidence }, null, 2));
     await mark(page, 'passed', 'Responsive smoke contract passed.');
   } catch (error) {
     await mark(page, 'failed', String(error?.message || error).slice(0, 255));
@@ -143,8 +154,12 @@ async function runTarget(target) {
 }
 
 const failures = [];
-for (const target of targets) {
-  try { await runTarget(target); }
-  catch (error) { failures.push(`${target.name}: ${error?.message || error}`); }
+for (const target of selectedTargets) {
+  try {
+    await runTarget(target);
+  } catch (error) {
+    failures.push(`${target.name}: ${error?.message || error}`);
+    break;
+  }
 }
 if (failures.length) throw new Error(failures.join('\n'));
