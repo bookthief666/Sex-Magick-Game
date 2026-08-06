@@ -27,8 +27,16 @@ expect(/browserstackLocal:\s*true/.test(yaml), 'BrowserStack Local must remain e
 expect(/browserStackLocalOptions:\s*\n\s+forcelocal:\s*true/.test(yaml), 'Real-mobile traffic must remain forced through the Local tunnel');
 expect(!/testMatch\s*:\s*\//.test(playwrightConfig), 'Playwright config must not serialize a RegExp testMatch through the BrowserStack SDK');
 expect(!/projects\s*:/.test(playwrightConfig), 'BrowserStack SDK platform projects must be owned by browserstack.yml');
-expect(/http-server \. -a 0\.0\.0\.0 -p 3000/.test(workflow), 'Real-device workflow must use the iOS-compatible local server port 3000');
-expect(/http:\/\/127\.0\.0\.1:3000\/index\.html/.test(workflow), 'Real-device workflow must health-check port 3000');
+
+expect(/desktop-browserstack-smoke:/.test(workflow), 'Reusable BrowserStack workflow must retain the desktop job');
+expect(/real-mobile-browserstack-smoke:/.test(workflow), 'Reusable BrowserStack workflow must retain the real-mobile job');
+expect(/BROWSERSTACK_TARGET_FILTER:\s*Desktop Chrome smoke/.test(workflow), 'Desktop workflow must select only the validated desktop target');
+expect(/node tools\/browserstack-real-device-smoke\.mjs/.test(workflow), 'Desktop workflow must retain the validated raw Playwright runner');
+expect(/http-server \. -a 0\.0\.0\.0 -p 8099/.test(workflow), 'Desktop workflow must serve the validated port 8099');
+expect(/http:\/\/127\.0\.0\.1:8099\/index\.html/.test(workflow), 'Desktop workflow must health-check port 8099');
+expect(/http-server \. -a 0\.0\.0\.0 -p 3000/.test(workflow), 'Real-mobile workflow must use the iOS-compatible local server port 3000');
+expect(/http:\/\/127\.0\.0\.1:3000\/index\.html/.test(workflow), 'Real-mobile workflow must health-check port 3000');
+expect(/npm run test:browserstack-mobile/.test(workflow), 'Real-mobile workflow must run the BrowserStack SDK matrix');
 expect(/http:\/\/bs-local\.com:3000\/index\.html/.test(mobileSpec), 'Real-mobile test must navigate directly to bs-local.com');
 expect(/navigationEvidence/.test(mobileSpec) && /responseStatus/.test(mobileSpec) && /bodyText/.test(mobileSpec), 'Real-mobile test must retain navigation diagnostics');
 expect(packageJson.devDependencies?.['browserstack-node-sdk'] === '1.64.2', 'BrowserStack Node SDK must remain pinned');
