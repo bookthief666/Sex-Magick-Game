@@ -10,6 +10,7 @@ const visualReferenceProjects = new Set([
   'chromium-fold-inner',
   'chromium-desktop'
 ]);
+const seededPages = new WeakSet<Page>();
 
 const standardStates = ['gameplay', 'menu', 'death', 'retry'] as const;
 const gateStates = ['gate-offer', 'gate-bank', 'void'] as const;
@@ -29,6 +30,8 @@ function baselineData(): Record<string, Record<string, string>> | null {
 }
 
 async function seedPage(page: Page) {
+  if (seededPages.has(page)) return;
+  seededPages.add(page);
   await page.addInitScript(() => {
     const fixedWallClock = 1_782_000_000_000;
     Date.now = () => fixedWallClock;
@@ -43,16 +46,29 @@ async function seedPage(page: Page) {
   });
 }
 
-async function canonicalizeDynamicText(page: Page) {
+async function installDynamicTextLock(page: Page) {
   await page.evaluate(() => {
-    const leaderboard = document.getElementById('leaderboardList');
-    if (leaderboard) leaderboard.textContent = 'VISUAL QA · LOCAL ONLY';
-    const track = document.getElementById('trackName');
-    if (track) track.textContent = 'SOURCE: PROCEDURAL OFFLINE ASSET';
-    const fps = document.getElementById('fpsCounter');
-    if (fps) fps.textContent = '60';
-    const audio = document.getElementById('audioStatus');
-    if (audio) audio.textContent = 'MUTED';
+    const values: Record<string, string> = {
+      leaderboardList: 'VISUAL QA · LOCAL ONLY',
+      trackName: 'SOURCE: PROCEDURAL OFFLINE ASSET',
+      fpsCounter: '60',
+      audioStatus: 'MUTED'
+    };
+    const previous = (window as any).__M14_DYNAMIC_TEXT_LOCKS__ as MutationObserver[] | undefined;
+    previous?.forEach(observer => observer.disconnect());
+    const observers: MutationObserver[] = [];
+    for (const [id, text] of Object.entries(values)) {
+      const node = document.getElementById(id);
+      if (!node) continue;
+      const apply = () => {
+        if (node.textContent !== text) node.textContent = text;
+      };
+      apply();
+      const observer = new MutationObserver(apply);
+      observer.observe(node, { childList: true, subtree: true, characterData: true });
+      observers.push(observer);
+    }
+    (window as any).__M14_DYNAMIC_TEXT_LOCKS__ = observers;
   });
 }
 
@@ -83,17 +99,21 @@ async function openVisualController(page: Page, gateSlice = false) {
     });
   }
 
-  await canonicalizeDynamicText(page);
+  await installDynamicTextLock(page);
   await page.addScriptTag({ url: '/tools/visual-state-runtime.js' });
   await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VISUAL_QA__));
   if (gateSlice) await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_GATE_SLICE__));
-  await canonicalizeDynamicText(page);
+  await installDynamicTextLock(page);
   return pageErrors;
 }
 
 async function showState(page: Page, state: string) {
   const snapshot = await page.evaluate(stateName => (window as any).__SEX_MAGICK_VISUAL_QA__.showState(stateName), state);
-  if (state === 'menu') await canonicalizeDynamicText(page);
+  if (state === 'menu') {
+    await expect(page.locator('#leaderboardList')).toHaveText('VISUAL QA · LOCAL ONLY');
+    await page.waitForTimeout(50);
+    await expect(page.locator('#leaderboardList')).toHaveText('VISUAL QA · LOCAL ONLY');
+  }
   return snapshot;
 }
 
