@@ -1,8 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './tests',
-  testMatch: /browserstack-mobile\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 20_000 },
   workers: 1,
@@ -17,10 +15,5 @@ export default defineConfig({
     video: 'retain-on-failure',
     colorScheme: 'dark',
     reducedMotion: 'reduce'
-  },
-  projects: [
-    {
-      name: 'browserstack-mobile'
-    }
-  ]
+  }
 });
