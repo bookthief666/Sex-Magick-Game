@@ -57,7 +57,7 @@ jobs:
 
       - name: Run BrowserStack real-device smoke set
         env:
-          BROWSERSTACK_TARGET_FILTER: Desktop Chrome smoke
+          BROWSERSTACK_TARGET_FILTER: Samsung Galaxy S23 Ultra smoke,iPhone 13 Safari smoke
         run: node tools/browserstack-real-device-smoke.mjs
 
       - name: Upload local server log
