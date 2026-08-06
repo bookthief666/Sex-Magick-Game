@@ -6,12 +6,13 @@ const accessKey = process.env.BROWSERSTACK_ACCESS_KEY;
 const localIdentifier = process.env.BROWSERSTACK_LOCAL_IDENTIFIER;
 const build = process.env.BROWSERSTACK_BUILD_NAME || `sex-magick-m13-${Date.now()}`;
 const project = process.env.BROWSERSTACK_PROJECT_NAME || 'Sex-Magick-Game';
-const clientVersion = execSync('npx playwright --version', { encoding: 'utf8' }).trim().split(/\s+/).pop();
+const installedVersion = execSync('npx playwright --version', { encoding: 'utf8' }).trim().split(/\s+/).pop();
+const supportedMinor = installedVersion.split('.').slice(0, 2).join('.');
 
 if (!username || !accessKey) throw new Error('BrowserStack repository secrets are unavailable.');
 if (!localIdentifier) throw new Error('BrowserStack Local identifier is unavailable.');
-if (clientVersion !== '1.60.0') {
-  throw new Error(`Unexpected Playwright client version ${clientVersion}; expected 1.60.0 for this BrowserStack gate.`);
+if (supportedMinor !== '1.59') {
+  throw new Error(`Unexpected Playwright client version ${installedVersion}; expected a 1.59.x client for the shared desktop/Android/iOS BrowserStack gate.`);
 }
 
 const targets = [
@@ -67,8 +68,8 @@ function createCapabilities(target) {
     'browserstack.accessKey': accessKey,
     'browserstack.local': 'true',
     'browserstack.localIdentifier': localIdentifier,
-    'browserstack.playwrightVersion': '1.60',
-    'client.playwrightVersion': clientVersion,
+    'browserstack.playwrightVersion': supportedMinor,
+    'client.playwrightVersion': supportedMinor,
     'browserstack.debug': 'true',
     'browserstack.networkLogs': 'true',
     'browserstack.video': 'true'
@@ -130,7 +131,7 @@ async function runTarget(target) {
     }
     if (errors.length) throw new Error(`Browser exceptions: ${errors.join(' | ')}`);
 
-    console.log(JSON.stringify({ target: target.name, evidence }, null, 2));
+    console.log(JSON.stringify({ target: target.name, installedVersion, supportedMinor, evidence }, null, 2));
     await mark(page, 'passed', 'Responsive smoke contract passed.');
   } catch (error) {
     await mark(page, 'failed', String(error?.message || error).slice(0, 255));
