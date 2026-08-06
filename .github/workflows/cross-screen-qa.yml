@@ -1,21 +1,21 @@
-name: M13 Cross-screen QA
+name: M14 Visual-state QA
 
 on:
   pull_request:
     branches:
-      - develop/m12-physical-performance-evidence
+      - develop/m13-cross-screen-automation
   push:
     branches:
-      - develop/m13-cross-screen-automation
+      - develop/m14-visual-state-regression
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  cross-screen:
+  visual-state:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -32,23 +32,23 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium firefox webkit
 
-      - name: Run cross-screen matrix
+      - name: Run cross-screen and visual-state matrix
         run: npm run test:cross-screen
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m13-playwright-report
+          name: m14-playwright-report
           path: playwright-report
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload traces, videos, screenshots, and JSON
+      - name: Upload traces, videos, screenshots, signatures, and JSON
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m13-test-results
+          name: m14-test-results
           path: test-results
           if-no-files-found: ignore
           retention-days: 14
