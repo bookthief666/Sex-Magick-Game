@@ -1,0 +1,5 @@
+M13 real-device smoke request
+Requested: 2026-08-05
+Purpose: validate BrowserStack Local connectivity and responsive smoke contracts on desktop Chrome, Samsung Galaxy S23 Ultra Chrome, and iPhone 13 Safari.
+Source branch: develop/m13-cross-screen-automation
+Precondition: local M13 Cross-screen QA run 31058094761 succeeded.
