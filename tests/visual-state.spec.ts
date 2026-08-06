@@ -56,7 +56,7 @@ async function openVisualController(page: Page, gateSlice = false) {
   }
   await page.goto(`/index.html?${query.toString()}`, { waitUntil: 'domcontentloaded' });
   await page.locator('#game-container').waitFor({ state: 'visible' });
-  await page.waitForFunction(() => typeof (window as any).game !== 'undefined' || typeof (window as any).__SEX_MAGICK_VIEWPORT__ !== 'undefined');
+  await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VIEWPORT__));
   await page.addScriptTag({ url: '/tools/visual-state-runtime.js' });
   await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VISUAL_QA__));
   if (gateSlice) await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_GATE_SLICE__));
@@ -139,11 +139,11 @@ test('deterministic visual signatures match the M14 reference baseline', async (
     signatures[state] = await visualHash(page, testInfo.project.name, state);
   }
 
-  await page.close();
-  const gatePage = await testInfo.project.use.browserName
-    ? null
-    : null;
-  void gatePage;
+  await openVisualController(page, true);
+  for (const state of gateStates) {
+    await showState(page, state);
+    signatures[state] = await visualHash(page, testInfo.project.name, state);
+  }
 
   console.log(`M14_VISUAL_SIGNATURE ${JSON.stringify({ project: testInfo.project.name, signatures })}`);
 
