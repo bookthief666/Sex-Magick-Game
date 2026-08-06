@@ -2,7 +2,15 @@ import { test, expect } from '@playwright/test';
 
 test('the real retry path resets score and returns to gameplay', async ({ page }) => {
   const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  const lootLockerRequests: string[] = [];
   page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('console', message => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('request', request => {
+    if (/lootlocker\.io/i.test(request.url())) lootLockerRequests.push(request.url());
+  });
 
   await page.addInitScript(() => {
     Date.now = () => 1_782_000_000_000;
@@ -39,4 +47,6 @@ test('the real retry path resets score and returns to gameplay', async ({ page }
   expect(result.normalized.layer).toBe('gameplay');
   expect(result.normalized.score).toBe(0);
   expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+  expect(lootLockerRequests).toEqual([]);
 });

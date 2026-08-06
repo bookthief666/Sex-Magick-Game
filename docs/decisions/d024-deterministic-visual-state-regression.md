@@ -26,6 +26,8 @@ The retry transition also demonstrated that behavioral truth and screenshot trut
 - The accepted baseline must pass at least two independent enforcement runs on the same code, dependency, workflow, and baseline inputs before adoption.
 - Firefox and WebKit continue structural state testing but do not inherit Chromium/Linux exact hashes.
 - Dynamic text, wall clock, randomness, animation, audio, haptics, LootLocker, fonts, viewport state, canvas state, and warm-up rendering are controlled in the QA path.
+- Every named state must satisfy its own renderer preconditions; `menu` may be the first request on a fresh controller and establishes a valid player without a prior harness priming step.
+- `visualQa=1` installs a parser-time local-only leaderboard preflight, and the browser contracts fail if any LootLocker request is initiated.
 - The production restart path is tested across all ten Playwright projects independently of the canonical retry screenshot.
 - Baseline updates require an explicit reviewed commit; the test must never silently update hashes.
 - A green visual gate does not establish subjective art quality, physical-device performance, Gate comprehension, fun, or release readiness.
@@ -61,6 +63,19 @@ Each successful job produced:
 ```
 
 All twenty-eight signatures and all ten production retry-transition projects passed in both jobs.
+
+Strengthened invariant enforcement:
+
+```text
+Head 4227a754bc9d2983cc6ddc76c51098c416c8aa09
+Run 31072483297
+Job 92523107905
+57 passed
+23 intentionally skipped
+80 total
+```
+
+The strengthened run proved fresh-controller menu-first rendering across all ten projects, asserted zero LootLocker requests and zero page/console errors, and reproduced all twenty-eight accepted signatures without baseline changes.
 
 ## Revisit when
 

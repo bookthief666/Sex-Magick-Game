@@ -152,9 +152,17 @@ async function resetStateRandom(page: Page, stateName: string) {
   }, seed);
 }
 
-async function openVisualController(page: Page, gateSlice = false) {
+async function openVisualController(page: Page, gateSlice = false, primeGameplay = true) {
   const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  const lootLockerRequests: string[] = [];
   page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('console', message => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('request', request => {
+    if (/lootlocker\.io/i.test(request.url())) lootLockerRequests.push(request.url());
+  });
   await seedPage(page);
   await page.route(/lootlocker\.io/i, route => route.abort('failed'));
 
@@ -175,8 +183,9 @@ async function openVisualController(page: Page, gateSlice = false) {
 
   if (!gateSlice) {
     await page.waitForFunction(() => {
+      const preflight = (window as any).__SEX_MAGICK_VISUAL_QA_PREFLIGHT__?.getSnapshot?.();
       const text = document.getElementById('leaderboardList')?.textContent || '';
-      return /OFFLINE|NO TOKEN|NO SCORES/i.test(text);
+      return preflight?.leaderboardSuppressed === true && /LOCAL ONLY/i.test(text);
     });
   }
 
@@ -186,10 +195,12 @@ async function openVisualController(page: Page, gateSlice = false) {
   if (gateSlice) await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_GATE_SLICE__));
   await installDynamicTextLock(page);
 
-  await resetStateRandom(page, gateSlice ? 'gate-page-init' : 'standard-page-init');
-  await page.evaluate(() => (window as any).__SEX_MAGICK_VISUAL_QA__.showGameplay());
-  await waitForVisualSettlement(page);
-  return pageErrors;
+  if (primeGameplay) {
+    await resetStateRandom(page, gateSlice ? 'gate-page-init' : 'standard-page-init');
+    await page.evaluate(() => (window as any).__SEX_MAGICK_VISUAL_QA__.showGameplay());
+    await waitForVisualSettlement(page);
+  }
+  return { pageErrors, consoleErrors, lootLockerRequests };
 }
 
 async function showState(page: Page, state: string) {
@@ -229,7 +240,7 @@ async function visualHash(page: Page, project: string, state: string) {
 }
 
 test('standard visual states remain reachable and internally consistent', async ({ page }) => {
-  const pageErrors = await openVisualController(page, false);
+  const { pageErrors, consoleErrors, lootLockerRequests } = await openVisualController(page, false);
   for (const state of standardStates) {
     const snapshot = await showState(page, state);
     expect(snapshot.label).toBe(state);
@@ -238,15 +249,32 @@ test('standard visual states remain reachable and internally consistent', async 
     expect(snapshot.viewport[1]).toBeGreaterThan(0);
     expect(snapshot.logicalCanvas[0]).toBeGreaterThan(0);
     expect(snapshot.logicalCanvas[1]).toBeGreaterThan(0);
+    expect(snapshot.playerReady).toBe(true);
     if (state === 'death') expect(snapshot.score).toBe(13);
     if (state === 'retry') expect(snapshot.score).toBe(0);
   }
   expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+  expect(lootLockerRequests).toEqual([]);
+});
+
+test('menu can be the first named state on a fresh visual controller', async ({ page }) => {
+  const { pageErrors, consoleErrors, lootLockerRequests } = await openVisualController(page, false, false);
+  const snapshot = await showState(page, 'menu');
+
+  expect(snapshot.label).toBe('menu');
+  expect(snapshot.layer).toBe('startScreen');
+  expect(snapshot.playerReady).toBe(true);
+  expect(snapshot.logicalCanvas[0]).toBeGreaterThan(0);
+  expect(snapshot.logicalCanvas[1]).toBeGreaterThan(0);
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+  expect(lootLockerRequests).toEqual([]);
 });
 
 test('Gate offer, bank, and Void states remain reachable', async ({ page }, testInfo) => {
   test.skip(!visualReferenceProjects.has(testInfo.project.name), 'Gate state coverage runs on visual reference projects.');
-  const pageErrors = await openVisualController(page, true);
+  const { pageErrors, consoleErrors, lootLockerRequests } = await openVisualController(page, true);
 
   const offer = await showState(page, 'gate-offer');
   expect(offer.layer).toBe('gameplay');
@@ -264,6 +292,8 @@ test('Gate offer, bank, and Void states remain reachable', async ({ page }, test
   expect(voidState.gate?.voidActive).toBe(true);
   expect(voidState.gate?.entries).toBeGreaterThanOrEqual(1);
   expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+  expect(lootLockerRequests).toEqual([]);
 });
 
 test('deterministic visual signatures match the M14 reference baseline', async ({ page }, testInfo) => {

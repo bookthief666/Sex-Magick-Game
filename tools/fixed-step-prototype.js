@@ -356,6 +356,47 @@
   loadPolicyWhenGrammarIsReady();
 })();
 
+(function bootstrapVisualQaLocalOnlyPreflight() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('visualQa') !== '1') return;
+
+  let leaderboardSuppressed = false;
+  try {
+    if (typeof Leaderboard !== 'undefined' && Leaderboard) {
+      const localOnly = async function visualQaLocalOnlyLeaderboard() {
+        const list = document.getElementById('leaderboardList');
+        if (list) list.textContent = 'VISUAL QA · LOCAL ONLY';
+        const status = document.getElementById('uploadStatus');
+        if (status) status.textContent = 'VISUAL QA · LOCAL ONLY';
+        return { localOnly: true, visualQa: true };
+      };
+      Leaderboard.init = localOnly;
+      Leaderboard.fetchTop = localOnly;
+      Leaderboard.submit = localOnly;
+      Leaderboard.__visualQaLocalOnly = true;
+      leaderboardSuppressed = true;
+    }
+  } catch (error) {
+    console.error('[SEX MAGICK] Visual QA could not suppress leaderboard initialization', error);
+  }
+
+  globalThis.__SEX_MAGICK_VISUAL_QA_PREFLIGHT__ = Object.freeze({
+    mode: 'visual-qa-local-only-preflight',
+    version: 1,
+    getSnapshot() {
+      return {
+        enabled: true,
+        leaderboardSuppressed,
+        guestSessionAllowed: false,
+        scoreSubmissionAllowed: false
+      };
+    }
+  });
+})();
+
 (function bootstrapGateSliceRuntime() {
   'use strict';
 
