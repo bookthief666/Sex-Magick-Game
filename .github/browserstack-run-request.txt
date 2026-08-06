@@ -1,13 +1,13 @@
 M13 real-device smoke request
-Requested: 2026-08-05T17:36-07:00
-Attempt: 5
+Requested: 2026-08-05T17:44-07:00
+Attempt: 6
 Mode: Samsung Galaxy S23 Ultra SDK canary only
-Purpose: validate BrowserStack's supported Node SDK transport for real Android Playwright after the raw browserType.connect path returned a malformed endpoint.
+Purpose: validate BrowserStack's supported Node SDK transport after moving testDir and a quoted string testMatch into browserstack.yml.
 Source branch: develop/m13-cross-screen-automation
 Playwright client: 1.59.1
 BrowserStack Node SDK: 1.64.2
 Transport: browserstack-node-sdk with browserstack.yml
 Target: Samsung Galaxy S23 Ultra, Android 13.0, Chrome
-Precondition: local M13 Cross-screen QA run 31060209965 succeeded on exact SDK head 9d1a45023279038ccb355a9bdc719d8c07b449d0.
+Precondition: local M13 Cross-screen QA run 31060683274 succeeded on exact corrected head d283d1205b136a8bea5cf7a5fcdfd059dd6a1cf4.
 Desktop legacy canary: M13 Real-device QA #3 succeeded.
-Previous mobile attempt: rejected by raw chromium.connect with a malformed mobile endpoint before test execution.
+Previous SDK attempt: stopped before device allocation because a TypeScript RegExp testMatch serialized to an invalid BrowserStack YAML value.
