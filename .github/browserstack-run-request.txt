@@ -1,13 +1,17 @@
 M13 real-device smoke request
-Requested: 2026-08-05T17:50-07:00
-Attempt: 7
+Requested: 2026-08-05T18:04-07:00
+Attempt: 8
 Mode: iPhone 13 Safari SDK canary only
-Purpose: validate the final unproven real-mobile target after the Samsung Galaxy S23 Ultra SDK canary succeeded.
+Purpose: verify iOS Local navigation using BrowserStack's required bs-local.com hostname and a supported local port.
 Source branch: develop/m13-cross-screen-automation
 Playwright client: 1.59.1
 BrowserStack Node SDK: 1.64.2
 Transport: browserstack-node-sdk with browserstack.yml
 Target: iPhone 13, iOS 15, Safari
-Precondition: local M13 Cross-screen QA run 31061052870 succeeded on exact iPhone-config head 9f41fea58546c2831ebc2ddfbf04ec891d21512a.
-Desktop canary: M13 Real-device QA #3 succeeded.
-Android SDK canary: M13 Real-device QA #6 succeeded.
+Local URL: http://bs-local.com:3000/index.html?assetMode=offline&renderDpr=native
+Local policy: browserStackLocalOptions.forcelocal=true
+Precondition: local M13 Cross-screen QA run 31061785419 succeeded on exact corrected head 45bf8d03777126d41a80a8e3b20b93c8a5981913.
+Desktop legacy canary: M13 Real-device QA #3 succeeded.
+Samsung SDK canary: M13 Real-device QA #6 succeeded.
+Previous iPhone attempt: Safari session launched, but localhost did not resolve to the game page and #game-container was absent.
+Diagnostics: navigation URL, title, response status, readyState, and body text are retained on failure.
