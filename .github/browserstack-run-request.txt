@@ -1,17 +1,16 @@
-M13 real-device smoke request
-Requested: 2026-08-05T18:04-07:00
-Attempt: 8
-Mode: iPhone 13 Safari SDK canary only
-Purpose: verify iOS Local navigation using BrowserStack's required bs-local.com hostname and a supported local port.
-Source branch: develop/m13-cross-screen-automation
+M15 real-device supply-chain validation request
+Requested: 2026-08-05T23:04-07:00
+Attempt: 1
+Mode: desktop Chrome plus Android Chrome and iPhone Safari smoke matrix
+Purpose: verify the locked BrowserStack SDK, immutable BrowserStack Action pins, and npm-ci install path against real remote sessions.
+Source branch: develop/m15-qa-supply-chain
+Precondition head: 7231804f09696d77a84b70358fcbab94a5329c32
+Precondition supply-chain run: 31075711927 succeeded.
+Precondition visual-state run: 31075711881 succeeded with 57 passed, 23 intentionally skipped, and all 28 signatures unchanged.
 Playwright client: 1.59.1
-BrowserStack Node SDK: 1.64.2
-Transport: browserstack-node-sdk with browserstack.yml
-Target: iPhone 13, iOS 15, Safari
-Local URL: http://bs-local.com:3000/index.html?assetMode=offline&renderDpr=native
-Local policy: browserStackLocalOptions.forcelocal=true
-Precondition: local M13 Cross-screen QA run 31061785419 succeeded on exact corrected head 45bf8d03777126d41a80a8e3b20b93c8a5981913.
-Desktop legacy canary: M13 Real-device QA #3 succeeded.
-Samsung SDK canary: M13 Real-device QA #6 succeeded.
-Previous iPhone attempt: Safari session launched, but localhost did not resolve to the game page and #game-container was absent.
-Diagnostics: navigation URL, title, response status, readyState, and body text are retained on failure.
+BrowserStack Node SDK: 1.65.3
+BrowserStack Action pin: 1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a
+Desktop target: Windows 11, Chrome latest, 1440 x 900
+Mobile targets: Samsung Galaxy S23 Ultra Android 13 Chrome; iPhone 13 iOS 15 Safari
+Local URLs: http://127.0.0.1:8099 and http://bs-local.com:3000
+Claim boundary: smoke assertions only; no performance, touch-latency, haptic, comprehension, fun, or release-readiness claim.
