@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: BrowserStack environment
-        uses: browserstack/github-actions/setup-env@master
+        uses: browserstack/github-actions/setup-env@1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a
         with:
           username: ${{ secrets.BROWSERSTACK_USERNAME }}
           access-key: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -26,17 +26,17 @@ jobs:
           project-name: 'Sex-Magick-Game'
 
       - name: Start BrowserStack Local
-        uses: browserstack/github-actions/setup-local@master
+        uses: browserstack/github-actions/setup-local@1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a
         with:
           local-testing: start
           local-identifier: random
           local-logging-level: all-logs
 
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
           cache: npm
@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload desktop server log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: m15-desktop-server-log
           path: /tmp/sex-magick-desktop-http.log
@@ -72,7 +72,7 @@ jobs:
 
       - name: Stop BrowserStack Local
         if: always()
-        uses: browserstack/github-actions/setup-local@master
+        uses: browserstack/github-actions/setup-local@1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a
         with:
           local-testing: stop
 
@@ -82,7 +82,7 @@ jobs:
 
     steps:
       - name: BrowserStack environment
-        uses: browserstack/github-actions/setup-env@master
+        uses: browserstack/github-actions/setup-env@1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a
         with:
           username: ${{ secrets.BROWSERSTACK_USERNAME }}
           access-key: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -90,10 +90,10 @@ jobs:
           project-name: 'Sex-Magick-Game'
 
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
           cache: npm
@@ -120,7 +120,7 @@ jobs:
 
       - name: Upload mobile server log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: m15-mobile-server-log
           path: /tmp/sex-magick-mobile-http.log
@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload BrowserStack SDK logs and Playwright evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: m15-browserstack-sdk-evidence
           path: |
