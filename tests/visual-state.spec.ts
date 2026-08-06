@@ -52,7 +52,8 @@ async function installDynamicTextLock(page: Page) {
       leaderboardList: 'VISUAL QA · LOCAL ONLY',
       trackName: 'SOURCE: PROCEDURAL OFFLINE ASSET',
       fpsCounter: '60',
-      audioStatus: 'MUTED'
+      audioStatus: 'MUTED',
+      uploadStatus: 'VISUAL QA · LOCAL ONLY'
     };
     const previous = (window as any).__M14_DYNAMIC_TEXT_LOCKS__ as MutationObserver[] | undefined;
     previous?.forEach(observer => observer.disconnect());
@@ -70,6 +71,85 @@ async function installDynamicTextLock(page: Page) {
     }
     (window as any).__M14_DYNAMIC_TEXT_LOCKS__ = observers;
   });
+}
+
+async function geometrySignature(page: Page) {
+  return page.evaluate(() => {
+    const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement | null;
+    const container = document.getElementById('game-container');
+    const canvasRect = canvas?.getBoundingClientRect();
+    const containerRect = container?.getBoundingClientRect();
+    const viewport = (window as any).__SEX_MAGICK_VIEWPORT__?.getSnapshot?.();
+    const render = (window as any).__SEX_MAGICK_RENDER__?.getSnapshot?.();
+    return JSON.stringify({
+      inner: [innerWidth, innerHeight],
+      profile: viewport?.profile || null,
+      viewportSize: [viewport?.width || null, viewport?.height || null],
+      orientation: viewport?.orientation || null,
+      htmlProfile: document.documentElement.dataset.smViewportProfile || null,
+      htmlOrientation: document.documentElement.dataset.smViewportOrientation || null,
+      canvasRect: canvasRect ? [
+        Number(canvasRect.x.toFixed(3)),
+        Number(canvasRect.y.toFixed(3)),
+        Number(canvasRect.width.toFixed(3)),
+        Number(canvasRect.height.toFixed(3))
+      ] : null,
+      containerRect: containerRect ? [
+        Number(containerRect.x.toFixed(3)),
+        Number(containerRect.y.toFixed(3)),
+        Number(containerRect.width.toFixed(3)),
+        Number(containerRect.height.toFixed(3))
+      ] : null,
+      logical: canvas ? [canvas.dataset.smLogicalWidth || null, canvas.dataset.smLogicalHeight || null] : null,
+      backing: canvas ? [canvas.dataset.smBackingWidth || null, canvas.dataset.smBackingHeight || null] : null,
+      effectiveDpr: canvas?.dataset.smEffectiveDpr || null,
+      renderResizeCount: render?.resizeCount || null
+    });
+  });
+}
+
+async function waitForVisualSettlement(page: Page, stableSamples = 4) {
+  await page.evaluate(async () => {
+    await document.fonts?.ready;
+    (window as any).__SEX_MAGICK_VIEWPORT__?.refresh?.();
+    (window as any).__SEX_MAGICK_RENDER__?.refresh?.();
+  });
+
+  let previous = '';
+  let stable = 0;
+  const observed: string[] = [];
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const current = await geometrySignature(page);
+    observed.push(current);
+    if (current === previous) stable += 1;
+    else stable = 1;
+    previous = current;
+    if (stable >= stableSamples) return current;
+    await page.waitForTimeout(50);
+  }
+  throw new Error(`Visual geometry did not settle: ${observed.slice(-6).join(' | ')}`);
+}
+
+function stateSeed(stateName: string) {
+  let seed = 0x93c0ffee >>> 0;
+  for (const character of stateName) {
+    seed = Math.imul(seed ^ character.charCodeAt(0), 16777619) >>> 0;
+  }
+  return seed || 1;
+}
+
+async function resetStateRandom(page: Page, stateName: string) {
+  const seed = stateSeed(stateName);
+  await page.evaluate(initialSeed => {
+    let state = initialSeed >>> 0;
+    Math.random = () => {
+      state += 0x6d2b79f5;
+      let value = state;
+      value = Math.imul(value ^ (value >>> 15), value | 1);
+      value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+  }, seed);
 }
 
 async function openVisualController(page: Page, gateSlice = false) {
@@ -91,6 +171,7 @@ async function openVisualController(page: Page, gateSlice = false) {
   await page.goto(`/index.html?${query.toString()}`, { waitUntil: 'domcontentloaded' });
   await page.locator('#game-container').waitFor({ state: 'visible' });
   await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VIEWPORT__));
+  await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_RENDER__));
 
   if (!gateSlice) {
     await page.waitForFunction(() => {
@@ -104,17 +185,34 @@ async function openVisualController(page: Page, gateSlice = false) {
   await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VISUAL_QA__));
   if (gateSlice) await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_GATE_SLICE__));
   await installDynamicTextLock(page);
+
+  await resetStateRandom(page, gateSlice ? 'gate-page-init' : 'standard-page-init');
+  await page.evaluate(() => (window as any).__SEX_MAGICK_VISUAL_QA__.showGameplay());
+  await waitForVisualSettlement(page);
   return pageErrors;
 }
 
 async function showState(page: Page, state: string) {
+  await resetStateRandom(page, state);
   const snapshot = await page.evaluate(stateName => (window as any).__SEX_MAGICK_VISUAL_QA__.showState(stateName), state);
+  await waitForVisualSettlement(page);
   if (state === 'menu') {
     await expect(page.locator('#leaderboardList')).toHaveText('VISUAL QA · LOCAL ONLY');
     await page.waitForTimeout(50);
     await expect(page.locator('#leaderboardList')).toHaveText('VISUAL QA · LOCAL ONLY');
   }
   return snapshot;
+}
+
+async function warmVisualStates(page: Page, states: readonly string[]) {
+  for (const state of states) {
+    await showState(page, state);
+    await page.locator('#game-container').screenshot({
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css'
+    });
+  }
 }
 
 async function visualHash(page: Page, project: string, state: string) {
@@ -174,12 +272,14 @@ test('deterministic visual signatures match the M14 reference baseline', async (
   const signatures: Record<string, string> = {};
 
   await openVisualController(page, false);
+  await warmVisualStates(page, standardStates);
   for (const state of standardStates) {
     await showState(page, state);
     signatures[state] = await visualHash(page, testInfo.project.name, state);
   }
 
   await openVisualController(page, true);
+  await warmVisualStates(page, gateStates);
   for (const state of gateStates) {
     await showState(page, state);
     signatures[state] = await visualHash(page, testInfo.project.name, state);
