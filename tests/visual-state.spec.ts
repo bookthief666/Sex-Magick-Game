@@ -43,25 +43,7 @@ async function seedPage(page: Page) {
   });
 }
 
-async function openVisualController(page: Page, gateSlice = false) {
-  const pageErrors: string[] = [];
-  page.on('pageerror', error => pageErrors.push(error.message));
-  await seedPage(page);
-  const query = new URLSearchParams({
-    assetMode: 'offline',
-    renderDpr: '1',
-    visualQa: '1'
-  });
-  if (gateSlice) {
-    query.set('gateSlice', '1');
-    query.set('inputBuffer', '3');
-  }
-  await page.goto(`/index.html?${query.toString()}`, { waitUntil: 'domcontentloaded' });
-  await page.locator('#game-container').waitFor({ state: 'visible' });
-  await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VIEWPORT__));
-  await page.addScriptTag({ url: '/tools/visual-state-runtime.js' });
-  await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VISUAL_QA__));
-  if (gateSlice) await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_GATE_SLICE__));
+async function canonicalizeDynamicText(page: Page) {
   await page.evaluate(() => {
     const leaderboard = document.getElementById('leaderboardList');
     if (leaderboard) leaderboard.textContent = 'VISUAL QA · LOCAL ONLY';
@@ -72,11 +54,47 @@ async function openVisualController(page: Page, gateSlice = false) {
     const audio = document.getElementById('audioStatus');
     if (audio) audio.textContent = 'MUTED';
   });
+}
+
+async function openVisualController(page: Page, gateSlice = false) {
+  const pageErrors: string[] = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  await seedPage(page);
+  await page.route(/lootlocker\.io/i, route => route.abort('failed'));
+
+  const query = new URLSearchParams({
+    assetMode: 'offline',
+    renderDpr: '1',
+    visualQa: '1'
+  });
+  if (gateSlice) {
+    query.set('gateSlice', '1');
+    query.set('inputBuffer', '3');
+  }
+
+  await page.goto(`/index.html?${query.toString()}`, { waitUntil: 'domcontentloaded' });
+  await page.locator('#game-container').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VIEWPORT__));
+
+  if (!gateSlice) {
+    await page.waitForFunction(() => {
+      const text = document.getElementById('leaderboardList')?.textContent || '';
+      return /OFFLINE|NO TOKEN|NO SCORES/i.test(text);
+    });
+  }
+
+  await canonicalizeDynamicText(page);
+  await page.addScriptTag({ url: '/tools/visual-state-runtime.js' });
+  await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VISUAL_QA__));
+  if (gateSlice) await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_GATE_SLICE__));
+  await canonicalizeDynamicText(page);
   return pageErrors;
 }
 
 async function showState(page: Page, state: string) {
-  return page.evaluate(stateName => (window as any).__SEX_MAGICK_VISUAL_QA__.showState(stateName), state);
+  const snapshot = await page.evaluate(stateName => (window as any).__SEX_MAGICK_VISUAL_QA__.showState(stateName), state);
+  if (state === 'menu') await canonicalizeDynamicText(page);
+  return snapshot;
 }
 
 async function visualHash(page: Page, project: string, state: string) {
