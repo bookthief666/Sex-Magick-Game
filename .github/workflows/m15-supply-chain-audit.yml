@@ -1,0 +1,75 @@
+name: M15 QA Supply-chain Audit
+
+on:
+  push:
+    branches:
+      - develop/m15-qa-supply-chain
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-lock-and-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Generate exact lockfile
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Verify lockfile installs
+        run: npm ci --ignore-scripts
+
+      - name: Capture production and full audit reports
+        shell: bash
+        run: |
+          npm audit --omit=dev --json > npm-audit-production.json || true
+          npm audit --json > npm-audit-full.json || true
+          node - <<'NODE'
+          const fs = require('fs');
+          const read = path => JSON.parse(fs.readFileSync(path, 'utf8'));
+          const summarize = report => ({
+            vulnerabilities: report.metadata?.vulnerabilities || {},
+            dependencies: report.metadata?.dependencies || {},
+            advisories: Object.entries(report.vulnerabilities || {}).map(([name, value]) => ({
+              name,
+              severity: value.severity,
+              direct: value.isDirect,
+              via: (value.via || []).map(item => typeof item === 'string' ? item : {
+                title: item.title,
+                severity: item.severity,
+                url: item.url,
+                range: item.range
+              }),
+              effects: value.effects || [],
+              range: value.range,
+              fixAvailable: value.fixAvailable
+            }))
+          });
+          fs.writeFileSync('npm-audit-summary.json', JSON.stringify({
+            production: summarize(read('npm-audit-production.json')),
+            full: summarize(read('npm-audit-full.json'))
+          }, null, 2));
+          NODE
+
+      - name: Upload lockfile and audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: m15-lockfile-and-audit
+          path: |
+            package-lock.json
+            npm-audit-production.json
+            npm-audit-full.json
+            npm-audit-summary.json
+          if-no-files-found: error
+          retention-days: 14
