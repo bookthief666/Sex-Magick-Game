@@ -8,7 +8,10 @@ const build = process.env.BROWSERSTACK_BUILD_NAME || `sex-magick-m13-${Date.now(
 const project = process.env.BROWSERSTACK_PROJECT_NAME || 'Sex-Magick-Game';
 const installedVersion = execSync('npx playwright --version', { encoding: 'utf8' }).trim().split(/\s+/).pop();
 const supportedMinor = installedVersion.split('.').slice(0, 2).join('.');
-const requestedTarget = String(process.env.BROWSERSTACK_TARGET_FILTER || '').trim();
+const requestedTargets = String(process.env.BROWSERSTACK_TARGET_FILTER || '')
+  .split(',')
+  .map(value => value.trim())
+  .filter(Boolean);
 
 if (!username || !accessKey) throw new Error('BrowserStack repository secrets are unavailable.');
 if (!localIdentifier) throw new Error('BrowserStack Local identifier is unavailable.');
@@ -50,12 +53,16 @@ const targets = [
   }
 ];
 
-const selectedTargets = requestedTarget
-  ? targets.filter(target => target.name === requestedTarget)
+const selectedTargets = requestedTargets.length
+  ? targets.filter(target => requestedTargets.includes(target.name))
   : targets;
 
+const unknownTargets = requestedTargets.filter(name => !targets.some(target => target.name === name));
+if (unknownTargets.length) {
+  throw new Error(`Unknown BrowserStack target filter(s): ${unknownTargets.join(', ')}`);
+}
 if (!selectedTargets.length) {
-  throw new Error(`Unknown BrowserStack target filter: ${requestedTarget}`);
+  throw new Error('No BrowserStack targets selected.');
 }
 
 async function mark(page, status, reason) {
