@@ -1,11 +1,13 @@
 M13 real-device smoke request
-Requested: 2026-08-05T17:30-07:00
-Attempt: 4
-Mode: Android and iOS mobile sessions only
-Purpose: validate the responsive smoke contract on Samsung Galaxy S23 Ultra Chrome and iPhone 13 Safari after the desktop BrowserStack handshake canary passed.
+Requested: 2026-08-05T17:36-07:00
+Attempt: 5
+Mode: Samsung Galaxy S23 Ultra SDK canary only
+Purpose: validate BrowserStack's supported Node SDK transport for real Android Playwright after the raw browserType.connect path returned a malformed endpoint.
 Source branch: develop/m13-cross-screen-automation
 Playwright client: 1.59.1
-BrowserStack server version: automatic selection from exact client version and browser/device capabilities
-Targets: Samsung Galaxy S23 Ultra smoke, iPhone 13 Safari smoke
-Precondition: local M13 Cross-screen QA run 31059828963 succeeded.
-Desktop canary: M13 Real-device QA #3 succeeded.
+BrowserStack Node SDK: 1.64.2
+Transport: browserstack-node-sdk with browserstack.yml
+Target: Samsung Galaxy S23 Ultra, Android 13.0, Chrome
+Precondition: local M13 Cross-screen QA run 31060209965 succeeded on exact SDK head 9d1a45023279038ccb355a9bdc719d8c07b449d0.
+Desktop legacy canary: M13 Real-device QA #3 succeeded.
+Previous mobile attempt: rejected by raw chromium.connect with a malformed mobile endpoint before test execution.
