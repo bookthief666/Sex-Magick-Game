@@ -38,9 +38,9 @@ jobs:
 
       - name: Start static game server
         run: |
-          nohup npx http-server . -a 0.0.0.0 -p 8099 -c-1 > /tmp/sex-magick-http.log 2>&1 &
+          nohup npx http-server . -a 0.0.0.0 -p 3000 -c-1 > /tmp/sex-magick-http.log 2>&1 &
           for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8099/index.html > /dev/null; then
+            if curl --fail --silent http://127.0.0.1:3000/index.html > /dev/null; then
               exit 0
             fi
             sleep 1
@@ -70,5 +70,6 @@ jobs:
           path: |
             logs
             .browserstack
+            test-results
           if-no-files-found: ignore
           retention-days: 14
