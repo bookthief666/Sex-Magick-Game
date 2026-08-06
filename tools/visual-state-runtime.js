@@ -69,18 +69,20 @@
 
   function silenceRuntime() {
     try {
+      const audio = typeof AudioSys !== 'undefined' ? AudioSys : root.AudioSys;
+      const sfx = typeof SFX !== 'undefined' ? SFX : root.SFX;
+      const haptics = typeof Haptics !== 'undefined' ? Haptics : root.Haptics;
+      const leaderboard = typeof Leaderboard !== 'undefined' ? Leaderboard : root.Leaderboard;
       for (const key of ['pause', 'resume', 'play', 'stop', 'switchToGameMusic', 'switchToGameOverMusic', 'switchToMenuMusic']) {
-        if (root.AudioSys && typeof root.AudioSys[key] === 'function') root.AudioSys[key] = () => {};
+        if (audio && typeof audio[key] === 'function') audio[key] = () => {};
       }
       for (const key of ['jump', 'collect', 'crash', 'levelUp', 'voidEnter', 'playTone']) {
-        if (root.SFX && typeof root.SFX[key] === 'function') root.SFX[key] = () => {};
+        if (sfx && typeof sfx[key] === 'function') sfx[key] = () => {};
       }
       for (const key of ['jump', 'collect', 'crash', 'levelUp', 'start']) {
-        if (root.Haptics && typeof root.Haptics[key] === 'function') root.Haptics[key] = () => {};
+        if (haptics && typeof haptics[key] === 'function') haptics[key] = () => {};
       }
-      if (root.Leaderboard) {
-        root.Leaderboard.submit = async () => ({ visualQa: true });
-      }
+      if (leaderboard) leaderboard.submit = async () => ({ visualQa: true });
     } catch (_error) {}
 
     game.settings.music = false;
@@ -101,8 +103,21 @@
     if (telegraph) telegraph.hidden = true;
   }
 
+  function ensureLevel() {
+    if (!Array.isArray(game.gameLevels) || game.gameLevels.length === 0) {
+      if (typeof game.prepareLevels !== 'function') throw new Error('Game level preparation is unavailable.');
+      game.prepareLevels();
+    }
+    if (!Number.isInteger(game.currentLevelIdx) || !game.gameLevels[game.currentLevelIdx]) {
+      game.currentLevelIdx = 0;
+    }
+    if (!game.gameLevels[game.currentLevelIdx]) throw new Error('Visual QA could not establish a current level.');
+    return game.gameLevels[game.currentLevelIdx];
+  }
+
   function stabilizeGame() {
     silenceRuntime();
+    ensureLevel();
     game.frames = 180;
     game.shake = 0;
     game.hitStop = 0;
@@ -145,6 +160,7 @@
   }
 
   function drawNow() {
+    ensureLevel();
     if (typeof game.drawScene === 'function') game.drawScene();
     if (typeof root.__SEX_MAGICK_GATE_SLICE__?.getSnapshot === 'function') {
       const hud = document.getElementById('gate-slice-hud');
@@ -178,6 +194,7 @@
 
   function showMenu() {
     resetUi();
+    ensureLevel();
     game.state = GameState.START;
     setHidden('startScreen', false);
     setHidden('menuButtons', false);
@@ -196,7 +213,7 @@
   function showDeath() {
     prepareGameplay({ score: 13 });
     game.gameOver();
-    game.state = GameState.GAMEOVER;
+    game.state = GameState.GAME_OVER;
     game.screenFlash = null;
     game.shake = 0;
     setHidden('gameOverScreen', false);
