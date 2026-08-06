@@ -10,16 +10,18 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  generate-lock-and-audit:
+  lock-and-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -30,8 +32,25 @@ jobs:
       - name: Generate exact lockfile
         run: npm install --package-lock-only --ignore-scripts
 
-      - name: Verify lockfile installs
-        run: npm ci --ignore-scripts
+      - name: Commit generated lockfile on branch pushes
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          if git diff --quiet -- package-lock.json && git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+            echo 'Committed lockfile already matches package.json.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'M15: commit reproducible npm lockfile'
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Verify committed lockfile is reproducible
+        run: |
+          npm ci --ignore-scripts
+          npm install --package-lock-only --ignore-scripts
+          git diff --exit-code -- package-lock.json
 
       - name: Capture production and full audit reports
         shell: bash
@@ -63,6 +82,21 @@ jobs:
             production: summarize(read('npm-audit-production.json')),
             full: summarize(read('npm-audit-full.json'))
           }, null, 2));
+          NODE
+
+      - name: Enforce production and high-severity policy
+        run: |
+          node - <<'NODE'
+          const report = require('./npm-audit-summary.json');
+          const production = report.production.vulnerabilities;
+          const full = report.full.vulnerabilities;
+          if (production.total !== 0) {
+            throw new Error(`Production dependency vulnerabilities are not allowed: ${JSON.stringify(production)}`);
+          }
+          if ((full.high || 0) > 0 || (full.critical || 0) > 0) {
+            throw new Error(`High or critical QA dependency vulnerabilities are not allowed: ${JSON.stringify(full)}`);
+          }
+          console.log(JSON.stringify({ production, full }, null, 2));
           NODE
 
       - name: Upload lockfile and audit evidence
