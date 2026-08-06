@@ -3,9 +3,9 @@ accessKey: ${BROWSERSTACK_ACCESS_KEY}
 framework: playwright
 
 platforms:
-  - browserName: chrome
-    osVersion: "13.0"
-    deviceName: Samsung Galaxy S23 Ultra
+  - browserName: safari
+    osVersion: "15"
+    deviceName: iPhone 13
     playwrightConfigOptions:
       name: browserstack-mobile
       testDir: ./tests
