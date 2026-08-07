@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SEX MAGICK R-1 Playtest</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #08080b; color: #f4f4f6; }
+    body { min-height: 100vh; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .panel { width: min(680px, calc(100vw - 28px)); margin: 28px auto; padding: 22px; border: 1px solid #444; background: #111116; }
+    h1, h2 { margin-top: 0; letter-spacing: .08em; }
+    p, label { line-height: 1.5; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .field { display: grid; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+    input, select, textarea { width: 100%; padding: 11px; border: 1px solid #555; background: #08080b; color: #fff; }
+    textarea { min-height: 120px; resize: vertical; }
+    .primary { width: 100%; margin-top: 18px; padding: 14px; border: 1px solid #00e5ff; background: #08242a; color: #cfffff; }
+    .secondary { padding: 10px 12px; border: 1px solid #666; background: #17171d; color: #fff; }
+    .warning { padding: 10px; border-left: 3px solid #ff2f6d; background: #1c0d13; color: #ffdbe6; }
+    .muted { color: #aaa; font-size: 13px; }
+    #session { display: none; position: fixed; inset: 0; background: #000; }
+    #gameFrame { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+    #sessionBar { position: fixed; top: max(6px, env(safe-area-inset-top)); right: 8px; z-index: 20; display: flex; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid rgba(255,255,255,.24); background: rgba(0,0,0,.72); color: #fff; font-size: 12px; }
+    #timer { min-width: 54px; text-align: center; letter-spacing: .08em; }
+    #questionnaire, #report { display: none; }
+    .answers { display: flex; gap: 18px; margin: 12px 0 18px; }
+    .answers label { display: flex; align-items: center; gap: 7px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 42vh; overflow: auto; padding: 12px; background: #07070a; border: 1px solid #333; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } .field.full { grid-column: auto; } .panel { margin: 14px auto; padding: 16px; } }
+  </style>
+</head>
+<body>
+  <main id="setup" class="panel">
+    <h1>R-1 Input Truth Playtest</h1>
+    <p class="warning"><strong>Facilitator:</strong> do not explain the controls, objective, buffer value, or prior findings. Hand the phone to the tester after pressing Begin.</p>
+    <div class="grid">
+      <label class="field">Anonymous tester code
+        <input id="testerCode" value="T1" maxlength="24" autocomplete="off">
+      </label>
+      <label class="field">Phone / device
+        <input id="device" placeholder="e.g. Fold 6 closed" maxlength="80" autocomplete="off">
+      </label>
+      <label class="field">Display setting
+        <select id="refreshRate">
+          <option value="unknown">Unknown</option>
+          <option value="60">60 Hz</option>
+          <option value="90">90 Hz</option>
+          <option value="120">120 Hz</option>
+          <option value="144">144 Hz</option>
+        </select>
+      </label>
+      <label class="field">Input buffer condition
+        <select id="buffer">
+          <option value="3">3 simulation steps</option>
+          <option value="6">6 simulation steps</option>
+        </select>
+      </label>
+    </div>
+    <p class="muted">The session lasts ten minutes. Data remains in this page until copied or downloaded. Nothing is transmitted.</p>
+    <button id="begin" class="primary">BEGIN 10-MINUTE SESSION</button>
+    <p id="setupError" class="warning" hidden></p>
+  </main>
+
+  <section id="session" aria-label="Playtest session">
+    <iframe id="gameFrame" title="SEX MAGICK playtest game" allow="autoplay; fullscreen"></iframe>
+    <div id="sessionBar">
+      <span id="timer">10:00</span>
+      <button id="endNow" class="secondary" type="button">END</button>
+    </div>
+  </section>
+
+  <section id="questionnaire" class="panel">
+    <h2>Two questions</h2>
+    <form id="questionForm">
+      <fieldset>
+        <legend>Did the game ever ignore you?</legend>
+        <div class="answers">
+          <label><input type="radio" name="ignored" value="yes" required> Yes</label>
+          <label><input type="radio" name="ignored" value="no" required> No</label>
+        </div>
+      </fieldset>
+      <label class="field full">What is the game asking you to do?
+        <textarea id="asking" required></textarea>
+      </label>
+      <button class="primary" type="submit">SAVE SESSION REPORT</button>
+    </form>
+  </section>
+
+  <section id="report" class="panel">
+    <h2>Local session report</h2>
+    <p class="muted">Use the lifetime counters for comparison because they span player replacement and retries.</p>
+    <pre id="reportJson"></pre>
+    <div class="actions">
+      <button id="copyReport" class="secondary" type="button">COPY JSON</button>
+      <button id="downloadReport" class="secondary" type="button">DOWNLOAD JSON</button>
+      <button id="newSession" class="secondary" type="button">NEW SESSION</button>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const SESSION_MS = 10 * 60 * 1000;
+      const setup = document.getElementById('setup');
+      const session = document.getElementById('session');
+      const questionnaire = document.getElementById('questionnaire');
+      const report = document.getElementById('report');
+      const frame = document.getElementById('gameFrame');
+      const timer = document.getElementById('timer');
+      const setupError = document.getElementById('setupError');
+      let sessionMeta = null;
+      let sessionTimer = null;
+      let captured = null;
+      let finalReport = null;
+
+      const params = new URLSearchParams(location.search);
+      if (params.get('buffer') === '6') document.getElementById('buffer').value = '6';
+      if (params.get('buffer') === '3') document.getElementById('buffer').value = '3';
+      if (params.get('tester')) document.getElementById('testerCode').value = params.get('tester').slice(0, 24);
+      if (params.get('device')) document.getElementById('device').value = params.get('device').slice(0, 80);
+      if (['60', '90', '120', '144'].includes(params.get('hz'))) document.getElementById('refreshRate').value = params.get('hz');
+
+      function formatTime(ms) {
+        const seconds = Math.max(0, Math.ceil(ms / 1000));
+        return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      }
+
+      function waitForGameApi(timeoutMs = 15000) {
+        const started = performance.now();
+        return new Promise((resolve, reject) => {
+          const attempt = () => {
+            try {
+              const gameWindow = frame.contentWindow;
+              if (gameWindow?.__SEX_MAGICK_COLLISION__ && gameWindow?.__SEX_MAGICK_TIMING__) {
+                resolve(gameWindow);
+                return;
+              }
+            } catch (_error) {}
+            if (performance.now() - started >= timeoutMs) {
+              reject(new Error('The gameplay runtime did not become ready.'));
+              return;
+            }
+            setTimeout(attempt, 50);
+          };
+          attempt();
+        });
+      }
+
+      async function beginSession() {
+        setupError.hidden = true;
+        const testerCode = document.getElementById('testerCode').value.trim() || 'anonymous';
+        const device = document.getElementById('device').value.trim() || 'unspecified';
+        const refreshRate = document.getElementById('refreshRate').value;
+        const bufferFrames = Number(document.getElementById('buffer').value);
+        const sessionId = `r1_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+        sessionMeta = {
+          protocol: 'R-1-input-truth-v1',
+          sessionId,
+          testerCode,
+          device,
+          refreshRate,
+          bufferFrames,
+          plannedDurationMs: SESSION_MS,
+          startedAt: new Date().toISOString(),
+          startedMonotonicMs: performance.now()
+        };
+
+        setup.style.display = 'none';
+        session.style.display = 'block';
+        frame.src = `../index.html?inputBuffer=${bufferFrames}&r1Playtest=1&session=${encodeURIComponent(sessionId)}`;
+
+        try {
+          const gameWindow = await waitForGameApi();
+          gameWindow.__SEX_MAGICK_COLLISION__.resetInputStats();
+          gameWindow.__SEX_MAGICK_INPUT_FEEDBACK__?.setTextEnabled?.(false);
+          const deadline = performance.now() + SESSION_MS;
+          timer.textContent = formatTime(SESSION_MS);
+          sessionTimer = setInterval(() => {
+            const remaining = deadline - performance.now();
+            timer.textContent = formatTime(remaining);
+            if (remaining <= 0) endSession('timer');
+          }, 250);
+          try { await session.requestFullscreen?.(); } catch (_error) {}
+        } catch (error) {
+          session.style.display = 'none';
+          setup.style.display = 'block';
+          setupError.textContent = error.message;
+          setupError.hidden = false;
+        }
+      }
+
+      function captureGameState() {
+        const gameWindow = frame.contentWindow;
+        const collision = gameWindow?.__SEX_MAGICK_COLLISION__;
+        const timing = gameWindow?.__SEX_MAGICK_TIMING__?.getSnapshot?.() || null;
+        return {
+          inputStats: collision?.getInputStats?.() || null,
+          configuredBufferFrames: collision?.getInputBufferFrames?.() ?? null,
+          game: timing ? {
+            state: timing.state,
+            rite: timing.rite,
+            score: Number(timing.score || 0),
+            frames: Number(timing.simulationFrames || 0),
+            renderFps: Number(timing.renderFps || 0),
+            pendingRaf: Boolean(timing.pendingRaf)
+          } : null,
+          viewport: {
+            width: gameWindow?.innerWidth || null,
+            height: gameWindow?.innerHeight || null,
+            devicePixelRatio: gameWindow?.devicePixelRatio || null
+          }
+        };
+      }
+
+      function endSession(reason) {
+        if (!sessionMeta || captured) return;
+        clearInterval(sessionTimer);
+        sessionTimer = null;
+        captured = captureGameState();
+        frame.src = 'about:blank';
+        try { document.exitFullscreen?.(); } catch (_error) {}
+        sessionMeta.endedAt = new Date().toISOString();
+        sessionMeta.actualDurationMs = Math.max(0, Math.round(performance.now() - sessionMeta.startedMonotonicMs));
+        sessionMeta.endReason = reason;
+        delete sessionMeta.startedMonotonicMs;
+        session.style.display = 'none';
+        questionnaire.style.display = 'block';
+      }
+
+      function buildReport(answers) {
+        const lifetime = captured?.inputStats?.lifetime || {};
+        const attempts = ['immediate', 'buffered', 'rejected', 'coalesced']
+          .reduce((total, key) => total + Number(lifetime[key] || 0), 0);
+        return {
+          schemaVersion: 1,
+          privacy: 'local-playtest-only-no-network-transmission',
+          ...sessionMeta,
+          result: captured,
+          derived: {
+            inputAttempts: attempts,
+            rejectedRate: attempts > 0 ? Number((Number(lifetime.rejected || 0) / attempts).toFixed(4)) : null,
+            expiredPerBuffered: Number(lifetime.buffered || 0) > 0
+              ? Number((Number(lifetime.expired || 0) / Number(lifetime.buffered || 0)).toFixed(4))
+              : null
+          },
+          answers
+        };
+      }
+
+      document.getElementById('begin').addEventListener('click', beginSession);
+      document.getElementById('endNow').addEventListener('click', () => endSession('facilitator'));
+
+      document.getElementById('questionForm').addEventListener('submit', event => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        finalReport = buildReport({
+          didGameIgnoreYou: form.get('ignored'),
+          whatIsTheGameAsking: document.getElementById('asking').value.trim()
+        });
+        questionnaire.style.display = 'none';
+        report.style.display = 'block';
+        document.getElementById('reportJson').textContent = JSON.stringify(finalReport, null, 2);
+      });
+
+      document.getElementById('copyReport').addEventListener('click', async event => {
+        await navigator.clipboard.writeText(JSON.stringify(finalReport, null, 2));
+        event.currentTarget.textContent = 'COPIED';
+      });
+
+      document.getElementById('downloadReport').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(finalReport, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${finalReport.sessionId}.json`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      });
+
+      document.getElementById('newSession').addEventListener('click', () => location.reload());
+    })();
+  </script>
+</body>
+</html>

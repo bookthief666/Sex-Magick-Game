@@ -1,0 +1,140 @@
+name: M13 Real-device QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop/sex-magick-2.0
+    paths:
+      - .github/browserstack-run-request.txt
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-browserstack-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: BrowserStack environment
+        uses: browserstack/github-actions/setup-env@1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a
+        with:
+          username: ${{ secrets.BROWSERSTACK_USERNAME }}
+          access-key: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          build-name: 'M15 desktop smoke - BUILD_INFO'
+          project-name: 'Sex-Magick-Game'
+
+      - name: Start BrowserStack Local
+        uses: browserstack/github-actions/setup-local@1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a
+        with:
+          local-testing: start
+          local-identifier: random
+          local-logging-level: all-logs
+
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Start desktop smoke server
+        run: |
+          nohup npx http-server . -a 0.0.0.0 -p 8099 -c-1 > /tmp/sex-magick-desktop-http.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8099/index.html > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/sex-magick-desktop-http.log
+          exit 1
+
+      - name: Run BrowserStack desktop Chrome smoke
+        env:
+          BROWSERSTACK_TARGET_FILTER: Desktop Chrome smoke
+        run: node tools/browserstack-real-device-smoke.mjs
+
+      - name: Upload desktop server log
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: m15-desktop-server-log
+          path: /tmp/sex-magick-desktop-http.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Stop BrowserStack Local
+        if: always()
+        uses: browserstack/github-actions/setup-local@1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a
+        with:
+          local-testing: stop
+
+  real-mobile-browserstack-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: BrowserStack environment
+        uses: browserstack/github-actions/setup-env@1ab56d9521ce20f4651bb5d9f3ef39c5ba54805a
+        with:
+          username: ${{ secrets.BROWSERSTACK_USERNAME }}
+          access-key: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
+          build-name: 'M15 real-mobile matrix - BUILD_INFO'
+          project-name: 'Sex-Magick-Game'
+
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Start real-mobile server
+        run: |
+          nohup npx http-server . -a 0.0.0.0 -p 3000 -c-1 > /tmp/sex-magick-mobile-http.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/index.html > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/sex-magick-mobile-http.log
+          exit 1
+
+      - name: Run BrowserStack Android and iOS smoke matrix
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: npm run test:browserstack-mobile
+
+      - name: Upload mobile server log
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: m15-mobile-server-log
+          path: /tmp/sex-magick-mobile-http.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload BrowserStack SDK logs and Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: m15-browserstack-sdk-evidence
+          path: |
+            logs
+            .browserstack
+            test-results
+          if-no-files-found: ignore
+          retention-days: 14

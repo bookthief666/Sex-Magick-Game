@@ -1,0 +1,135 @@
+name: Fast gameplay QA
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop/sex-magick-2.0
+  push:
+    branches:
+      - develop/sex-magick-2.0
+
+permissions:
+  contents: read
+
+jobs:
+  fast-gameplay-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+
+      - name: Syntax-check runtime and tests
+        run: |
+          node --check tools/fixed-step-clock.js
+          node --check tools/fixed-step-prototype.js
+          node --check tools/collision-runtime.js
+          node --check tools/input-feedback-policy.js
+          node --check tools/gate-slice-runtime.js
+          node --check tools/gate-evidence-runtime.js
+          node --check tools/viewport-runtime.js
+          node --check tools/canvas-render-runtime.js
+          node --check tools/asset-resilience-runtime.js
+          node --check tools/performance-budget-runtime.js
+          node --check tools/performance-evidence-analysis.js
+          node --check tools/run-telemetry.js
+          node --check tools/obstacle-grammar.js
+          node --check tools/player-reachability.js
+          node --check tools/reachability-policy.js
+          node --check tools/compositional-reachability.js
+          node --check tools/compositional-robustness.js
+          node --check tools/m7-review-diagnostics.js
+          node --check tools/run-m7-review-audit.js
+          node --check tools/test-fixed-step-clock.js
+          node --check tools/test-collision-runtime.js
+          node --check tools/test-input-feedback-policy.js
+          node --check tools/test-r1-playtest-harness.js
+          node --check tools/test-gate-slice.js
+          node --check tools/test-gate-slice-playtest-harness.js
+          node --check tools/test-gate-slice-playtest-v2-harness.js
+          node --check tools/test-gate-evidence-runtime.js
+          node --check tools/test-viewport-runtime.js
+          node --check tools/test-canvas-render-runtime.js
+          node --check tools/test-asset-resilience-runtime.js
+          node --check tools/test-performance-budget-runtime.js
+          node --check tools/test-performance-budget-harness.js
+          node --check tools/test-performance-evidence-analysis.js
+          node --check tools/test-performance-evidence-harness.js
+          node --check tools/test-run-telemetry.js
+          node --check tools/test-obstacle-grammar.js
+          node --check tools/test-player-reachability.js
+          node --check tools/test-compositional-reachability.js
+          node --check tools/test-m7-review-diagnostics.js
+          node --check tools/browser-fixed-step-test.mjs
+          node --check tools/browser-collision-test.mjs
+          node --check tools/browser-policy-fail-closed-test.mjs
+          node --check tools/browser-gate-slice-test.mjs
+          node --check tools/browser-m9-runtime-hardening-test.mjs
+          node --check tools/browser-m10-render-resilience-test.mjs
+          node --check tools/browser-m11-performance-budget-test.mjs
+          node --check tools/browser-m12-physical-performance-evidence-test.mjs
+          node --check tools/browser-telemetry-test.mjs
+          node --check tools/run-browser-fixed-step-test.mjs
+          node --check tools/run-browser-collision-test.mjs
+          node --check tools/run-browser-telemetry-test.mjs
+          node --check tools/run-browser-obstacle-grammar-test.mjs
+          node --check tools/run-browser-reachability-test.mjs
+          node --check tools/run-browser-compositional-test.mjs
+
+      - name: Run fast deterministic contracts
+        run: |
+          node tools/test-fixed-step-clock.js
+          node tools/test-collision-runtime.js
+          node tools/test-input-feedback-policy.js
+          node tools/test-r1-playtest-harness.js
+          node tools/test-gate-slice.js
+          node tools/test-gate-slice-playtest-harness.js
+          node tools/test-gate-slice-playtest-v2-harness.js
+          node tools/test-gate-evidence-runtime.js
+          node tools/test-viewport-runtime.js
+          node tools/test-canvas-render-runtime.js
+          node tools/test-asset-resilience-runtime.js
+          node tools/test-performance-budget-runtime.js
+          node tools/test-performance-budget-harness.js
+          node tools/test-performance-evidence-analysis.js
+          node tools/test-performance-evidence-harness.js
+          node tools/test-run-telemetry.js
+          node tools/test-obstacle-grammar.js
+          node tools/test-m7-review-diagnostics.js
+
+      - name: Run fixed-step Chrome integration
+        run: node tools/run-browser-fixed-step-test.mjs
+
+      - name: Run collision, input, and touch Chrome integration
+        run: node tools/run-browser-collision-test.mjs
+
+      - name: Run fail-closed policy Chrome integration
+        run: node tools/browser-policy-fail-closed-test.mjs
+
+      - name: Run Gate slice Chrome integration
+        run: node tools/browser-gate-slice-test.mjs
+
+      - name: Run M9 runtime hardening Chrome integration
+        run: node tools/browser-m9-runtime-hardening-test.mjs
+
+      - name: Run M10 render and asset resilience Chrome integration
+        run: node tools/browser-m10-render-resilience-test.mjs
+
+      - name: Run M11 performance budget Chrome integration
+        run: node tools/browser-m11-performance-budget-test.mjs
+
+      - name: Run M12 physical evidence Chrome integration
+        run: node tools/browser-m12-physical-performance-evidence-test.mjs
+
+      - name: Run telemetry and fast-retry Chrome integration
+        run: node tools/run-browser-telemetry-test.mjs
+
+      - name: Run obstacle grammar Chrome integration
+        run: node tools/run-browser-obstacle-grammar-test.mjs

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en" data-status="running">
+<head>
+  <meta charset="utf-8">
+  <title>Reachability Browser QA</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;background:#000;color:#fff}
+    iframe{position:fixed;inset:0;width:100%;height:100%;border:0}
+    #result{position:fixed;inset:8px;z-index:100000;margin:0;padding:12px;overflow:auto;background:rgba(0,0,0,.94);color:#dff;font:12px/1.45 monospace;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <iframe id="gameFrame" src="../index.html?reachabilityBrowserQa=1#debug"></iframe>
+  <pre id="result">RUNNING</pre>
+  <script>
+    (() => {
+      'use strict';
+      const resultNode = document.getElementById('result');
+      const frame = document.getElementById('gameFrame');
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      function approximately(actual, expected, epsilon = 1e-8) {
+        assert(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
+      }
+
+      function lexical(win, name) {
+        try { return win.eval(name); } catch (_error) { return null; }
+      }
+
+      function runtimeDiagnostics(win) {
+        return {
+          game: Boolean(lexical(win, 'game')),
+          grammarModule: Boolean(win.SexMagickObstacleGrammar),
+          patternRuntime: Boolean(win.__SEX_MAGICK_PATTERNS__),
+          policyModule: Boolean(win.SexMagickReachabilityPolicy),
+          policyRuntime: Boolean(win.__SEX_MAGICK_REACHABILITY_POLICY__),
+          timing: Boolean(win.__SEX_MAGICK_TIMING__),
+          collision: Boolean(win.__SEX_MAGICK_COLLISION__),
+          scripts: [...win.document.scripts]
+            .map(script => script.src || '[inline]')
+            .filter(source => /fixed-step|obstacle|reachability/.test(source))
+        };
+      }
+
+      function waitForRuntime(win, timeoutMs = 9000) {
+        return new Promise((resolve, reject) => {
+          const deadline = performance.now() + timeoutMs;
+          const poll = () => {
+            if (
+              lexical(win, 'game') &&
+              win.SexMagickObstacleGrammar &&
+              win.__SEX_MAGICK_REACHABILITY_POLICY__ &&
+              win.__SEX_MAGICK_TIMING__ &&
+              win.__SEX_MAGICK_COLLISION__
+            ) {
+              resolve();
+              return;
+            }
+            if (performance.now() >= deadline) {
+              reject(new Error(`Timed out waiting for integrated reachability runtime: ${JSON.stringify(runtimeDiagnostics(win))}`));
+              return;
+            }
+            setTimeout(poll, 25);
+          };
+          poll();
+        });
+      }
+
+      function loadReachabilitySolver(win) {
+        return new Promise((resolve, reject) => {
+          if (win.SexMagickReachability) return resolve(win.SexMagickReachability);
+          const script = win.document.createElement('script');
+          script.src = new URL('./player-reachability.js', window.location.href).href;
+          script.onload = () => resolve(win.SexMagickReachability);
+          script.onerror = () => reject(new Error('Failed to load player-reachability.js'));
+          win.document.head.appendChild(script);
+        });
+      }
+
+      function comparePlayerPhysics(win, reachability, rite) {
+        const PlayerClass = lexical(win, 'Player');
+        const gameInstance = lexical(win, 'game');
+        assert(PlayerClass && gameInstance, `${rite} lexical game classes unavailable`);
+
+        const player = new PlayerClass(rite);
+        player.y = 400;
+        player.vy = 0;
+        player.jumpCooldown = 0;
+        player.trail = [];
+        gameInstance.player = player;
+        gameInstance.gameMode = rite;
+        gameInstance.isMobile = true;
+        gameInstance.settings.sfx = false;
+        gameInstance.particles = [];
+        gameInstance.gameOver = () => { throw new Error(`${rite} unexpectedly reached bottom death`); };
+
+        let model = { y: 400, vy: 0, cooldown: 0 };
+        let acceptedJumps = 0;
+        for (let simulationFrame = 0; simulationFrame < 180; simulationFrame += 1) {
+          gameInstance.frames = simulationFrame + 1;
+          const requestJump = simulationFrame % 19 === 0 || simulationFrame % 37 === 5;
+          const beforeCooldown = player.jumpCooldown;
+          if (requestJump) player.jump();
+          if (requestJump && beforeCooldown === 0) acceptedJumps += 1;
+          player.update();
+
+          model = reachability.advancePlayerState(model, {
+            rite,
+            mobile: true,
+            viewportHeight: win.innerHeight,
+            jump: requestJump
+          });
+          assert(model, `${rite} model unexpectedly died`);
+          approximately(player.y, model.y);
+          approximately(player.vy, model.vy);
+          assert(player.jumpCooldown === model.cooldown, `${rite} cooldown diverged at frame ${simulationFrame}`);
+        }
+        return { rite, acceptedJumps, finalY: player.y, finalVy: player.vy, cooldown: player.jumpCooldown };
+      }
+
+      async function run() {
+        const win = frame.contentWindow;
+        await waitForRuntime(win);
+        const reachability = await loadReachabilitySolver(win);
+        const haptics = lexical(win, 'Haptics');
+        assert(haptics, 'Lexical Haptics binding unavailable');
+        for (const method of ['jump', 'collect', 'crash', 'levelUp', 'start']) haptics[method] = () => {};
+
+        const hexParity = comparePlayerPhysics(win, reachability, 'HEX');
+        const monasParity = comparePlayerPhysics(win, reachability, 'MONAS');
+        const grammar = win.SexMagickObstacleGrammar;
+        const policyApi = win.SexMagickReachabilityPolicy;
+        const runtimePolicy = win.__SEX_MAGICK_REACHABILITY_POLICY__;
+
+        const originalReturnFlow = grammar.PATTERN_LIBRARY.MONAS.find(pattern => pattern.id === 'monas.return-flow');
+        const adjustedReturnFlow = policyApi.applyPatternOverride(originalReturnFlow);
+        const commonCase = {
+          rite: 'MONAS', viewportWidth: 884, viewportHeight: 1104,
+          mobile: false, speed: 8.5, gap: 110, breathPhase: 0, beamWidth: 5000
+        };
+        const originalClassification = reachability.classifyGateSequence({
+          ...commonCase,
+          ratios: grammar.materializePattern(originalReturnFlow, 0.22, 1)
+        });
+        const adjustedClassification = reachability.classifyGateSequence({
+          ...commonCase,
+          ratios: grammar.materializePattern(adjustedReturnFlow, 0.22, 1)
+        });
+
+        assert(originalClassification.classification === 'invalid', 'Original Monas return flow defect was not reproduced');
+        assert(adjustedClassification.classification === 'verified', 'Adjusted Monas return flow is not verified');
+        assert(adjustedClassification.verifiedMargin === 8, 'Adjusted Monas return flow lacks eight-pixel margin');
+        assert(runtimePolicy.verifiedPatternCount === 16, 'Unexpected verified pattern count');
+        assert(runtimePolicy.fallbackPatternIds.MONAS === 'monas.still-point', 'Unsafe Monas fallback configured');
+
+        const scheduler = new grammar.PatternScheduler({ seed: 305419896, rite: 'MONAS' });
+        let adjustedActive = null;
+        for (let index = 0; index < 8; index += 1) {
+          const active = scheduler.choosePattern();
+          if (active.reachabilityAdjusted) { adjustedActive = active; break; }
+        }
+        assert(adjustedActive, 'Runtime scheduler did not apply a measured Monas adjustment');
+        assert(adjustedActive.reachabilityVerdict === 'verified', 'Adjusted runtime pattern lacks verified verdict');
+
+        const selected = grammar.PATTERN_LIBRARY.MONAS.find(pattern => pattern.id === 'monas.mercurial-wave');
+        const fallback = policyApi.resolvePatternCandidate({
+          rite: 'MONAS', selected, catalog: grammar.PATTERN_LIBRARY.MONAS,
+          verdicts: { ...policyApi.PATTERN_VERDICTS, 'monas.mercurial-wave': 'invalid' }
+        });
+        assert(fallback.fallbackApplied, 'Invalid pattern did not trigger fallback');
+        assert(fallback.pattern.id === 'monas.still-point', 'Fallback was not deterministic still point');
+
+        const ledger = new grammar.PatternRunLedger({ storage: grammar.createMemoryStorage() });
+        ledger.begin({ runId: 'browser_policy_evidence', seed: 305419896, rite: 'MONAS', startReason: 'qa' });
+        const evidenceSpec = scheduler.next({ viewportHeight: 844, gap: 200, orbChance: 0 });
+        ledger.recordSpawn(evidenceSpec, { frames: 140, score: 0 });
+        const evidence = ledger.snapshot().current;
+        assert(evidence.reachabilityPolicyVersion === runtimePolicy.version, 'Run evidence lacks policy version');
+        assert(evidence.patternEvents[0].reachabilityPolicyVersion === runtimePolicy.version, 'Spawn evidence lacks policy version');
+
+        resultNode.textContent = [
+          'PASS reachability browser integration',
+          `POLICY ${runtimePolicy.mode} v${runtimePolicy.version}`,
+          `VERIFIED PATTERNS ${runtimePolicy.verifiedPatternCount}`,
+          `HEX PARITY JUMPS ${hexParity.acceptedJumps}`,
+          `MONAS PARITY JUMPS ${monasParity.acceptedJumps}`,
+          `ORIGINAL RETURN FLOW ${originalClassification.classification}`,
+          `ADJUSTED RETURN FLOW ${adjustedClassification.classification}`,
+          `ADJUSTED MARGIN ${adjustedClassification.verifiedMargin}`,
+          `RUNTIME ADJUSTMENT ${adjustedActive.baseId}`,
+          `MONAS FALLBACK ${fallback.pattern.id}`,
+          `EVIDENCE POLICY VERSION ${evidence.reachabilityPolicyVersion}`
+        ].join('\n');
+        document.documentElement.dataset.status = 'pass';
+      }
+
+      frame.addEventListener('load', () => {
+        run().catch(error => {
+          document.documentElement.dataset.status = 'fail';
+          resultNode.textContent = `FAIL\n${error.stack || error}`;
+        });
+      }, { once: true });
+    })();
+  </script>
+</body>
+</html>

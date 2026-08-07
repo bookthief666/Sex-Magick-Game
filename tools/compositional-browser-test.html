@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en" data-status="running">
+<head>
+  <meta charset="utf-8">
+  <title>Compositional Reachability Browser QA</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; background: #000; color: #fff; }
+    iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; }
+    #result { position: fixed; inset: 8px; z-index: 100000; margin: 0; padding: 12px; overflow: auto; background: rgba(0,0,0,.94); color: #dff; font: 12px/1.45 monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <iframe id="gameFrame" src="../index.html?compositionBrowserQa=1#debug"></iframe>
+  <pre id="result">RUNNING</pre>
+  <script>
+    (() => {
+      'use strict';
+      const frame = document.getElementById('gameFrame');
+      const resultNode = document.getElementById('result');
+
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      function getGame(win) {
+        try { return win.eval('game'); } catch (_error) { return null; }
+      }
+
+      function waitForBaseRuntime(win, timeoutMs = 9000) {
+        return new Promise((resolve, reject) => {
+          const deadline = performance.now() + timeoutMs;
+          const poll = () => {
+            if (
+              getGame(win) &&
+              win.SexMagickObstacleGrammar &&
+              win.SexMagickReachabilityPolicy &&
+              win.__SEX_MAGICK_REACHABILITY_POLICY__ &&
+              win.__SEX_MAGICK_TIMING__
+            ) {
+              resolve();
+              return;
+            }
+            if (performance.now() >= deadline) {
+              reject(new Error('Timed out waiting for base gameplay runtime'));
+              return;
+            }
+            setTimeout(poll, 25);
+          };
+          poll();
+        });
+      }
+
+      function loadScript(win, source, globalName) {
+        return new Promise((resolve, reject) => {
+          if (win[globalName]) {
+            resolve(win[globalName]);
+            return;
+          }
+          const script = win.document.createElement('script');
+          script.src = new URL(source, window.location.href).href;
+          script.onload = () => resolve(win[globalName]);
+          script.onerror = () => reject(new Error(`Failed to load ${source}`));
+          win.document.head.appendChild(script);
+        });
+      }
+
+      async function run() {
+        const win = frame.contentWindow;
+        await waitForBaseRuntime(win);
+        await loadScript(win, './player-reachability.js', 'SexMagickReachability');
+        const composition = await loadScript(win, './compositional-reachability.js', 'SexMagickCompositionalReachability');
+        const robustnessPolicy = await loadScript(win, './compositional-robustness.js', 'SexMagickCompositionalRobustness');
+        assert(composition, 'Compositional API missing');
+        assert(robustnessPolicy, 'Distributed robustness API missing');
+
+        const results = [];
+        for (const rite of ['HEX', 'MONAS']) {
+          const first = composition.generatePatternSequence({
+            rite, seed: 0x12345678, patternCycles: 1, viewportHeight: 844, gap: 110
+          });
+          const replay = composition.generatePatternSequence({
+            rite, seed: 0x12345678, patternCycles: 1, viewportHeight: 844, gap: 110
+          });
+          assert(first.digest === replay.digest, `${rite} sequence digest changed`);
+
+          const solution = composition.solveComposition({
+            generated: first,
+            viewportWidth: 390,
+            viewportHeight: 844,
+            mobile: true,
+            speed: 8.5,
+            gap: 110,
+            breathPhase: 0,
+            margin: 8,
+            beamWidth: 600
+          });
+          assert(solution.solvable && solution.witnessValid, `${rite} browser composition failed`);
+          assert(solution.boundaryResults.length === 6, `${rite} family boundary count changed`);
+          assert(solution.minimumClearance >= 8, `${rite} browser witness lost margin`);
+
+          const robustness = robustnessPolicy.evaluateWitnessRobustness(solution, {
+            viewportWidth: 390,
+            viewportHeight: 844,
+            mobile: true,
+            speed: 8.5,
+            gap: 110,
+            breathPhase: 0,
+            margin: 8,
+            maximumDistance: 3,
+            maximumCases: 30
+          });
+          assert(robustness.baseValid, `${rite} base witness failed perturbation replay`);
+          assert(robustness.results.some(item => !item.valid), `${rite} perturbation audit produced no failures`);
+          assert(robustness.coverage.sampledJumpCount > 0, `${rite} has no sampled jumps`);
+          assert(robustness.coverage.firstSampledIndex === 0, `${rite} perturbation coverage missed the first jump`);
+          assert(robustness.coverage.lastSampledIndex === solution.jumpFrames.length - 1, `${rite} perturbation coverage missed the last jump`);
+          results.push({ rite, first, solution, robustness });
+        }
+
+        const summary = [
+          'PASS compositional reachability browser integration',
+          `MODE composition v${composition.COMPOSITION_VERSION} robustness v${robustnessPolicy.ROBUSTNESS_VERSION}`,
+          ...results.flatMap(entry => [
+            `${entry.rite} DIGEST ${entry.first.digest}`,
+            `${entry.rite} GATES ${entry.first.gateCount}`,
+            `${entry.rite} BOUNDARIES ${entry.solution.boundaryResults.length}`,
+            `${entry.rite} INITIAL STATES ${entry.solution.initialStateCount}`,
+            `${entry.rite} SURVIVORS ${entry.solution.survivingStateCount}`,
+            `${entry.rite} MIN CLEARANCE ${entry.solution.minimumClearance.toFixed(3)}`,
+            `${entry.rite} ROBUSTNESS ${entry.robustness.classification}`,
+            `${entry.rite} PERTURBATION RATE ${entry.robustness.overallRate.toFixed(3)}`,
+            `${entry.rite} COVERAGE ${entry.robustness.coverage.sampledJumpCount}/${entry.robustness.coverage.totalJumps} FIRST ${entry.robustness.coverage.firstSampledIndex} LAST ${entry.robustness.coverage.lastSampledIndex}`
+          ])
+        ].join('\n');
+
+        document.documentElement.dataset.status = 'pass';
+        resultNode.textContent = summary;
+      }
+
+      frame.addEventListener('load', () => {
+        run().catch(error => {
+          document.documentElement.dataset.status = 'fail';
+          resultNode.textContent = `FAIL\n${error.stack || error}`;
+        });
+      }, { once: true });
+    })();
+  </script>
+</body>
+</html>
