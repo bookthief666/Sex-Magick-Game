@@ -17,16 +17,20 @@ Running this protocol is not required before direction-independent M9 asset/runt
 ## Required branch
 
 ```text
-develop/m9-runtime-hardening
+develop/sex-magick-2.0
 ```
+
+M9–M15 were a linear branch stack and have been fast-forwarded into
+`develop/sex-magick-2.0`. The former `develop/m9-runtime-hardening`
+branch is superseded; use the consolidated branch instead.
 
 ## Update Termux checkout
 
 ```bash
 cd ~/Sex-Magick-Game
 git fetch origin
-git switch develop/m9-runtime-hardening
-git pull --ff-only origin develop/m9-runtime-hardening
+git switch develop/sex-magick-2.0
+git pull --ff-only origin develop/sex-magick-2.0
 ```
 
 Start the server:
