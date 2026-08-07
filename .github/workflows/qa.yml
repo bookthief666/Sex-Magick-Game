@@ -5,16 +5,9 @@ on:
     branches:
       - main
       - develop/sex-magick-2.0
-      - develop/m9-runtime-hardening
-      - develop/m10-render-resilience
-      - develop/m11-performance-budget
   push:
     branches:
       - develop/sex-magick-2.0
-      - develop/m9-runtime-hardening
-      - develop/m10-render-resilience
-      - develop/m11-performance-budget
-      - develop/m12-physical-performance-evidence
 
 permissions:
   contents: read

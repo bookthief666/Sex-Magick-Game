@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - develop/m15-qa-supply-chain
+      - develop/sex-magick-2.0
     paths:
       - .github/browserstack-run-request.txt
 

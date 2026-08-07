@@ -3,10 +3,16 @@ name: M15 QA Supply-chain Audit
 on:
   pull_request:
     branches:
-      - develop/m14-visual-state-regression
+      - main
+  schedule:
+    - cron: '45 10 * * 1'
   push:
     branches:
-      - develop/m15-qa-supply-chain
+      - develop/sex-magick-2.0
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 permissions:
