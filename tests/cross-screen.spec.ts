@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 
+// index.html declares the game instance with a top-level `let`, which never
+// becomes a property of `window`. Page-side code must reference it by bare
+// identifier; this declaration only satisfies the type checker.
+declare const game: any;
+
 const expectedProfiles: Record<string, string> = {
   'chromium-small-phone': 'compact-phone',
   'chromium-android-phone': 'tall-phone',
@@ -87,6 +92,67 @@ test('layout, profile, touch targets, and DPR budget remain valid', async ({ pag
   expect(Math.abs(result.logical.height - result.viewportHeight)).toBeLessThanOrEqual(2);
   expect(result.backingPixels).toBeLessThanOrEqual(8_000_000);
   expect(result.undersized, JSON.stringify(result.undersized)).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('missions HUD stays inside the safe area and clear of the play corridor', async ({ page }, testInfo) => {
+  // The missions HUD is deliberately absent from the M14 signature baselines,
+  // because mission progress is per-player persisted state and would make those
+  // screenshots non-deterministic. This is the coverage that replaces them, and
+  // it holds at every geometry rather than at the four reference ones.
+  const pageErrors: string[] = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  await page.goto('/index.html?assetMode=offline&renderDpr=native&gateSlice=1', { waitUntil: 'domcontentloaded' });
+  await page.locator('#game-container').waitFor({ state: 'visible' });
+  // The runtime installs off the Game prototype, which exists before the `game`
+  // instance is constructed on DOMContentLoaded. Wait for both.
+  await page.waitForFunction('!!window.__SEX_MAGICK_MISSIONS__ && typeof game !== "undefined" && !!game');
+
+  const result = await page.evaluate(() => {
+    const api = (window as any).__SEX_MAGICK_MISSIONS__;
+    game.gameMode = 'HEX';
+    game.startGame();
+
+    const hud = document.getElementById('sex-magick-missions') as HTMLElement | null;
+    const rect = hud?.getBoundingClientRect();
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement;
+    const canvasRect = canvas.getBoundingClientRect();
+    const style = hud ? getComputedStyle(hud) : null;
+
+    return {
+      active: api.getActive().length,
+      suppressed: api.hudSuppressed(),
+      present: Boolean(hud),
+      hidden: hud ? hud.hidden : true,
+      rows: hud ? hud.querySelectorAll('.sm-mission').length : 0,
+      pointerEvents: style?.pointerEvents,
+      rect: rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height } : null,
+      viewport: { width: innerWidth, height: innerHeight },
+      // The player flies in the upper-middle band of the screen; the HUD must
+      // not intrude on it. An obscured Fold-closed corridor is an explicit stop
+      // condition in the pilot protocol.
+      corridorBottom: canvasRect.top + canvasRect.height * 0.75,
+      bodyScrollWidth: document.body.scrollWidth
+    };
+  });
+
+  expect(result.present).toBe(true);
+  expect(result.suppressed).toBe(false);
+  expect(result.hidden).toBe(false);
+  expect(result.active).toBe(3);
+  expect(result.rows).toBe(3);
+  // Never steals a tap from the full-screen touch surface.
+  expect(result.pointerEvents).toBe('none');
+
+  const rect = result.rect!;
+  expect(rect.width).toBeGreaterThan(0);
+  expect(rect.height).toBeGreaterThan(0);
+  expect(rect.left).toBeGreaterThanOrEqual(-1);
+  expect(rect.right).toBeLessThanOrEqual(result.viewport.width + 1);
+  expect(rect.bottom).toBeLessThanOrEqual(result.viewport.height + 1);
+  expect(rect.top).toBeGreaterThanOrEqual(result.corridorBottom);
+  // Adding the HUD must not introduce horizontal overflow at any geometry.
+  expect(result.bodyScrollWidth).toBeLessThanOrEqual(result.viewport.width + 1);
   expect(pageErrors).toEqual([]);
 });
 

@@ -194,6 +194,27 @@
   document.head.appendChild(script);
 })();
 
+// Observes the Gate slice rather than driving anything, so load order relative
+// to it does not matter; it installs once the Game prototype exists.
+(function bootstrapMissionsRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickMissions ||
+    document.querySelector('script[data-sex-magick-missions]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./missions-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickMissions = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Missions runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
 // Loads ahead of the grammar because spawnPatternPillar routes pillar geometry
 // through the variety runtime's safety clamps when it is present.
 (function bootstrapObstacleVarietyRuntime() {

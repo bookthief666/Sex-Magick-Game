@@ -17,6 +17,11 @@ on:
       - 'playwright.config.ts'
       - 'tools/visual-state-runtime.js'
       - 'tools/canvas-render-runtime.js'
+      # Both affect what the page renders: the variety runtime moves pillar
+      # geometry, and the missions runtime adds a HUD layer that must stay out of
+      # the signature screenshots and inside the safe area at every geometry.
+      - 'tools/obstacle-variety-runtime.js'
+      - 'tools/missions-runtime.js'
       - '.github/workflows/cross-screen-qa.yml'
   workflow_dispatch:
 

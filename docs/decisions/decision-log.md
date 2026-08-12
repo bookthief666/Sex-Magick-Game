@@ -308,3 +308,14 @@ State deduplication also discarded all but one representative `initialStateId` w
 **Consequences:** The 2026-08-12 pilot spent 196 of its 507 gate clears past the old ceiling, on a flat curve; that is now the escalation the owner asked for as "more variety". Safety rests on one fact — a gap of width G swinging by ±A always contains a static corridor of G − 2A — so clamping every pattern's request against a verified floor of 110 makes motion clearable at any phase. 110 is measured: the audit degrades to marginal at 105 and invalid at 96. Motion and narrowing therefore self-limit, dramatic in wide early bands and near-still at KETHER. The Void cap also corrects a pre-existing overreach, since GEBURAH already exceeded the audited ceiling at 9.3. Evidence: 1008 new reachability cases all verified at margin 8, the original 252-case audit unchanged, and a 20 000-frame browser run confirming 102 distinct phases and a narrowest gap of exactly 110. Double-gap walls are deferred — they break the solver's single-corridor model and need solver support before shipping.
 
 **Full record:** `docs/decisions/d027-difficulty-curve-and-obstacle-variety.md`
+
+## D-028 — Give runs a purpose beyond score with persistent missions, read from existing telemetry
+
+**Date:** 2026-08-12
+**Status:** Accepted
+
+**Decision:** Add three persistent, rotating objectives carrying progress across runs, driven entirely by state the Gate slice already tracks. The missions runtime is a pure observer — it diffs monotonic counters and reads `lastClear` rather than walking the 120-entry event array, which splices from the front and would silently undercount. `gate-slice-runtime.js` is unchanged.
+
+**Consequences:** The 2026-08-12 pilot had 7 of 15 runs die under 15 gates and produce nothing; a short run is no longer a total loss. Missions also direct attention at mechanics a player would otherwise never engage, which matters most for the four bands M17 added. Two scopes (`cumulative` carries across runs, `run` resets) and a rotation that keeps the active three spanning light/steady/deep tiers, so nothing unreachable is ever handed out. Persistence stores only mission ids and integers under a defensive reader. The HUD is suppressed under `visualQa=1` — mission progress is per-player state and would make signature screenshots non-deterministic — verified differentially against a worktree at the pre-M18 commit, since this sandbox's Chromium cannot reproduce the committed baselines at all: 25 of 28 signatures are byte-identical and the 3 that differ also differ between two runs of the unmodified tree. The lost coverage is replaced by structural cross-screen assertions that run at every geometry instead of four. Targets are first estimates anchored to pilot rates and are explicitly untuned; that needs a Fold block at both postures.
+
+**Full record:** `docs/decisions/d028-persistent-missions.md`

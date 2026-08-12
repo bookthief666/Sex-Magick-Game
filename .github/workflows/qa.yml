@@ -42,6 +42,7 @@ jobs:
           node --check tools/run-telemetry.js
           node --check tools/obstacle-grammar.js
           node --check tools/obstacle-variety-runtime.js
+          node --check tools/missions-runtime.js
           node --check tools/player-reachability.js
           node --check tools/reachability-policy.js
           node --check tools/compositional-reachability.js
@@ -66,6 +67,7 @@ jobs:
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
           node --check tools/test-obstacle-variety-runtime.js
+          node --check tools/test-missions-runtime.js
           node --check tools/test-player-reachability.js
           node --check tools/test-compositional-reachability.js
           node --check tools/test-m7-review-diagnostics.js
@@ -78,6 +80,7 @@ jobs:
           node --check tools/browser-m11-performance-budget-test.mjs
           node --check tools/browser-m12-physical-performance-evidence-test.mjs
           node --check tools/browser-m17-obstacle-variety-test.mjs
+          node --check tools/browser-m18-missions-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -106,6 +109,7 @@ jobs:
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
           node tools/test-obstacle-variety-runtime.js
+          node tools/test-missions-runtime.js
           node tools/test-m7-review-diagnostics.js
 
       - name: Run fixed-step Chrome integration
@@ -140,3 +144,6 @@ jobs:
 
       - name: Run M17 obstacle variety Chrome integration
         run: node tools/browser-m17-obstacle-variety-test.mjs
+
+      - name: Run M18 missions Chrome integration
+        run: node tools/browser-m18-missions-test.mjs
