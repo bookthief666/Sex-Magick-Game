@@ -303,40 +303,47 @@ async function main() {
       (() => {
         const api = globalThis.__SEX_MAGICK_MISSIONS__;
         const before = api.getActive();
-        const target = before[0];
-        // Park the mission one step from done, then take that step for real.
-        api.forceProgress(target.id, target.target - 1);
+
+        // The active three are drawn at random, so this cannot depend on which
+        // ones came up. Park every one of them a single step from done, then take
+        // a step generous enough to finish any mission in the catalogue.
+        for (const entry of before) api.forceProgress(entry.id, entry.target - 1);
+
         const state = game.gateSliceState;
-        const previous = JSON.parse(JSON.stringify(state));
         state.gatesCleared += 1;
-        state.gateEntries += 1;
-        state.gateBanks += 1;
-        state.voidSurvivals += 1;
-        state.riskStreak += 1;
+        // gateEntries stays at zero so REFUSE THE GATE can also complete; the
+        // delta mission that counts entries simply does not advance this step.
+        state.gateEntries = 0;
+        state.gateBanks += 500;
+        state.voidSurvivals += 500;
+        state.riskStreak = 500;
         state.bandIndex = 7;
         state.scoreBreakdown.bank += 500;
         state.lastClear = { family: 'climax', zone: 'risk-top', riskActive: true, nearMiss: true };
         game.updateGameObjects();
+
         const after = api.getActive();
+        const completedCounts = api.getSnapshot().completed;
         const announce = document.getElementById('sex-magick-missions-announce');
         return {
-          completedId: target.id,
           before: before.map(x => x.id),
           after: after.map(x => x.id),
+          completedIds: before.map(x => x.id).filter(id => (completedCounts[id] || 0) > 0),
           announceShown: Boolean(announce) && !announce.hidden,
-          announceText: announce ? announce.textContent : '',
-          completedCount: api.getSnapshot().completed[target.id] || 0
+          announceText: announce ? announce.textContent : ''
         };
       })();
     `);
 
     assert.ok(
-      !rotated.after.includes(rotated.completedId),
-      `${rotated.completedId} completed but stayed active`
+      rotated.completedIds.length > 0,
+      `no mission completed from ${JSON.stringify(rotated.before)} despite each being one step from done`
     );
-    assert.equal(rotated.after.length, 3, 'the freed slot must be refilled');
+    for (const id of rotated.completedIds) {
+      assert.ok(!rotated.after.includes(id), `${id} completed but stayed active`);
+    }
+    assert.equal(rotated.after.length, 3, 'every freed slot must be refilled');
     assert.equal(new Set(rotated.after).size, 3, 'rotation must not duplicate a mission');
-    assert.equal(rotated.completedCount, 1, 'completion must be recorded');
     assert.ok(rotated.announceShown, 'completing a mission must announce it');
     assert.match(rotated.announceText, /RITE FULFILLED/);
 
@@ -411,7 +418,7 @@ async function main() {
       gatesCleared: played.gatesCleared,
       activeAtStart: played.before.map(x => `${x.label} 0/${x.target}`),
       activeAfterRun: played.during.map(x => `${x.label} ${x.progress}/${x.target}`),
-      rotatedOut: rotated.completedId,
+      rotatedOut: rotated.completedIds,
       rotatedIn: rotated.after.filter(id => !rotated.before.includes(id)),
       persistedAcrossReload: `${persistedBefore.id} = ${afterReload.progress}`
     }, null, 2));

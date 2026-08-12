@@ -271,6 +271,27 @@
   let lastVoidSurvivals = 0;
   let announceTimer = null;
 
+  /**
+   * Session-level totals, in memory only and never persisted.
+   *
+   * The per-run counters on the state object reset with every run, so at the end
+   * of a playtest they only describe the final run. These accumulate across the
+   * whole session, which is what the V2 playtest report needs in order to say
+   * anything about whether power-ups were actually earned and used.
+   */
+  let sessionTotals = null;
+
+  function resetSessionTotals() {
+    sessionTotals = {
+      earnedFromVoid: 0,
+      earnedFromGates: 0,
+      absorbs: 0,
+      dissolves: 0,
+      dissolveAttemptsWithoutCharge: 0,
+      unlocksSeen: []
+    };
+  }
+
   function visualQaActive() {
     try {
       return new URLSearchParams(root.location?.search || '').get('visualQa') === '1';
@@ -459,10 +480,14 @@
   function useDissolution(gameInstance = typeof game !== 'undefined' ? game : null) {
     if (!liveState || !gameInstance) return false;
     if (gameInstance.state !== GameState.PLAYING) return false;
-    if (chargesOf(liveState, 'dissolution') <= 0) return false;
+    if (chargesOf(liveState, 'dissolution') <= 0) {
+      if (sessionTotals) sessionTotals.dissolveAttemptsWithoutCharge += 1;
+      return false;
+    }
     const pillar = nextPillarAhead(gameInstance);
     if (!pillar || !dissolvePillar(gameInstance, pillar)) return false;
     spendCharge(liveState, 'dissolution');
+    if (sessionTotals) sessionTotals.dissolves += 1;
     // No gate-clear credit: the wall was skipped, not cleared. This also stops
     // the button being used to farm the M18 missions that count gates.
     try { if (gameInstance.settings?.sfx) SFX.collect(); } catch (_error) {}
@@ -500,6 +525,7 @@
     if (blocking.length === 0) return false;
 
     spendCharge(liveState, 'aegis');
+    if (sessionTotals) sessionTotals.absorbs += 1;
     for (const pillar of blocking) dissolvePillar(gameInstance, pillar);
     gameInstance.hitStop = 3;
     gameInstance.shake = Math.max(finiteNumber(gameInstance.shake, 0), 8);
@@ -517,18 +543,26 @@
     const unlockedNow = recordBand(liveState, slice.bandIndex);
     if (unlockedNow.length > 0) {
       writeState(liveStorage, liveState);
-      for (const id of unlockedNow) announce(`${getPowerup(id)?.label} UNSEALED`);
+      for (const id of unlockedNow) {
+        if (sessionTotals) sessionTotals.unlocksSeen.push(id);
+        announce(`${getPowerup(id)?.label} UNSEALED`);
+      }
     }
 
     const survivals = wholeNumber(slice.voidSurvivals, 0);
     if (survivals > lastVoidSurvivals) {
       for (let count = lastVoidSurvivals; count < survivals; count += 1) {
-        if (awardCharge(liveState)) announce('CHALLENGE MET · CHARGE EARNED');
+        if (awardCharge(liveState)) {
+          if (sessionTotals) sessionTotals.earnedFromVoid += 1;
+          announce('CHALLENGE MET · CHARGE EARNED');
+        }
       }
       lastVoidSurvivals = survivals;
     }
 
-    if (applyGateMilestones(liveState, slice.gatesCleared).length > 0) {
+    const milestoneAwards = applyGateMilestones(liveState, slice.gatesCleared);
+    if (milestoneAwards.length > 0) {
+      if (sessionTotals) sessionTotals.earnedFromGates += milestoneAwards.length;
       announce('ASCENT · CHARGE EARNED');
     }
 
@@ -548,6 +582,7 @@
 
     liveStorage = safeBrowserStorage();
     liveState = readState(liveStorage);
+    resetSessionTotals();
 
     const originalStartGame = Game.prototype.startGame;
     const originalRestartGame = Game.prototype.restartGame;
@@ -592,6 +627,7 @@
       mode: 'local-powerups-no-network',
       gatesPerCharge: GATES_PER_CHARGE,
       getSnapshot: () => (liveState ? JSON.parse(JSON.stringify(liveState)) : null),
+      getSessionTotals: () => (sessionTotals ? JSON.parse(JSON.stringify(sessionTotals)) : null),
       getPowerups: () => (liveState ? describe(liveState) : []),
       hudSuppressed: () => visualQaActive(),
       useDissolution: () => useDissolution(),
@@ -611,6 +647,7 @@
       },
       reset() {
         liveState = createState();
+        resetSessionTotals();
         lastVoidSurvivals = 0;
         writeState(liveStorage, liveState);
         renderHud(typeof game !== 'undefined' ? game : null);

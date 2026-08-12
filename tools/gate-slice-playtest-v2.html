@@ -231,7 +231,27 @@
         const inputStats = gameWindow?.__SEX_MAGICK_COLLISION__?.getInputStats?.() || null;
         const preflight = gameWindow?.__SEX_MAGICK_GATE_PREFLIGHT__?.getSnapshot?.() || null;
         const viewport = gameWindow?.__SEX_MAGICK_VIEWPORT__?.getSnapshot?.() || null;
-        return { evidence, current, inputStats, preflight, viewport };
+        // M18 and M19 state. Captured optionally rather than gated on, so a
+        // runtime that fails to load costs a section of the report instead of
+        // stranding the owner mid-session. `installed` records which were present,
+        // so a missing section can be told apart from an empty one.
+        const missionsApi = gameWindow?.__SEX_MAGICK_MISSIONS__;
+        const powerupApi = gameWindow?.__SEX_MAGICK_POWERUPS__;
+        const missions = missionsApi ? {
+          installed: true,
+          snapshot: missionsApi.getSnapshot?.() || null,
+          active: missionsApi.getActive?.() || null
+        } : { installed: false };
+        const powerups = powerupApi ? {
+          installed: true,
+          snapshot: powerupApi.getSnapshot?.() || null,
+          state: powerupApi.getPowerups?.() || null,
+          // Per-run counters reset with every run, so at session end they only
+          // describe the last one. These accumulate across the whole session.
+          sessionTotals: powerupApi.getSessionTotals?.() || null,
+          gatesPerCharge: powerupApi.gatesPerCharge ?? null
+        } : { installed: false };
+        return { evidence, current, inputStats, preflight, viewport, missions, powerups };
       }
 
       function endSession(reason) {
