@@ -203,7 +203,10 @@ async function main() {
   assert.ok(pythonBinary, 'Python executable not found');
 
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'sex-magick-m19-powerups-'));
-  const server = spawn(pythonBinary, ['-m', 'http.server', String(HTTP_PORT), '--bind', '127.0.0.1'], {
+  // Deliberately the no-cache server rather than `python -m http.server`. The
+  // 2026-08-12 session was corrupted by heuristic caching serving a stale Gate
+  // slice, so the suite exercises the same server the owner is told to use.
+  const server = spawn(pythonBinary, ['tools/serve-playtest.py', String(HTTP_PORT)], {
     cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe']
   });
   children.push(server);
@@ -239,6 +242,19 @@ async function main() {
   try {
     // --- unlocks arrive by ascent, charges by challenge --------------------
     await openGame(client, `gateSlice=1&m19Qa=${Date.now()}`);
+
+    // The check that would have caught the wasted round in one line.
+    const fingerprint = await evaluate(client, `
+      (() => ({
+        gateSlice: globalThis.__SEX_MAGICK_GATE_SLICE__.getFingerprint(),
+        grammarVersion: globalThis.__SEX_MAGICK_PATTERNS__?.version ?? null,
+        powerupsVersion: globalThis.__SEX_MAGICK_POWERUPS__.version
+      }))();
+    `);
+    assert.equal(fingerprint.gateSlice.gateEntryRadius, 44, 'a stale Gate slice is being served');
+    assert.equal(fingerprint.gateSlice.bandCount, 8, 'the extended band table is not the one running');
+    assert.equal(fingerprint.gateSlice.bandNames.at(-1), 'KETHER');
+    assert.equal(fingerprint.grammarVersion, 2, 'a stale obstacle grammar is being served');
 
     const climb = await evaluate(client, `
       (() => {
@@ -357,109 +373,199 @@ async function main() {
     assert.equal(voidDeath.after, 1, 'AEGIS must not be consumed inside the Void');
     assert.equal(voidDeath.died, true, 'the Void must stay lethal - it is the wager');
 
-    // --- DISSOLUTION removes a wall and grants no gate credit -------------
+    // --- DISSOLUTION fires itself, and only when nothing else can save you ---
     await openGame(client, `gateSlice=1&m19Qa=${Date.now()}-dissolve`);
 
-    const dissolved = await evaluate(client, `
+    const auto = await evaluate(client, `
       (() => {
         ${HARNESS}
         const api = globalThis.__SEX_MAGICK_POWERUPS__;
-        api.forceBand(3);
-        game.gameMode = 'HEX';
         api.reset();
         api.forceBand(3);
+        game.gameMode = 'HEX';
         game.startGame();
+        game.gameOver = () => {};
+
+        // Case 1: a wall the player can comfortably clear must NOT be consumed.
         api.grant('dissolution', 1);
+        const survivable = new Pillar(0, 220);
+        survivable.gap = 220;
+        survivable.top = game.player.y - 110;   // centred on the player
+        survivable.baseTop = survivable.top;
+        survivable.x = game.player.x + 260;
+        survivable.marked = false;
+        survivable.motionAmplitude = 0;
+        game.obstacles = [survivable];
+        game.player.vy = 0;
+        const survivableVerdict = api.isPillarUnavoidable(survivable);
+        game.updateGameObjects();
+        const afterSurvivable = {
+          charges: api.getPowerups().find(x => x.id === 'dissolution').charges,
+          pillarStillThere: game.obstacles.includes(survivable)
+        };
 
-        const button = document.getElementById('sex-magick-dissolve');
-        const rect = button.getBoundingClientRect();
-
-        // A wall well ahead of the player, so it is a skip rather than a save.
-        const p = new Pillar(0, 160);
-        p.gap = 160;
-        p.top = 120;
-        p.baseTop = 120;
-        p.x = game.player.x + 240;
-        p.marked = false;
-        p.motionAmplitude = 0;
-        game.obstacles = [p];
-
+        // Case 2: a wall high above a player already falling fast, with almost no
+        // room left, is unreachable by any tap - that must fire.
+        const doomed = new Pillar(0, 90);
+        doomed.gap = 90;
+        doomed.top = 40;
+        doomed.baseTop = 40;
+        doomed.x = game.player.x + 120;
+        doomed.marked = false;
+        doomed.motionAmplitude = 0;
+        game.obstacles = [doomed];
+        game.player.y = game.canvas.height - 60;
+        game.player.vy = 11;
+        game.player.jumpCooldown = 0;
+        const doomedVerdict = api.isPillarUnavoidable(doomed);
         const gatesBefore = game.gateSliceState.gatesCleared;
         const scoreBefore = game.score;
-        const chargesBefore = api.getPowerups().find(x => x.id === 'dissolution').charges;
-        const yBefore = game.player.y;
-        const vyBefore = game.player.vy;
-
-        // Click the real button, through the real listener.
-        button.click();
+        game.updateGameObjects();
 
         return {
-          buttonRect: { width: rect.width, height: rect.height, left: rect.left, bottom: rect.bottom },
-          chargesBefore,
-          chargesAfter: api.getPowerups().find(x => x.id === 'dissolution').charges,
-          pillarGone: !game.obstacles.includes(p),
-          gatesAfter: game.gateSliceState.gatesCleared,
+          survivableVerdict,
+          afterSurvivable,
+          doomedVerdict,
+          chargesAfterDoom: api.getPowerups().find(x => x.id === 'dissolution').charges,
+          doomedGone: !game.obstacles.includes(doomed),
           gatesBefore,
+          gatesAfter: game.gateSliceState.gatesCleared,
           scoreBefore,
           scoreAfter: game.score,
-          playerMoved: game.player.y !== yBefore || game.player.vy !== vyBefore
+          dissolves: api.getSessionTotals().dissolves
         };
       })();
     `);
 
-    assert.ok(dissolved.buttonRect.width >= 44, `breaker button is ${dissolved.buttonRect.width}px wide, under the 44px policy`);
-    assert.ok(dissolved.buttonRect.height >= 44, `breaker button is ${dissolved.buttonRect.height}px tall, under the 44px policy`);
-    assert.equal(dissolved.chargesBefore, 1);
-    assert.equal(dissolved.chargesAfter, 0, 'using DISSOLUTION must consume the charge');
-    assert.equal(dissolved.pillarGone, true, 'the wall ahead must dissolve');
-    assert.equal(dissolved.gatesAfter, dissolved.gatesBefore, 'a dissolved wall must grant no gate credit');
-    assert.equal(dissolved.scoreAfter, dissolved.scoreBefore, 'a dissolved wall must grant no score');
+    assert.equal(auto.survivableVerdict, false, 'a clearable wall must not be judged unavoidable');
+    assert.equal(auto.afterSurvivable.charges, 1, 'a clearable wall must not consume a charge');
+    assert.equal(auto.afterSurvivable.pillarStillThere, true, 'a clearable wall must survive');
 
-    // --- the button must never steal a jump -------------------------------
-    // This is the regression that would matter most: M2 makes the whole screen a
-    // jump surface, and CONTROL_SELECTOR is what keeps buttons out of it.
-    const noJump = await evaluate(client, `
+    assert.equal(auto.doomedVerdict, true, 'an unreachable wall must be judged unavoidable');
+    assert.equal(auto.doomedGone, true, 'an unavoidable wall must dissolve on its own');
+    assert.equal(auto.chargesAfterDoom, 0, 'firing must consume the charge');
+    assert.equal(auto.dissolves, 1, 'the session total must record the auto-fire');
+    assert.equal(auto.gatesAfter, auto.gatesBefore, 'a dissolved wall must grant no gate credit');
+    assert.equal(auto.scoreAfter, auto.scoreBefore, 'a dissolved wall must grant no score');
+
+    // --- DISSOLUTION resolves before AEGIS, and neither covers the Void ------
+    const ordering = await evaluate(client, `
       (() => {
-        // A first-run photosensitivity notice sits at z-index 10001 over the
-        // bottom of the screen. A real player acknowledges it before playing, so
-        // the hit test must too - otherwise it measures the notice, not the button.
+        const api = globalThis.__SEX_MAGICK_POWERUPS__;
+
+        const doomedWall = () => {
+          const p = new Pillar(0, 90);
+          p.gap = 90; p.top = 40; p.baseTop = 40;
+          p.x = game.player.x + 120; p.marked = false; p.motionAmplitude = 0;
+          game.obstacles = [p];
+          game.player.y = game.canvas.height - 60;
+          game.player.vy = 11;
+          game.player.jumpCooldown = 0;
+          return p;
+        };
+
+        // Holding both on a doomed approach: the breaker acts first, so the
+        // shield is kept back for a hit that could not be seen coming.
+        api.reset(); api.forceBand(3); game.startGame();
+        game.gameOver = () => {};
+        api.grant('aegis', 1); api.grant('dissolution', 1);
+        doomedWall();
+        game.updateGameObjects();
+        const both = {
+          aegis: api.getPowerups().find(x => x.id === 'aegis').charges,
+          dissolution: api.getPowerups().find(x => x.id === 'dissolution').charges
+        };
+
+        // Inside the Void neither may fire: the Void is the wager.
+        api.reset(); api.forceBand(3); game.startGame();
+        game.gameOver = () => {};
+        api.grant('aegis', 1); api.grant('dissolution', 1);
+        game.__gateSliceVoidActive = true;
+        doomedWall();
+        game.updateGameObjects();
+        const inVoid = {
+          aegis: api.getPowerups().find(x => x.id === 'aegis').charges,
+          dissolution: api.getPowerups().find(x => x.id === 'dissolution').charges
+        };
+        game.__gateSliceVoidActive = false;
+
+        return { both, inVoid };
+      })();
+    `);
+
+    assert.equal(ordering.both.dissolution, 0, 'DISSOLUTION must resolve first on a doomed approach');
+    assert.equal(ordering.both.aegis, 1, 'AEGIS must be preserved when the breaker already saved you');
+    assert.equal(ordering.inVoid.dissolution, 1, 'DISSOLUTION must not fire inside the Void');
+    assert.equal(ordering.inVoid.aegis, 1, 'AEGIS must not fire inside the Void');
+
+    // --- ward rings, and no control of any kind -----------------------------
+    const surface = await evaluate(client, `
+      (() => {
+        const api = globalThis.__SEX_MAGICK_POWERUPS__;
+        api.reset(); api.forceBand(7); game.startGame();
+
+        const strokes = [];
+        const ctx = game.ctx;
+        const realStroke = ctx.stroke.bind(ctx);
+        ctx.stroke = function trackStroke(...args) {
+          strokes.push(String(ctx.strokeStyle).toLowerCase());
+          return realStroke(...args);
+        };
+        game.player.draw(ctx);
+        const withoutCharges = strokes.filter(c => c === '#c9b4ff').length;
+
+        strokes.length = 0;
+        api.grant('aegis', 3);
+        game.player.draw(ctx);
+        const withCharges = strokes.filter(c => c === '#c9b4ff').length;
+        ctx.stroke = realStroke;
+
+        const hud = document.getElementById('sex-magick-powerups');
+        const controls = hud ? hud.querySelectorAll('button, [role="button"], input, a') : [];
+        return {
+          withoutCharges,
+          withCharges,
+          hudPointerEvents: hud ? getComputedStyle(hud).pointerEvents : null,
+          controlCount: controls.length,
+          legacyButton: Boolean(document.getElementById('sex-magick-dissolve'))
+        };
+      })();
+    `);
+
+    assert.equal(surface.withoutCharges, 0, 'no ward rings may be drawn with no charges held');
+    assert.equal(surface.withCharges, 3, 'one ward ring per held AEGIS charge must be drawn on the avatar');
+
+    // The owner removed the button. Enforce that structurally rather than by
+    // memory: the whole screen is the jump surface and nothing here may compete.
+    assert.equal(surface.legacyButton, false, 'the M19 breaker button must be gone');
+    assert.equal(surface.controlCount, 0, 'the power-up layer must contain no interactive controls');
+    assert.equal(surface.hudPointerEvents, 'none', 'the power-up layer must not accept pointer events');
+
+    // --- the full-screen tap must still jump --------------------------------
+    const tap = await evaluate(client, `
+      (() => {
         const notice = document.getElementById('sex-magick-sensitivity-notice');
         if (notice) notice.querySelector('button').click();
-
-        const button = document.getElementById('sex-magick-dissolve');
-        const rect = button.getBoundingClientRect();
-        const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-        const before = { y: game.player.y, vy: game.player.vy };
-
-        const touch = new Touch({
-          identifier: 1, target: button,
-          clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2
-        });
-        button.dispatchEvent(new TouchEvent('touchstart', {
+        game.state = GameState.PLAYING;
+        const before = game.player.vy;
+        const touch = new Touch({ identifier: 1, target: document.body, clientX: 40, clientY: game.canvas.height - 40 });
+        document.body.dispatchEvent(new TouchEvent('touchstart', {
           bubbles: true, cancelable: true, touches: [touch], targetTouches: [touch], changedTouches: [touch]
         }));
-
-        const stack = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-          .map(el => el.tagName + '#' + (el.id || '') + '.' + (el.className || '')
-            + ' z=' + getComputedStyle(el).zIndex + ' pe=' + getComputedStyle(el).pointerEvents);
-        return {
-          stack,
-          buttonRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-          hitTestIsButton: target === button || button.contains(target),
-          vyBefore: before.vy,
-          vyAfter: game.player.vy,
-          jumped: game.player.vy !== before.vy
-        };
+        return { before, after: game.player.vy, jumped: game.player.vy !== before };
       })();
     `);
 
-    assert.equal(noJump.hitTestIsButton, true, `the button must be the topmost element at its own centre; stack was ${JSON.stringify(noJump.stack)} rect ${JSON.stringify(noJump.buttonRect)}`);
-    assert.equal(noJump.jumped, false, 'tapping the breaker button must not also jump the player');
+    assert.equal(tap.jumped, true, 'a tap over the power-up corner must still jump the player');
 
     // --- charges reset per run, unlocks survive a reload ------------------
     const acrossRuns = await evaluate(client, `
       (() => {
         const api = globalThis.__SEX_MAGICK_POWERUPS__;
+        // Self-contained: earlier probes leave charges at cap.
+        api.reset();
+        api.forceBand(3);
+        game.startGame();
         api.grant('aegis', 1);
         const beforeRestart = api.getPowerups().find(x => x.id === 'aegis').charges;
         game.restartGame();
@@ -531,7 +637,9 @@ async function main() {
       voidSurvivals: climb.voidSurvivals,
       chargesEarned: climb.snapshot.earned,
       unlockedAtEnd: climb.atEnd.filter(x => x.unlocked).map(x => `${x.label} ${x.charges}/${x.capacity}`),
-      breakerButton: `${dissolved.buttonRect.width}x${dissolved.buttonRect.height}`,
+      autoDissolveFired: auto.doomedGone && auto.chargesAfterDoom === 0,
+      survivableWallSpared: auto.afterSurvivable.pillarStillThere,
+      wardRingsAtThreeCharges: surface.withCharges,
       shieldAbsorbed: absorbed.pillarGone && absorbed.playing,
       voidStayedLethal: voidDeath.died && voidDeath.after === 1
     }, null, 2));

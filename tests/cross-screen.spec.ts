@@ -156,12 +156,10 @@ test('missions HUD stays inside the safe area and clear of the play corridor', a
   expect(pageErrors).toEqual([]);
 });
 
-test('power-up button is tappable and clears the missions HUD', async ({ page }) => {
-  // Like the missions HUD, the power-up HUD is kept out of the M14 signature
-  // baselines because charge counts are per-run state. These are the assertions
-  // that replace that coverage, and the ones that matter most: a button the
-  // player cannot reach, or one that overlaps the missions row, is a real defect
-  // at a real screen size.
+test('power-up readout adds no control and clears the missions HUD', async ({ page }) => {
+  // M19 put a breaker button in this corner and the owner never pressed it once
+  // across a whole session, so M20 removed it. This test is what stops it coming
+  // back: the entire screen is the jump surface, and nothing may compete for a tap.
   const pageErrors: string[] = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.goto('/index.html?assetMode=offline&renderDpr=native&gateSlice=1', { waitUntil: 'domcontentloaded' });
@@ -170,14 +168,7 @@ test('power-up button is tappable and clears the missions HUD', async ({ page })
 
   const result = await page.evaluate(() => {
     const api = (window as any).__SEX_MAGICK_POWERUPS__;
-    // A first-run photosensitivity notice covers the bottom of the screen until
-    // acknowledged. A real player dismisses it before playing, so the hit test
-    // must too, or it measures the notice instead of the button.
-    const notice = document.getElementById('sex-magick-sensitivity-notice');
-    if (notice) (notice.querySelector('button') as HTMLButtonElement)?.click();
-
     api.reset();
-    // KETHER, so both power-ups are unsealed and the HUD is at its tallest.
     api.forceBand(7);
     game.gameMode = 'HEX';
     game.startGame();
@@ -185,30 +176,25 @@ test('power-up button is tappable and clears the missions HUD', async ({ page })
     api.grant('dissolution', 2);
 
     const hud = document.getElementById('sex-magick-powerups') as HTMLElement;
-    const button = document.getElementById('sex-magick-dissolve') as HTMLButtonElement;
     const missions = document.getElementById('sex-magick-missions') as HTMLElement;
-    const buttonRect = button.getBoundingClientRect();
+    const hudRect = hud.getBoundingClientRect();
     const missionsRect = missions.getBoundingClientRect();
     const canvasRect = (document.querySelector('canvas') as HTMLCanvasElement).getBoundingClientRect();
-    const centre = document.elementFromPoint(
-      buttonRect.left + buttonRect.width / 2,
-      buttonRect.top + buttonRect.height / 2
-    );
 
     return {
       hudHidden: hud.hidden,
-      buttonHidden: button.hidden,
-      buttonDisabled: button.disabled,
-      buttonRect: {
-        left: buttonRect.left, right: buttonRect.right,
-        top: buttonRect.top, bottom: buttonRect.bottom,
-        width: buttonRect.width, height: buttonRect.height
+      pointerEvents: getComputedStyle(hud).pointerEvents,
+      controlCount: hud.querySelectorAll('button, [role="button"], input, select, textarea, a').length,
+      legacyButton: Boolean(document.getElementById('sex-magick-dissolve')),
+      hudRect: {
+        left: hudRect.left, right: hudRect.right,
+        top: hudRect.top, bottom: hudRect.bottom,
+        width: hudRect.width, height: hudRect.height
       },
       missionsRect: {
         left: missionsRect.left, right: missionsRect.right,
         top: missionsRect.top, bottom: missionsRect.bottom
       },
-      topmostIsButton: centre === button || button.contains(centre as Node),
       viewport: { width: innerWidth, height: innerHeight },
       corridorBottom: canvasRect.top + canvasRect.height * 0.75,
       bodyScrollWidth: document.body.scrollWidth
@@ -216,29 +202,25 @@ test('power-up button is tappable and clears the missions HUD', async ({ page })
   });
 
   expect(result.hudHidden).toBe(false);
-  expect(result.buttonHidden).toBe(false);
-  expect(result.buttonDisabled).toBe(false);
+  expect(result.hudRect.width).toBeGreaterThan(0);
 
-  // The touch-target policy the suite enforces elsewhere applies here too.
-  expect(result.buttonRect.width).toBeGreaterThanOrEqual(44);
-  expect(result.buttonRect.height).toBeGreaterThanOrEqual(44);
-
-  // Actually reachable by a finger, not just by button.click().
-  expect(result.topmostIsButton).toBe(true);
+  // The structural guard: no control, and no way to take a tap.
+  expect(result.legacyButton).toBe(false);
+  expect(result.controlCount).toBe(0);
+  expect(result.pointerEvents).toBe('none');
 
   // Inside the viewport and below the play corridor at every geometry.
-  expect(result.buttonRect.left).toBeGreaterThanOrEqual(-1);
-  expect(result.buttonRect.right).toBeLessThanOrEqual(result.viewport.width + 1);
-  expect(result.buttonRect.bottom).toBeLessThanOrEqual(result.viewport.height + 1);
-  expect(result.buttonRect.top).toBeGreaterThanOrEqual(result.corridorBottom);
+  expect(result.hudRect.left).toBeGreaterThanOrEqual(-1);
+  expect(result.hudRect.right).toBeLessThanOrEqual(result.viewport.width + 1);
+  expect(result.hudRect.bottom).toBeLessThanOrEqual(result.viewport.height + 1);
+  expect(result.hudRect.top).toBeGreaterThanOrEqual(result.corridorBottom);
 
-  // The missions row was shifted up specifically to make room for this button.
   const overlaps =
-    result.buttonRect.right > result.missionsRect.left &&
-    result.buttonRect.left < result.missionsRect.right &&
-    result.buttonRect.bottom > result.missionsRect.top &&
-    result.buttonRect.top < result.missionsRect.bottom;
-  expect(overlaps, `button ${JSON.stringify(result.buttonRect)} overlaps missions ${JSON.stringify(result.missionsRect)}`).toBe(false);
+    result.hudRect.right > result.missionsRect.left &&
+    result.hudRect.left < result.missionsRect.right &&
+    result.hudRect.bottom > result.missionsRect.top &&
+    result.hudRect.top < result.missionsRect.bottom;
+  expect(overlaps, `power-ups ${JSON.stringify(result.hudRect)} overlap missions ${JSON.stringify(result.missionsRect)}`).toBe(false);
 
   expect(result.bodyScrollWidth).toBeLessThanOrEqual(result.viewport.width + 1);
   expect(pageErrors).toEqual([]);

@@ -236,4 +236,114 @@ for (const raw of [null, '', 'not json', '{}', '[]', '{"version":999,"highestBan
   }
 }
 
+// --- M20: the reachable band ---------------------------------------------
+// This is the predicate DISSOLUTION fires on, so it carries the whole risk of
+// the auto-trigger. The bar must be "no input can save them", never "this is
+// hard" - a looser test would steal saves the player would have made.
+{
+  const PHYS = { gravity: 0.45, maxFallSpeed: 11, jumpForce: -7.5, cooldownFrames: 8 };
+
+  // Zero frames means no movement at all.
+  {
+    const band = powerups.reachableBand({ ...PHYS, y: 400, vy: 0, cooldown: 0, frames: 0 });
+    assert.equal(band.minY, 400);
+    assert.equal(band.maxY, 400);
+  }
+
+  // The band only ever widens with time, and always contains the start.
+  {
+    let previousWidth = -1;
+    for (let frames = 0; frames <= 90; frames += 1) {
+      const band = powerups.reachableBand({ ...PHYS, y: 400, vy: 0, cooldown: 0, frames });
+      assert.ok(Number.isFinite(band.minY) && Number.isFinite(band.maxY));
+      assert.ok(band.minY <= band.maxY, `inverted band at ${frames} frames`);
+      const width = band.maxY - band.minY;
+      assert.ok(width >= previousWidth - 1e-9, `band narrowed at ${frames} frames`);
+      previousWidth = width;
+    }
+  }
+
+  // Jumping climbs, falling descends - the two bounds must not be confused.
+  {
+    const band = powerups.reachableBand({ ...PHYS, y: 400, vy: 0, cooldown: 0, frames: 30 });
+    assert.ok(band.minY < 400, 'the player must be able to climb above the start');
+    assert.ok(band.maxY > 400, 'the player must be able to fall below the start');
+  }
+
+  // Terminal velocity is respected: descent over N frames never exceeds N*maxFall.
+  {
+    const frames = 60;
+    const band = powerups.reachableBand({ ...PHYS, y: 0, vy: 100, cooldown: 0, frames });
+    assert.ok(band.maxY <= frames * PHYS.maxFallSpeed + 1e-6, 'fall exceeded terminal velocity');
+  }
+
+  // A cooldown already running delays the first jump, so the ceiling is lower.
+  {
+    const ready = powerups.reachableBand({ ...PHYS, y: 400, vy: 0, cooldown: 0, frames: 12 });
+    const blocked = powerups.reachableBand({ ...PHYS, y: 400, vy: 0, cooldown: 8, frames: 12 });
+    assert.ok(blocked.minY >= ready.minY, 'a pending cooldown cannot raise the ceiling');
+  }
+}
+
+// The doom verdict itself, expressed the way the runtime asks it.
+{
+  const PHYS = { gravity: 0.45, maxFallSpeed: 11, jumpForce: -7.5, cooldownFrames: 8 };
+  const HALF = 12;
+  const doomed = (y, vy, frames, top, gap) => {
+    const band = powerups.reachableBand({ ...PHYS, y, vy, cooldown: 0, frames });
+    return band.maxY < top + HALF || band.minY > top + gap - HALF;
+  };
+
+  // Centred in a wide gap with time to spare: obviously fine.
+  assert.equal(doomed(400, 0, 30, 320, 160), false, 'a centred player must not be condemned');
+
+  // Far below a high gap with almost no time: nothing can be done.
+  assert.equal(doomed(760, 11, 4, 100, 120), true, 'an unreachable gap must be called doomed');
+
+  // The same geometry with genuinely enough time is survivable, so must not fire.
+  // The player climbs about 5.7 px/frame at the real jump cadence, so clearing
+  // 552 px takes roughly 97 frames - 80 is still doom, 100 is not.
+  assert.equal(doomed(760, 11, 80, 100, 120), true, '80 frames is not enough to climb 552px');
+  assert.equal(doomed(760, 11, 100, 100, 120), false, 'given time to climb, it is not doom');
+
+  // A player who only just makes it must not be condemned. This is the boundary
+  // the whole feature turns on: the predicate has to be no-input-can-save-them,
+  // not this-looks-hard.
+  {
+    let firstSurvivable = null;
+    for (let frames = 1; frames <= 160; frames += 1) {
+      if (!doomed(760, 11, frames, 100, 120)) { firstSurvivable = frames; break; }
+    }
+    assert.ok(firstSurvivable !== null, 'it must become survivable given enough time');
+    assert.equal(doomed(760, 11, firstSurvivable, 100, 120), false);
+    assert.equal(doomed(760, 11, firstSurvivable - 1, 100, 120), true,
+      'the verdict must flip exactly once, at the frame it becomes reachable');
+  }
+
+  // Above the gap and falling toward it is never doom - gravity is doing the work.
+  assert.equal(doomed(200, 2, 20, 320, 160), false, 'falling into the gap is not doom');
+
+  // Once doomed at a given horizon, more urgency cannot make it survivable.
+  for (let frames = 1; frames <= 4; frames += 1) {
+    assert.equal(doomed(760, 11, frames, 100, 120), true, `still doomed at ${frames} frames`);
+  }
+}
+
+// --- M20: no activation control ------------------------------------------
+// The owner removed the button; the API must not offer a manual trigger either.
+assert.equal(typeof powerups.useDissolution, 'undefined', 'manual activation must be gone');
+
+// The ward colour must not collide with any reserved colour.
+{
+  const reserved = ['#ff2f6d', '#ff003c', '#00e5ff', '#ffd700', '#f8fbff'];
+  assert.ok(/^#[0-9a-f]{6}$/i.test(powerups.WARD_COLOR));
+  for (const colour of reserved) {
+    assert.notEqual(powerups.WARD_COLOR.toLowerCase(), colour.toLowerCase(),
+      `the ward must not reuse the reserved colour ${colour}`);
+  }
+}
+
+assert.ok(powerups.UNAVOIDABLE_LOOKAHEAD_FRAMES > 0 && powerups.UNAVOIDABLE_LOOKAHEAD_FRAMES <= 120,
+  'the lookahead must be bounded, or the projection outruns the breathing gap');
+
 console.log(`powerups v${powerups.POWERUP_VERSION}: all deterministic contracts passed`);

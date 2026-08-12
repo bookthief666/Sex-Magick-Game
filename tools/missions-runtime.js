@@ -449,13 +449,13 @@
     // viewport runtime already publishes per Fold profile, so both postures are
     // handled by existing code rather than by new breakpoints here.
     style.textContent = `
-      /* Sits above the bottom-left DISSOLUTION button the power-up runtime owns.
-         The 62px offset clears its 46px height plus breathing room, and the
-         cross-screen suite asserts the two never overlap. */
+      /* Sits above the bottom-left power-up readout, which is now two short lines
+         of passive text rather than the button M19 shipped. The cross-screen suite
+         asserts the two never overlap. */
       #sex-magick-missions {
         position: fixed;
         left: 50%;
-        bottom: max(62px, calc(env(safe-area-inset-bottom) + 62px));
+        bottom: max(46px, calc(env(safe-area-inset-bottom) + 46px));
         transform: translateX(-50%);
         z-index: 27;
         width: var(--sm-hud-width, min(330px, calc(100vw - 120px)));
@@ -479,7 +479,7 @@
       #sex-magick-missions-announce {
         position: fixed;
         left: 50%;
-        bottom: max(190px, calc(env(safe-area-inset-bottom) + 180px));
+        bottom: max(170px, calc(env(safe-area-inset-bottom) + 160px));
         transform: translateX(-50%);
         z-index: 29;
         padding: 7px 14px;

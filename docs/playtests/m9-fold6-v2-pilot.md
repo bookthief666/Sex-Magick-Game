@@ -44,8 +44,18 @@ git pull --ff-only origin develop/sex-magick-2.0
 Start the server:
 
 ```bash
-python -m http.server 8000 --bind 127.0.0.1
+python3 tools/serve-playtest.py 8000
 ```
+
+**Use this server, not `python -m http.server`.** The stock module sends no
+`Cache-Control`, so the browser heuristically caches the runtime modules. On
+2026-08-12 that produced a report which looked complete but described a build that
+did not exist: the new files loaded while a pre-M16 Gate slice ran from cache, and
+the whole session had to be discarded. `serve-playtest.py` sends `no-store`.
+
+Every report now carries a `runtime` fingerprint recording the entry radius, band
+table and module versions that actually executed. Check it before trusting a
+session.
 
 ## Fold-closed V2 session
 

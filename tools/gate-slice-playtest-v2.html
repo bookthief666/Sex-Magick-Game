@@ -231,6 +231,16 @@
         const inputStats = gameWindow?.__SEX_MAGICK_COLLISION__?.getInputStats?.() || null;
         const preflight = gameWindow?.__SEX_MAGICK_GATE_PREFLIGHT__?.getSnapshot?.() || null;
         const viewport = gameWindow?.__SEX_MAGICK_VIEWPORT__?.getSnapshot?.() || null;
+        // Which build actually ran. The 2026-08-12 session reported cleanly while
+        // executing a cached pre-M16 Gate slice, and diagnosing that took three
+        // separate inferences from the event data. Now the report says so itself.
+        const runtime = {
+          gateSlice: gameWindow?.__SEX_MAGICK_GATE_SLICE__?.getFingerprint?.() || null,
+          grammarVersion: gameWindow?.__SEX_MAGICK_PATTERNS__?.version ?? null,
+          varietyVersion: gameWindow?.__SEX_MAGICK_OBSTACLE_VARIETY__?.version ?? null,
+          missionsVersion: gameWindow?.__SEX_MAGICK_MISSIONS__?.version ?? null,
+          powerupsVersion: gameWindow?.__SEX_MAGICK_POWERUPS__?.version ?? null
+        };
         // M18 and M19 state. Captured optionally rather than gated on, so a
         // runtime that fails to load costs a section of the report instead of
         // stranding the owner mid-session. `installed` records which were present,
@@ -251,7 +261,7 @@
           sessionTotals: powerupApi.getSessionTotals?.() || null,
           gatesPerCharge: powerupApi.gatesPerCharge ?? null
         } : { installed: false };
-        return { evidence, current, inputStats, preflight, viewport, missions, powerups };
+        return { runtime, evidence, current, inputStats, preflight, viewport, missions, powerups };
       }
 
       function endSession(reason) {

@@ -1122,6 +1122,27 @@
       version: SLICE_VERSION,
       storageKey: STORAGE_KEY,
       query: 'gateSlice=1',
+      /**
+       * Identifies which build of this file is actually executing.
+       *
+       * The 2026-08-12 session reported cleanly while running a cached
+       * pre-M16 copy of this module, and it took three separate inferences
+       * from the event data to notice. Every value here is read live from the
+       * constants above rather than written as a literal, so a playtest report
+       * states its own provenance and that failure can never be silent again.
+       */
+      getFingerprint() {
+        return {
+          sliceVersion: SLICE_VERSION,
+          gateEntryRadius: GATE_ENTRY_RADIUS,
+          gateOuterRadius: GATE_OUTER_RADIUS,
+          bandCount: BANDS.length,
+          bandNames: BANDS.map(band => band.name),
+          maxValidatedSpeed: MAX_VALIDATED_SPEED,
+          minValidatedGap: MIN_VALIDATED_GAP,
+          gnosisCapacity: GNOSIS_CAPACITY
+        };
+      },
       getSnapshot() {
         if (typeof game === 'undefined' || !game) return null;
         return {

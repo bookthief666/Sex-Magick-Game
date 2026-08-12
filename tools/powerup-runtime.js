@@ -19,6 +19,16 @@
   // charges would be too rare to feel like a system.
   const GATES_PER_CHARGE = 25;
 
+  // Ward violet. Must avoid all three reserved colours - hazard #ff2f6d/#ff003c,
+  // Hexagram #00e5ff and Monas #ffd700 - so protection can never be mistaken for
+  // danger, and the Rite auras stay legible for the later in-run transformation.
+  const WARD_COLOR = '#c9b4ff';
+
+  // How far ahead a wall may be before the doom projection is trusted. The gap
+  // breathes and walls move, so a long-range projection would condemn walls that
+  // are still perfectly survivable.
+  const UNAVOIDABLE_LOOKAHEAD_FRAMES = 70;
+
   /**
    * The unlock ladder.
    *
@@ -270,6 +280,7 @@
   let liveStorage = null;
   let lastVoidSurvivals = 0;
   let announceTimer = null;
+  let wardPulse = 0;
 
   /**
    * Session-level totals, in memory only and never persisted.
@@ -304,6 +315,7 @@
     return (
       typeof Game !== 'undefined' &&
       typeof GameState !== 'undefined' &&
+      typeof Player !== 'undefined' &&
       typeof document !== 'undefined' &&
       // Power-ups are meaningless without bands, Gates and the Void, and the
       // shield hook must wrap the slice's gameOver from the outside.
@@ -332,28 +344,12 @@
         text-shadow: 0 0 7px rgba(0, 229, 255, .75);
       }
       #sex-magick-powerups[hidden] { display: none !important; }
-      #sex-magick-aegis-status { opacity: .85; }
-      #sex-magick-aegis-status[hidden] { display: none !important; }
-      /* A real <button>, which CONTROL_SELECTOR already exempts from the
-         full-screen jump handler, at the 44px the touch-target policy requires. */
-      #sex-magick-dissolve {
-        width: 46px;
-        height: 46px;
-        pointer-events: auto;
-        cursor: pointer;
-        background: rgba(0, 0, 0, .58);
-        border: 1px solid rgba(0, 229, 255, .8);
-        border-radius: 50%;
-        color: #dff6ff;
-        font: 15px/1 'Orbitron', monospace;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        backdrop-filter: blur(4px);
-        text-shadow: 0 0 8px #00e5ff;
-      }
-      #sex-magick-dissolve[hidden] { display: none !important; }
-      #sex-magick-dissolve:disabled { opacity: .3; cursor: default; }
+      /* Both readouts are passive text. There is no control here and there must
+         never be one: the whole screen is the jump surface, and the 2026-08-12
+         session showed a button in this corner simply never gets pressed. */
+      .sm-powerup-row { opacity: .85; white-space: nowrap; }
+      .sm-powerup-row[hidden] { display: none !important; }
+      .sm-powerup-row.is-ward { color: #c9b4ff; text-shadow: 0 0 7px rgba(201, 180, 255, .8); }
       #sex-magick-powerups-announce {
         position: fixed;
         left: 50%;
@@ -384,15 +380,10 @@
       hud.id = 'sex-magick-powerups';
       hud.hidden = true;
       hud.innerHTML = `
-        <div id="sex-magick-aegis-status" hidden></div>
-        <button id="sex-magick-dissolve" type="button" aria-label="Dissolve the next wall" hidden>◇</button>
+        <div id="sex-magick-aegis-status" class="sm-powerup-row is-ward" hidden></div>
+        <div id="sex-magick-dissolve-status" class="sm-powerup-row" hidden></div>
       `;
       document.body.appendChild(hud);
-      hud.querySelector('#sex-magick-dissolve').addEventListener('click', event => {
-        event.preventDefault();
-        event.stopPropagation();
-        useDissolution();
-      });
     }
     let announce = document.getElementById('sex-magick-powerups-announce');
     if (!announce) {
@@ -424,13 +415,12 @@
       status.hidden = true;
     }
 
-    const button = document.getElementById('sex-magick-dissolve');
+    const dissolveRow = document.getElementById('sex-magick-dissolve-status');
     if (dissolution.unlocked) {
-      button.hidden = false;
-      button.disabled = dissolution.charges <= 0;
-      button.textContent = dissolution.charges > 0 ? String(dissolution.charges) : '◇';
+      dissolveRow.textContent = `${'◇'.repeat(dissolution.charges) || '·'} DISSOLUTION`;
+      dissolveRow.hidden = false;
     } else {
-      button.hidden = true;
+      dissolveRow.hidden = true;
     }
 
     hud.hidden = !(aegis.unlocked || dissolution.unlocked);
@@ -454,8 +444,11 @@
     gameInstance.obstacles.splice(index, 1);
     try {
       const centreX = pillar.x + (pillar.w / 2);
-      for (let count = 0; count < 18; count += 1) {
-        gameInstance.particles.push(new Particle(centreX, pillar.top + pillar.gap / 2, '#00e5ff', 9));
+      // Ward violet, so a dissolving wall is unmistakably the power-up acting and
+      // not the Gate, whose ring is Hexagram cyan.
+      for (let count = 0; count < 26; count += 1) {
+        const spread = (count / 26) * Math.max(1, pillar.gap);
+        gameInstance.particles.push(new Particle(centreX, pillar.top + spread, WARD_COLOR, 10));
       }
     } catch (_error) {}
     return true;
@@ -477,21 +470,118 @@
     return best;
   }
 
-  function useDissolution(gameInstance = typeof game !== 'undefined' ? game : null) {
+  /**
+   * The band of heights the player could still occupy `frames` from now.
+   *
+   * Lower bound: jump on every frame the cooldown allows. Upper bound: never jump
+   * and fall, clamped to terminal velocity. Anything the player can actually do
+   * lands between the two, so if the gap falls outside this band no input saves
+   * them. Mirrors index.html's Player.update exactly - gravity, then the terminal
+   * clamp, then the position step.
+   */
+  function reachableBand(options = {}) {
+    const gravity = finiteNumber(options.gravity, 0.45);
+    const maxFall = finiteNumber(options.maxFallSpeed, 11);
+    const jumpForce = finiteNumber(options.jumpForce, -7.5);
+    const cooldownFrames = Math.max(1, Math.floor(finiteNumber(options.cooldownFrames, 8)));
+    const frames = Math.max(0, Math.floor(finiteNumber(options.frames, 0)));
+    const startY = finiteNumber(options.y, 0);
+    const startVy = finiteNumber(options.vy, 0);
+    const startCooldown = Math.max(0, Math.floor(finiteNumber(options.cooldown, 0)));
+
+    let lowY = startY, lowVy = startVy, cooldown = startCooldown;
+    let highY = startY, highVy = startVy;
+
+    for (let frame = 0; frame < frames; frame += 1) {
+      // Highest reachable: jump the instant the cooldown permits.
+      if (cooldown <= 0) {
+        lowVy = jumpForce;
+        cooldown = cooldownFrames;
+      } else {
+        lowVy += gravity;
+        cooldown -= 1;
+      }
+      if (lowVy > maxFall) lowVy = maxFall;
+      lowY += lowVy;
+
+      // Lowest reachable: never jump.
+      highVy += gravity;
+      if (highVy > maxFall) highVy = maxFall;
+      highY += highVy;
+    }
+
+    return { minY: Math.min(lowY, highY), maxY: Math.max(lowY, highY) };
+  }
+
+  /**
+   * True when the player cannot clear `pillar` by any sequence of taps.
+   *
+   * The bar is deliberately "no input can save them" rather than "this looks
+   * hard". A looser test would steal saves the player would have made themselves,
+   * which is the difference between a rescue and the game playing itself.
+   */
+  function isPillarUnavoidable(gameInstance, pillar) {
+    const player = gameInstance?.player;
+    if (!player || !pillar) return false;
+    const speed = Math.max(0.1, finiteNumber(gameInstance.gameSpeed, 1));
+    const half = Math.max(0, finiteNumber(player.r, 16) - finiteNumber(CONFIG?.HITBOX_OFFSET, 0));
+
+    // Frames until the pillar's trailing edge clears the player's leading edge -
+    // the last instant a collision is still possible.
+    const frames = Math.floor(
+      ((finiteNumber(pillar.x, 0) + finiteNumber(pillar.w, 0)) - (finiteNumber(player.x, 0) - half)) / speed
+    );
+    if (frames <= 0) return false;
+    // Too far out to judge: the gap breathes and the wall may move, so committing
+    // a charge on a long-range projection would fire on walls that are still fine.
+    if (frames > UNAVOIDABLE_LOOKAHEAD_FRAMES) return false;
+
+    // Evaluate at the moment of closest approach, where the corridor is tightest.
+    const arrival = Math.max(0, Math.floor(
+      (finiteNumber(pillar.x, 0) + (finiteNumber(pillar.w, 0) / 2) - finiteNumber(player.x, 0)) / speed
+    ));
+    const band = reachableBand({
+      y: player.y,
+      vy: player.vy,
+      cooldown: player.jumpCooldown,
+      frames: arrival,
+      gravity: finiteNumber(CONFIG?.GRAVITY, 0.45),
+      maxFallSpeed: finiteNumber(CONFIG?.MAX_FALL_SPEED, 11),
+      jumpForce: finiteNumber(CONFIG?.PLAYER_JUMP_FORCE, -7.5),
+      cooldownFrames: gameInstance.isMobile ? 8 : 5
+    });
+
+    const safeTop = finiteNumber(pillar.top, 0) + half;
+    const safeBottom = finiteNumber(pillar.top, 0) + finiteNumber(pillar.gap, 0) - half;
+    if (safeBottom <= safeTop) return false;
+
+    // Doomed only when the whole reachable band sits outside the corridor.
+    return band.maxY < safeTop || band.minY > safeBottom;
+  }
+
+  /**
+   * Fires DISSOLUTION when, and only when, the next wall is already lost.
+   *
+   * Resolves before AEGIS on a doomed approach, so the shield is kept back for a
+   * hit that could not be seen coming. Declines inside the Void for the same
+   * reason AEGIS does - the Void is the wager.
+   */
+  function tryDissolve(gameInstance) {
     if (!liveState || !gameInstance) return false;
     if (gameInstance.state !== GameState.PLAYING) return false;
-    if (chargesOf(liveState, 'dissolution') <= 0) {
-      if (sessionTotals) sessionTotals.dissolveAttemptsWithoutCharge += 1;
-      return false;
-    }
+    if (gameInstance.__gateSliceVoidActive) return false;
+    if (chargesOf(liveState, 'dissolution') <= 0) return false;
+
     const pillar = nextPillarAhead(gameInstance);
-    if (!pillar || !dissolvePillar(gameInstance, pillar)) return false;
+    if (!pillar || !isPillarUnavoidable(gameInstance, pillar)) return false;
+    if (!dissolvePillar(gameInstance, pillar)) return false;
+
     spendCharge(liveState, 'dissolution');
     if (sessionTotals) sessionTotals.dissolves += 1;
-    // No gate-clear credit: the wall was skipped, not cleared. This also stops
-    // the button being used to farm the M18 missions that count gates.
+    // No gate-clear credit: the wall was skipped, not cleared. That also stops it
+    // inflating the M18 missions that count gates.
     try { if (gameInstance.settings?.sfx) SFX.collect(); } catch (_error) {}
-    announce('DISSOLUTION · THE WAY OPENS');
+    announce('DISSOLUTION · THE WALL UNMAKES ITSELF');
     renderHud(gameInstance);
     return true;
   }
@@ -513,6 +603,54 @@
     });
   }
 
+  /**
+   * Ward rings around the player, one per held AEGIS charge.
+   *
+   * This is the change the owner actually asked for: "the avatar should maybe
+   * start glowing or generate an actual visual thin neon shield". A count in the
+   * corner was not read during play - protection has to live where the eyes
+   * already are, on the sigil itself.
+   */
+  function drawWardRings(ctx, player) {
+    if (!liveState || visualQaActive()) return;
+    const charges = chargesOf(liveState, 'aegis');
+    if (charges <= 0) return;
+
+    const reduced = Boolean(root.__SEX_MAGICK_COLLISION__?.getAccessibility?.().reducedMotion);
+    const radius = Math.max(1, finiteNumber(player?.r, 16));
+    wardPulse += reduced ? 0 : 0.07;
+
+    ctx.save();
+    ctx.translate(finiteNumber(player?.x, 0), finiteNumber(player?.y, 0));
+    for (let index = 0; index < charges; index += 1) {
+      const breathe = reduced ? 0 : Math.sin(wardPulse + index * 0.9) * 1.6;
+      ctx.beginPath();
+      ctx.strokeStyle = WARD_COLOR;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.9 - index * 0.16;
+      if (!reduced) {
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = WARD_COLOR;
+      }
+      ctx.arc(0, 0, radius + 7 + index * 5 + breathe, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // The ward coming apart. Shown at the moment of absorb so the save is legible
+  // as the shield doing its job rather than as an unexplained survival.
+  function shatterWard(gameInstance) {
+    if (visualQaActive()) return;
+    const player = gameInstance?.player;
+    if (!player) return;
+    try {
+      for (let index = 0; index < 22; index += 1) {
+        gameInstance.particles.push(new Particle(player.x, player.y, WARD_COLOR, 9));
+      }
+    } catch (_error) {}
+  }
+
   function tryAbsorb(gameInstance) {
     if (!liveState || !gameInstance) return false;
     if (gameInstance.state === GameState.GAME_OVER) return false;
@@ -526,11 +664,12 @@
 
     spendCharge(liveState, 'aegis');
     if (sessionTotals) sessionTotals.absorbs += 1;
+    shatterWard(gameInstance);
     for (const pillar of blocking) dissolvePillar(gameInstance, pillar);
     gameInstance.hitStop = 3;
     gameInstance.shake = Math.max(finiteNumber(gameInstance.shake, 0), 8);
     try { if (gameInstance.settings?.sfx) SFX.levelUp(); } catch (_error) {}
-    announce('AEGIS HOLDS');
+    announce('AEGIS SHATTERS · YOU SURVIVE');
     renderHud(gameInstance);
     return true;
   }
@@ -545,25 +684,30 @@
       writeState(liveStorage, liveState);
       for (const id of unlockedNow) {
         if (sessionTotals) sessionTotals.unlocksSeen.push(id);
-        announce(`${getPowerup(id)?.label} UNSEALED`);
+        const powerup = getPowerup(id);
+        announce(`${powerup?.label} UNSEALED · ${powerup?.detail}`);
       }
     }
 
     const survivals = wholeNumber(slice.voidSurvivals, 0);
     if (survivals > lastVoidSurvivals) {
       for (let count = lastVoidSurvivals; count < survivals; count += 1) {
-        if (awardCharge(liveState)) {
+        const earned = awardCharge(liveState);
+        if (earned) {
           if (sessionTotals) sessionTotals.earnedFromVoid += 1;
-          announce('CHALLENGE MET · CHARGE EARNED');
+          announce(`VOID SURVIVED · ${getPowerup(earned)?.label} +1`);
         }
       }
       lastVoidSurvivals = survivals;
     }
 
+    // Pre-emptive, so it must run before the frame's collision test can land.
+    tryDissolve(gameInstance);
+
     const milestoneAwards = applyGateMilestones(liveState, slice.gatesCleared);
     if (milestoneAwards.length > 0) {
       if (sessionTotals) sessionTotals.earnedFromGates += milestoneAwards.length;
-      announce('ASCENT · CHARGE EARNED');
+      announce(`ASCENT · ${getPowerup(milestoneAwards[0])?.label} +${milestoneAwards.length}`);
     }
 
     renderHud(gameInstance);
@@ -615,6 +759,15 @@
       return originalGameOver.apply(this, args);
     };
 
+    // Installed last, so this wraps collision-runtime's drawTruthfulPlayer without
+    // that file needing to know power-ups exist.
+    const originalPlayerDraw = Player.prototype.draw;
+    Player.prototype.draw = function drawPlayerWithWard(ctx, ...rest) {
+      const result = originalPlayerDraw.call(this, ctx, ...rest);
+      try { drawWardRings(ctx, this); } catch (_error) {}
+      return result;
+    };
+
     Game.prototype.returnToMenu = function returnToMenuWithPowerups(...args) {
       const hud = document.getElementById('sex-magick-powerups');
       if (hud) hud.hidden = true;
@@ -630,7 +783,10 @@
       getSessionTotals: () => (sessionTotals ? JSON.parse(JSON.stringify(sessionTotals)) : null),
       getPowerups: () => (liveState ? describe(liveState) : []),
       hudSuppressed: () => visualQaActive(),
-      useDissolution: () => useDissolution(),
+      // No public activation: DISSOLUTION fires itself. Exposed only so tests can
+      // drive the predictive check directly.
+      tryDissolve: () => tryDissolve(typeof game !== 'undefined' ? game : null),
+      isPillarUnavoidable: pillar => isPillarUnavoidable(typeof game !== 'undefined' ? game : null, pillar),
       // Test affordances. Nothing in normal play calls these.
       grant(id, count = 1) {
         if (!liveState || !getPowerup(id)) return false;
@@ -686,6 +842,9 @@
     applyGateMilestones,
     beginRunState,
     describe,
+    reachableBand,
+    WARD_COLOR,
+    UNAVOIDABLE_LOOKAHEAD_FRAMES,
     createMemoryStorage,
     safeBrowserStorage,
     readState,
