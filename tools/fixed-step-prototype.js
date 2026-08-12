@@ -194,6 +194,28 @@
   document.head.appendChild(script);
 })();
 
+// Waits for the Gate slice before installing, so its gameOver wrapper is the
+// outermost one and still sees __gateSliceVoidActive when the shield decides
+// whether to absorb.
+(function bootstrapPowerupRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickPowerups ||
+    document.querySelector('script[data-sex-magick-powerups]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./powerup-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickPowerups = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Power-up runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
 // Observes the Gate slice rather than driving anything, so load order relative
 // to it does not matter; it installs once the Game prototype exists.
 (function bootstrapMissionsRuntime() {
