@@ -1,7 +1,15 @@
 # M9 Fold 6 Pilot — Complete-Session Evidence and Viewport Profiles
 
 Date prepared: 2026-08-04  
-Status: ready to run after the owner chooses to revisit Gate testing
+Status: **first block completed 2026-08-12** (fold-open, `buffer=3`) — see
+[`m8-fold6-owner-pilot-results.md`](./m8-fold6-owner-pilot-results.md).
+This protocol remains the standing harness for every future block.
+
+> **Superseded section:** the input-buffer comparison below is closed. The
+> 2026-08-12 block recorded 1768 immediate inputs and zero buffered, rejected, or
+> expired ones, so a `buffer=6` arm would produce identical counters. Keep three
+> frames and do not run the comparison. Future blocks should vary **posture**
+> (fold-open vs fold-closed), not buffer length.
 
 ## Purpose
 
