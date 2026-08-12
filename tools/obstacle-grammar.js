@@ -21,7 +21,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createObstacleGrammarApi(root) {
   'use strict';
 
-  const GRAMMAR_VERSION = 1;
+  const GRAMMAR_VERSION = 2;
   const STORAGE_KEY = 'sex_magick_patterns_v1';
   const DEFAULT_MAX_RUNS = 20;
   const DEFAULT_MAX_SPAWNS = 300;
@@ -30,26 +30,36 @@
   const MAX_RATIO_DELTA = 0.18;
   const FAMILY_CYCLE = Object.freeze(['safe', 'pressure', 'recovery', 'pressure', 'climax', 'recovery']);
 
+  // `motion` is the vertical swing in pixels a pattern asks its walls to make, and
+  // `gapScale` how open or tight it wants them. Both are properties of the named
+  // pattern rather than per-spawn rolls, so each pattern has a recognisable
+  // character and - critically - the seeded random stream is untouched, which
+  // keeps the existing 252-case reachability audit valid.
+  //
+  // Neither value is trusted at face value at runtime. The variety runtime clamps
+  // both so the corridor left after scaling and swing is never narrower than the
+  // gap the solver has verified, which is why the boldest values here are safe:
+  // they simply stop being reachable once a band's gap has nothing left to give.
   const PATTERN_LIBRARY = Object.freeze({
     HEX: Object.freeze([
-      Object.freeze({ id: 'hex.axis-hold', family: 'safe', kind: 'offsets', values: [0, 0, 0] }),
-      Object.freeze({ id: 'hex.gentle-step', family: 'safe', kind: 'offsets', values: [0, -0.05, -0.1, -0.05, 0], mirror: true }),
-      Object.freeze({ id: 'hex.staircase', family: 'pressure', kind: 'offsets', values: [0, -0.08, -0.16, -0.24, -0.16], mirror: true }),
-      Object.freeze({ id: 'hex.ascending-triad', family: 'pressure', kind: 'offsets', values: [0, -0.1, -0.2, -0.1, 0], mirror: true }),
-      Object.freeze({ id: 'hex.return-to-axis', family: 'recovery', kind: 'center', values: [0, 0.35, 0.7, 1] }),
-      Object.freeze({ id: 'hex.square-breath', family: 'recovery', kind: 'offsets', values: [0, 0.05, 0, -0.05, 0], mirror: true }),
-      Object.freeze({ id: 'hex.cross-quadrants', family: 'climax', kind: 'offsets', values: [0, -0.14, 0.02, 0.16, 0, -0.12, 0], mirror: true }),
-      Object.freeze({ id: 'hex.lightning-flash', family: 'climax', kind: 'offsets', values: [0, -0.12, -0.22, -0.08, 0.08, 0.18, 0], mirror: true })
+      Object.freeze({ id: 'hex.axis-hold', family: 'safe', kind: 'offsets', values: [0, 0, 0], motion: 0, gapScale: 1.12 }),
+      Object.freeze({ id: 'hex.gentle-step', family: 'safe', kind: 'offsets', values: [0, -0.05, -0.1, -0.05, 0], mirror: true, motion: 8, gapScale: 1.05 }),
+      Object.freeze({ id: 'hex.staircase', family: 'pressure', kind: 'offsets', values: [0, -0.08, -0.16, -0.24, -0.16], mirror: true, motion: 0, gapScale: 0.94 }),
+      Object.freeze({ id: 'hex.ascending-triad', family: 'pressure', kind: 'offsets', values: [0, -0.1, -0.2, -0.1, 0], mirror: true, motion: 14, gapScale: 1 }),
+      Object.freeze({ id: 'hex.return-to-axis', family: 'recovery', kind: 'center', values: [0, 0.35, 0.7, 1], motion: 6, gapScale: 1.15 }),
+      Object.freeze({ id: 'hex.square-breath', family: 'recovery', kind: 'offsets', values: [0, 0.05, 0, -0.05, 0], mirror: true, motion: 18, gapScale: 1.08 }),
+      Object.freeze({ id: 'hex.cross-quadrants', family: 'climax', kind: 'offsets', values: [0, -0.14, 0.02, 0.16, 0, -0.12, 0], mirror: true, motion: 20, gapScale: 0.95 }),
+      Object.freeze({ id: 'hex.lightning-flash', family: 'climax', kind: 'offsets', values: [0, -0.12, -0.22, -0.08, 0.08, 0.18, 0], mirror: true, motion: 26, gapScale: 0.9 })
     ]),
     MONAS: Object.freeze([
-      Object.freeze({ id: 'monas.soft-orbit', family: 'safe', kind: 'offsets', values: [0, 0.04, 0, -0.04, 0], mirror: true }),
-      Object.freeze({ id: 'monas.still-point', family: 'safe', kind: 'offsets', values: [0, 0, 0, 0] }),
-      Object.freeze({ id: 'monas.mercurial-wave', family: 'pressure', kind: 'offsets', values: [0, -0.09, -0.16, -0.08, 0.04, 0.12, 0.06], mirror: true }),
-      Object.freeze({ id: 'monas.lunar-sweep', family: 'pressure', kind: 'offsets', values: [0, -0.07, -0.14, -0.08, 0.02, 0.1, 0.04], mirror: true }),
-      Object.freeze({ id: 'monas.return-flow', family: 'recovery', kind: 'center', values: [0, 0.25, 0.55, 0.8, 1] }),
-      Object.freeze({ id: 'monas.orbit-settle', family: 'recovery', kind: 'offsets', values: [0, 0.06, 0.03, 0, -0.03, 0], mirror: true }),
-      Object.freeze({ id: 'monas.serpent-current', family: 'climax', kind: 'offsets', values: [0, -0.12, -0.2, -0.08, 0.08, 0.18, 0.06, -0.06, 0], mirror: true }),
-      Object.freeze({ id: 'monas.caduceus-wave', family: 'climax', kind: 'offsets', values: [0, -0.1, -0.18, -0.06, 0.1, 0.16, 0.04, -0.08, 0], mirror: true })
+      Object.freeze({ id: 'monas.soft-orbit', family: 'safe', kind: 'offsets', values: [0, 0.04, 0, -0.04, 0], mirror: true, motion: 10, gapScale: 1.1 }),
+      Object.freeze({ id: 'monas.still-point', family: 'safe', kind: 'offsets', values: [0, 0, 0, 0], motion: 0, gapScale: 1.15 }),
+      Object.freeze({ id: 'monas.mercurial-wave', family: 'pressure', kind: 'offsets', values: [0, -0.09, -0.16, -0.08, 0.04, 0.12, 0.06], mirror: true, motion: 16, gapScale: 1 }),
+      Object.freeze({ id: 'monas.lunar-sweep', family: 'pressure', kind: 'offsets', values: [0, -0.07, -0.14, -0.08, 0.02, 0.1, 0.04], mirror: true, motion: 12, gapScale: 0.96 }),
+      Object.freeze({ id: 'monas.return-flow', family: 'recovery', kind: 'center', values: [0, 0.25, 0.55, 0.8, 1], motion: 8, gapScale: 1.14 }),
+      Object.freeze({ id: 'monas.orbit-settle', family: 'recovery', kind: 'offsets', values: [0, 0.06, 0.03, 0, -0.03, 0], mirror: true, motion: 5, gapScale: 1.06 }),
+      Object.freeze({ id: 'monas.serpent-current', family: 'climax', kind: 'offsets', values: [0, -0.12, -0.2, -0.08, 0.08, 0.18, 0.06, -0.06, 0], mirror: true, motion: 22, gapScale: 0.93 }),
+      Object.freeze({ id: 'monas.caduceus-wave', family: 'climax', kind: 'offsets', values: [0, -0.1, -0.18, -0.06, 0.1, 0.16, 0.04, -0.08, 0], mirror: true, motion: 24, gapScale: 0.9 })
     ])
   });
 
@@ -89,6 +99,25 @@
       value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
       return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
     };
+  }
+
+  // One full swing of the wall motion takes 2*PI/0.05 frames. Phases are drawn
+  // from that period so neighbouring pillars sit at different points in their
+  // cycle instead of moving in lockstep as they did when the offset came from a
+  // single global sine.
+  const MOTION_PHASE_PERIOD = 126;
+
+  // Matches the swing the stock game applied to every pillar from one global
+  // sine, so a pattern that declares no `motion` behaves exactly as before.
+  const DEFAULT_MOTION_PX = 5;
+
+  // Deterministic per (seed, spawnIndex) and derived by hashing rather than by
+  // pulling from the scheduler's random stream. Consuming the stream here would
+  // shift every downstream pattern choice and invalidate the reachability audit,
+  // for a value that only needs to look uncorrelated.
+  function deriveMotionPhase(seed, spawnIndex) {
+    return hashStringToSeed(`${normalizeSeed(seed)}|motion|${Math.max(0, Math.floor(finiteNumber(spawnIndex, 0)))}`)
+      % MOTION_PHASE_PERIOD;
   }
 
   function materializePattern(pattern, anchorRatio = 0.5, direction = 1) {
@@ -139,6 +168,12 @@
           }
         } catch (error) {
           errors.push(error.message);
+        }
+        if (pattern.motion !== undefined && !(Number.isFinite(pattern.motion) && pattern.motion >= 0)) {
+          errors.push(`${pattern.id} declares a non-finite or negative motion`);
+        }
+        if (pattern.gapScale !== undefined && !(Number.isFinite(pattern.gapScale) && pattern.gapScale > 0)) {
+          errors.push(`${pattern.id} declares a non-positive gapScale`);
         }
       }
     }
@@ -205,6 +240,8 @@
         variant,
         serial: this.patternSerial,
         ratios,
+        motion: finiteNumber(pattern.motion, DEFAULT_MOTION_PX),
+        gapScale: finiteNumber(pattern.gapScale, 1),
         stepIndex: 0
       };
       return this.active;
@@ -242,6 +279,9 @@
         topRatio,
         top: computeTopFromRatio(viewportHeight, gap, topRatio),
         gap,
+        motion: active.motion,
+        gapScale: active.gapScale,
+        motionPhase: deriveMotionPhase(this.seed, this.spawnIndex),
         orb,
         rotation,
         innerPattern,
@@ -477,9 +517,23 @@
       const legacyOrbRoll = Math.random();
       const legacyWouldSpawnOrb = legacyOrbRoll > (1 - CONFIG.ORB_SPAWN_CHANCE);
       if (legacyWouldSpawnOrb) Math.random();
-      pillar.gap = gap;
-      pillar.top = spec.top;
-      pillar.baseTop = spec.top;
+      // The variety runtime owns the safety clamps, so route geometry through it
+      // when present and fall back to the flat pattern placement when it is not.
+      const variety = root.SexMagickObstacleVariety;
+      if (variety) {
+        variety.applyPillarGeometry(pillar, variety.resolvePillarGeometry({
+          gap,
+          top: spec.top,
+          gapScale: spec.gapScale,
+          motionAmplitude: spec.motion,
+          motionPhase: spec.motionPhase,
+          minimumGap: variety.VERIFIED_STATIC_GAP
+        }));
+      } else {
+        pillar.gap = gap;
+        pillar.top = spec.top;
+        pillar.baseTop = spec.top;
+      }
       pillar.rotation = spec.rotation;
       pillar.innerPattern = spec.innerPattern;
       pillar.hasWarning = Boolean(gameInstance.isMobile && spec.warning);
@@ -682,6 +736,8 @@
     MIN_TOP_RATIO,
     MAX_TOP_RATIO,
     MAX_RATIO_DELTA,
+    MOTION_PHASE_PERIOD,
+    DEFAULT_MOTION_PX,
     FAMILY_CYCLE,
     PATTERN_LIBRARY,
     clamp,
@@ -689,6 +745,7 @@
     normalizeSeed,
     hashStringToSeed,
     createSeededRandom,
+    deriveMotionPhase,
     materializePattern,
     validatePatternLibrary,
     computeTopFromRatio,

@@ -6,8 +6,8 @@ import path from 'node:path';
 import process from 'node:process';
 
 const ROOT = process.cwd();
-const HTTP_PORT = Number(process.env.GATE_SLICE_QA_HTTP_PORT || 4182);
-const DEBUG_PORT = Number(process.env.GATE_SLICE_QA_DEBUG_PORT || 9232);
+const HTTP_PORT = Number(process.env.M17_QA_HTTP_PORT || 4186);
+const DEBUG_PORT = Number(process.env.M17_QA_DEBUG_PORT || 9236);
 const BASE_URL = `http://127.0.0.1:${HTTP_PORT}`;
 const children = [];
 const EXTERNAL_BLOCKED_URLS = [
@@ -148,7 +148,7 @@ async function main() {
   assert.ok(chromeBinary, 'Chrome/Chromium executable not found');
   assert.ok(pythonBinary, 'Python executable not found');
 
-  const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'sex-magick-gate-slice-'));
+  const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'sex-magick-m17-variety-'));
   const server = spawn(pythonBinary, ['-m', 'http.server', String(HTTP_PORT), '--bind', '127.0.0.1'], {
     cwd: ROOT,
     stdio: ['ignore', 'pipe', 'pipe']
@@ -194,13 +194,14 @@ async function main() {
   client.on('Runtime.exceptionThrown', event => exceptions.push(event.exceptionDetails));
   client.on('Network.requestWillBeSent', event => requestedUrls.push(event.request?.url || ''));
 
+
   try {
     await client.send('Page.navigate', {
-      url: `${BASE_URL}/index.html?gateSlice=1&inputBuffer=3&gateSliceQa=${Date.now()}`
+      url: `${BASE_URL}/index.html?gateSlice=1&m17Qa=${Date.now()}`
     });
     await waitForExpression(
       client,
-      `typeof game !== 'undefined' && !!game && !!globalThis.__SEX_MAGICK_GATE_SLICE__`
+      `typeof game !== 'undefined' && !!game && !!globalThis.__SEX_MAGICK_GATE_SLICE__ && !!globalThis.SexMagickObstacleVariety`
     );
     await waitForExpression(
       client,
@@ -233,174 +234,167 @@ async function main() {
         SFX.levelUp = () => {};
         SFX.voidEnter = () => {};
         SFX.playTone = () => {};
-        Haptics.jump = () => {};
-        Haptics.collect = () => {};
-        Haptics.crash = () => {};
-        Haptics.levelUp = () => {};
-        Haptics.start = () => {};
-        Game.prototype.drawScene = function () {};
 
-        game.settings.music = false;
-        game.settings.sfx = false;
-        game.settings.vibration = false;
+        const variety = globalThis.SexMagickObstacleVariety;
+        const installed = Boolean(globalThis.__SEX_MAGICK_OBSTACLE_VARIETY__);
+        const verifiedStaticGap = variety.VERIFIED_STATIC_GAP;
+
         game.gameMode = 'HEX';
         game.startGame();
-        game.player.update = () => {};
-        game.player.draw = () => {};
-        game.particles = [];
-        game.collectibles = [];
-        game.pentagrams = [];
-        __SEX_MAGICK_GATE_SLICE__.clearHistory();
 
-        const menu = {
-          monasDisabled: document.getElementById('startMonasBtn').disabled,
-          monasText: document.getElementById('startMonasBtn').textContent,
-          hexText: document.getElementById('startHexBtn').textContent,
-          leaderboardHidden: document.querySelector('.leaderboard-container').hidden
-        };
-        const preflight = __SEX_MAGICK_GATE_PREFLIGHT__.getSnapshot();
-        const orderedLevels = game.gameLevels.map(level => level.name);
+        // This test is about the geometry the grammar produces, not about
+        // surviving it. Neutralise death and hold the player mid-screen so the
+        // spawn stream keeps running long enough to sample every band's output.
+        game.gameOver = () => {};
+        const holdY = game.canvas.height / 2;
 
-        game.gateSliceState.gatesCleared = 6;
-        game.gateSliceState.bandIndex = 1;
-        game.applyLevel();
-        game.frames = 1;
-        game.player.y = 200;
-        game.obstacles = [{
-          x: game.player.x - 50,
-          w: 45,
-          top: 178,
-          baseTop: 178,
-          gap: 190,
-          marked: false,
-          patternFamily: 'pressure',
-          update() {},
-          collides() { return false; },
-          draw() {}
-        }];
-        game.updateGameObjects();
-        const afterRisk = __SEX_MAGICK_GATE_SLICE__.getSnapshot();
-        const scoreAfterRisk = game.score;
+        // Drive enough simulation to spawn a long stream of pillars, sampling
+        // every one the grammar produces before it scrolls away.
+        const observed = [];
+        const seenPillars = new Set();
+        let corridorViolations = 0;
+        let subFloorGaps = 0;
+        let motionExceeded = 0;
 
-        game.obstacles = [];
-        __SEX_MAGICK_GATE_SLICE__.forceGnosis(10);
-        __SEX_MAGICK_GATE_SLICE__.spawnGateNow();
-        game.gateSliceOffer.y = game.player.y + 240;
-        game.gateSliceOffer.x = game.player.x - game.gateSliceOffer.outerRadius - game.player.r - game.gameSpeed - 2;
-        game.frames = 2;
-        game.updateGameObjects();
-        const afterBank = __SEX_MAGICK_GATE_SLICE__.getSnapshot();
-        const scoreAfterBank = game.score;
+        for (let frame = 0; frame < 20000; frame += 1) {
+          if (game.player) { game.player.y = holdY; game.player.vy = 0; }
+          game.runFixedSimulationStep();
+          for (const pillar of game.obstacles) {
+            if (seenPillars.has(pillar)) continue;
+            seenPillars.add(pillar);
+            const amplitude = Number(pillar.motionAmplitude);
+            const gap = Number(pillar.gap);
+            if (!(gap - (2 * Math.max(0, amplitude)) >= verifiedStaticGap - 1e-6)) corridorViolations += 1;
+            if (!(gap >= verifiedStaticGap - 1e-6)) subFloorGaps += 1;
+            observed.push({
+              patternId: pillar.patternId,
+              gap,
+              gapScale: Number(pillar.gapScale),
+              amplitude,
+              phase: Number(pillar.motionPhase),
+              baseTop: Number(pillar.baseTop)
+            });
+          }
+        }
 
-        __SEX_MAGICK_GATE_SLICE__.forceGnosis(10);
-        __SEX_MAGICK_GATE_SLICE__.spawnGateNow();
-        game.gateSliceOffer.x = game.player.x + game.gameSpeed;
-        game.gateSliceOffer.y = game.player.y;
-        game.frames = 3;
-        game.updateGameObjects();
-        const afterEntry = __SEX_MAGICK_GATE_SLICE__.getSnapshot();
-        const speedDuringVoid = game.gameSpeed;
+        // A pillar's rendered top must never leave the swing it was clamped to.
+        const swingProbe = game.obstacles[0] || null;
+        let swingExceeded = 0;
+        if (swingProbe) {
+          const base = swingProbe.baseTop;
+          const allowed = Math.max(0, Number(swingProbe.motionAmplitude));
+          for (let frame = 0; frame < 400; frame += 1) {
+            game.frames = frame;
+            swingProbe.update(0);
+            if (Math.abs(swingProbe.top - base) > allowed + 1e-6) swingExceeded += 1;
+          }
+          swingProbe.baseTop = base;
+        }
 
-        game.__gateSliceVoidStartedAt = game.frames - 480;
-        game.endVoidMode();
-        const afterSurvival = __SEX_MAGICK_GATE_SLICE__.getSnapshot();
-        const scoreAfterSurvival = game.score;
-
-        __SEX_MAGICK_GATE_SLICE__.forceGnosis(10);
-        __SEX_MAGICK_GATE_SLICE__.spawnGateNow();
-        game.gateSliceOffer.x = game.player.x + game.gameSpeed;
-        game.gateSliceOffer.y = game.player.y;
-        game.frames = 500;
-        game.updateGameObjects();
-        game.gameOver();
-        const afterDeath = __SEX_MAGICK_GATE_SLICE__.getSnapshot();
-        const history = __SEX_MAGICK_GATE_SLICE__.getHistory();
+        for (const entry of observed) {
+          if (Math.abs(entry.amplitude) > variety.MOTION_MAX_AMPLITUDE_PX + 1e-6) motionExceeded += 1;
+        }
 
         return {
-          menu,
-          preflight,
-          orderedLevels,
-          afterRisk,
-          scoreAfterRisk,
-          afterBank,
-          scoreAfterBank,
-          afterEntry,
-          speedDuringVoid,
-          afterSurvival,
-          scoreAfterSurvival,
-          afterDeath,
-          history,
-          finalState: game.state,
-          inputBufferFrames: __SEX_MAGICK_COLLISION__.getInputBufferFrames(),
-          hudPresent: Boolean(document.getElementById('gate-slice-hud')),
-          localOnlyStatus: document.getElementById('uploadStatus').textContent
+          hudBandName: (document.getElementById('gate-slice-band') || {}).textContent || null,
+          installed,
+          verifiedStaticGap,
+          maxMotionAmplitude: variety.MOTION_MAX_AMPLITUDE_PX,
+          pillarsObserved: observed.length,
+          distinctPatterns: [...new Set(observed.map(x => x.patternId))].length,
+          distinctPhases: [...new Set(observed.map(x => x.phase))].length,
+          distinctAmplitudes: [...new Set(observed.map(x => Math.round(x.amplitude * 100)))].length,
+          distinctGapScales: [...new Set(observed.map(x => x.gapScale))].length,
+          movingPillars: observed.filter(x => x.amplitude > 0).length,
+          stillPillars: observed.filter(x => x.amplitude === 0).length,
+          minGap: Math.min(...observed.map(x => x.gap)),
+          maxAmplitudeSeen: Math.max(...observed.map(x => x.amplitude)),
+          corridorViolations,
+          subFloorGaps,
+          motionExceeded,
+          swingExceeded,
+          swingProbed: Boolean(swingProbe),
+          gatesCleared: game.gateSliceState ? game.gateSliceState.gatesCleared : 0,
+          bandIndex: game.gateSliceState ? game.gateSliceState.bandIndex : -1
         };
-      })()
+      })();
     `);
 
-    assert.equal(result.menu.monasDisabled, true);
-    assert.match(result.menu.monasText, /SEALED/);
-    assert.match(result.menu.hexText, /THE GATE/);
-    assert.equal(result.menu.leaderboardHidden, true);
-    assert.equal(result.preflight.leaderboardSuppressed, true);
-    assert.equal(result.preflight.guestSessionAllowed, false);
-    assert.equal(result.preflight.scoreSubmissionAllowed, false);
+    assert.ok(result.installed, 'the obstacle variety runtime must install in the real page');
+    assert.equal(result.verifiedStaticGap, 110);
+
+    assert.ok(result.pillarsObserved > 40, `expected a long pillar stream, saw ${result.pillarsObserved}`);
+
+    // The safety invariant, checked against every pillar the game actually built.
+    assert.equal(result.corridorViolations, 0, 'a spawned pillar left less than the verified corridor');
+    assert.equal(result.subFloorGaps, 0, 'a spawned pillar had a gap below the verified floor');
+    assert.equal(result.motionExceeded, 0, 'a spawned pillar exceeded the motion ceiling');
+    assert.ok(result.minGap >= 110 - 1e-6, `narrowest spawned gap was ${result.minGap}`);
+
+    // The variety is real, not nominal.
+    assert.ok(result.distinctPatterns >= 4, `expected several patterns, saw ${result.distinctPatterns}`);
+    assert.ok(result.distinctPhases > 5, `walls are still moving in lockstep: ${result.distinctPhases} phases`);
+    assert.ok(result.distinctAmplitudes >= 3, `expected varied motion, saw ${result.distinctAmplitudes} amplitudes`);
+    assert.ok(result.distinctGapScales >= 3, `expected varied gaps, saw ${result.distinctGapScales} scales`);
+    assert.ok(result.movingPillars > 0, 'no pillar actually moved');
+    assert.ok(result.stillPillars > 0, 'no pillar held still');
+
+    // Motion stays inside the amplitude it was clamped to, frame by frame.
+    assert.ok(result.swingProbed, 'the swing probe needs at least one live pillar');
+    assert.equal(result.swingExceeded, 0, 'a pillar swung beyond its clamped amplitude');
+
+    // The curve keeps escalating past where it used to stop. GEBURAH is band 3
+    // and used to be the ceiling; a run this long must now be beyond it.
+    assert.ok(
+      result.gatesCleared > 32,
+      `the probe run only cleared ${result.gatesCleared} gates, too few to exercise the extension`
+    );
+    assert.ok(
+      result.bandIndex > 3,
+      `band index stalled at ${result.bandIndex} after ${result.gatesCleared} gates; the curve still ends at GEBURAH`
+    );
+    assert.ok(
+      typeof result.hudBandName === 'string' && result.hudBandName.length > 0,
+      'the HUD must name the band the run reached'
+    );
+    assert.ok(
+      !['MALKUTH', 'YESOD', 'TIPHARETH', 'GEBURAH'].includes(result.hudBandName),
+      `the HUD still shows a pre-M17 band: ${result.hudBandName}`
+    );
+
+    assert.deepEqual(exceptions, [], `page threw: ${JSON.stringify(exceptions.map(e => e.text))}`);
     assert.equal(
       requestedUrls.some(url => url.includes('lootlocker.io')),
       false,
-      `Gate slice must not initiate LootLocker requests: ${JSON.stringify(requestedUrls)}`
+      'M17 must not initiate LootLocker requests'
     );
-    assert.deepEqual(result.orderedLevels, ['MALKUTH', 'YESOD', 'TIPHARETH', 'GEBURAH', 'CHESED', 'BINAH', 'CHOKMAH', 'KETHER']);
 
-    assert.equal(result.afterRisk.state.gatesCleared, 7);
-    assert.equal(result.afterRisk.state.gnosis, 1);
-    assert.equal(result.afterRisk.state.lastClear.zone, 'risk-top');
-    assert.equal(result.afterRisk.state.lastClear.family, 'pressure');
-    assert.equal(result.scoreAfterRisk, 3);
-
-    assert.equal(result.afterBank.state.gateOffers, 1);
-    assert.equal(result.afterBank.state.gateBanks, 1);
-    assert.equal(result.afterBank.state.gnosis, 0);
-    assert.equal(result.scoreAfterBank, 33);
-
-    assert.equal(result.afterEntry.voidActive, true);
-    assert.equal(result.afterEntry.state.currentWager, 10);
-    assert.equal(result.afterEntry.state.gateEntries, 1);
-    assert.ok(Math.abs(result.speedDuringVoid - 5.7) < 1e-9);
-
-    assert.equal(result.afterSurvival.voidActive, false);
-    assert.equal(result.afterSurvival.state.voidSurvivals, 1);
-    assert.equal(result.afterSurvival.state.currentWager, 0);
-    assert.equal(result.scoreAfterSurvival, 133);
-
-    assert.equal(result.finalState, 'gameover');
-    assert.equal(result.afterDeath.state.voidDeaths, 1);
-    assert.equal(result.afterDeath.state.gateOffers, 3);
-    assert.equal(result.afterDeath.state.gateEntries, 2);
-    assert.ok(Math.abs(result.afterDeath.gateEntryRate - (2 / 3)) < 1e-9);
-    assert.equal(result.history.length, 1);
-    assert.equal(result.history[0].voidSurvivals, 1);
-    assert.equal(result.history[0].voidDeaths, 1);
-    assert.equal(result.inputBufferFrames, 3);
-    assert.equal(result.hudPresent, true);
-    assert.equal(result.localOnlyStatus, 'GATE SLICE — LOCAL ONLY');
-    assert.equal(exceptions.length, 0, `Browser exceptions: ${JSON.stringify(exceptions)}`);
-
-    console.log('gate-slice-browser: all integration checks passed');
-    console.log(JSON.stringify({ ...result, requestedUrls }, null, 2));
+    console.log('m17-obstacle-variety-browser: all integration checks passed');
+    console.log(JSON.stringify({
+      pillarsObserved: result.pillarsObserved,
+      distinctPatterns: result.distinctPatterns,
+      distinctPhases: result.distinctPhases,
+      distinctAmplitudes: result.distinctAmplitudes,
+      distinctGapScales: result.distinctGapScales,
+      movingPillars: result.movingPillars,
+      stillPillars: result.stillPillars,
+      minGap: result.minGap,
+      maxAmplitudeSeen: result.maxAmplitudeSeen,
+      gatesCleared: result.gatesCleared,
+      bandIndex: result.bandIndex,
+      hudBandName: result.hudBandName
+    }, null, 2));
   } finally {
-    client.close();
-    for (const child of children.reverse()) {
-      if (!child.killed) child.kill('SIGTERM');
-    }
+    await client.close();
+    for (const child of children) child.kill('SIGKILL');
+    // Chrome can still be releasing its profile; removeProfile retries rather
+    // than failing an otherwise-passing run on ENOTEMPTY.
     await removeProfile(userDataDir);
   }
 }
 
 main().catch(error => {
-  console.error(error.stack || error);
-  for (const child of children.reverse()) {
-    if (!child.killed) child.kill('SIGTERM');
-  }
-  process.exitCode = 1;
+  for (const child of children) child.kill('SIGKILL');
+  console.error(error);
+  process.exit(1);
 });

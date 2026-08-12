@@ -55,11 +55,27 @@
   const GATE_VERTICAL_PX_PER_FRAME = 2.2;
   const GATE_MIN_REACH_PX = 60;
 
+  // The hardest configuration the reachability solver proves clearable is speed
+  // 8.5 against a 110 px gap (see DEFAULT_SCENARIOS in player-reachability.js).
+  // No band, and no Void applied on top of a band, may exceed it.
+  const MAX_VALIDATED_SPEED = 8.5;
+  const MIN_VALIDATED_GAP = 110;
+
+  // The 2026-08-12 pilot cleared 507 gates and 196 of them - 38.7 percent of all
+  // play - happened past GEBURAH, where the curve simply stopped. Runs of 81, 78,
+  // 64, 64 and 53 gates all finished on flat difficulty. These four bands
+  // continue the ascent to the edge of the proven envelope: KETHER sits exactly
+  // at speed 8.5, and its 122 px gap stays at or above CONFIG.MIN_PILLAR_GAP even
+  // at the bottom of the +/-10 px breathing that getCurrentGap applies.
   const BANDS = Object.freeze([
     Object.freeze({ name: 'MALKUTH', gateThreshold: 0, speed: 2.9, gap: 220, riskActive: false }),
     Object.freeze({ name: 'YESOD', gateThreshold: 6, speed: 3.8, gap: 190, riskActive: true }),
     Object.freeze({ name: 'TIPHARETH', gateThreshold: 16, speed: 5.0, gap: 165, riskActive: true }),
-    Object.freeze({ name: 'GEBURAH', gateThreshold: 32, speed: 6.2, gap: 145, riskActive: true })
+    Object.freeze({ name: 'GEBURAH', gateThreshold: 32, speed: 6.2, gap: 145, riskActive: true }),
+    Object.freeze({ name: 'CHESED', gateThreshold: 48, speed: 6.9, gap: 138, riskActive: true }),
+    Object.freeze({ name: 'BINAH', gateThreshold: 68, speed: 7.5, gap: 132, riskActive: true }),
+    Object.freeze({ name: 'CHOKMAH', gateThreshold: 92, speed: 8.0, gap: 127, riskActive: true }),
+    Object.freeze({ name: 'KETHER', gateThreshold: 120, speed: MAX_VALIDATED_SPEED, gap: 122, riskActive: true })
   ]);
 
   let installed = false;
@@ -79,6 +95,22 @@
 
   function roundHalf(value) {
     return Math.round(finiteNumber(Number(value), 0) * 2) / 2;
+  }
+
+  // The Void multiplies band speed and shrinks the gap. Left uncapped that runs
+  // straight out of the envelope the reachability solver has proven: even at
+  // GEBURAH it already reached 9.3, and the old gap floor of 100 sat below the
+  // game's own CONFIG.MIN_PILLAR_GAP. The Void stays a sharp escalation at low
+  // bands and saturates at the hardest provably clearable configuration instead
+  // of running off into difficulty nobody has shown is survivable.
+  function voidSpeedFor(bandSpeed) {
+    const base = Math.max(0, finiteNumber(Number(bandSpeed), 0));
+    return Math.min(MAX_VALIDATED_SPEED, base * VOID_SPEED_MULTIPLIER);
+  }
+
+  function voidGapFor(baseGap) {
+    const base = finiteNumber(Number(baseGap), MIN_VALIDATED_GAP);
+    return Math.max(MIN_VALIDATED_GAP, base - VOID_GAP_REDUCTION);
   }
 
   function getBandIndex(gatesCleared) {
@@ -681,7 +713,7 @@
       document.getElementById('levelUi').textContent = band.name;
     }
     gameInstance.gameSpeed = gameInstance.__gateSliceVoidActive
-      ? band.speed * VOID_SPEED_MULTIPLIER
+      ? voidSpeedFor(band.speed)
       : band.speed;
     gameInstance.currentBaseGap = band.gap;
     if (announce) {
@@ -924,7 +956,7 @@
       const band = BANDS[this.gateSliceState.bandIndex] || BANDS[0];
       const breathing = Math.sin(this.frames * 0.05) * 10;
       const base = band.gap + breathing;
-      return this.__gateSliceVoidActive ? Math.max(100, base - VOID_GAP_REDUCTION) : base;
+      return this.__gateSliceVoidActive ? voidGapFor(base) : base;
     };
 
     Game.prototype.startGame = function startGateSlice(...args) {
@@ -970,7 +1002,7 @@
       this.voidMode = true;
       this.voidTimer = VOID_DURATION_STEPS;
       this.preVoidSpeed = (BANDS[this.gateSliceState.bandIndex] || BANDS[0]).speed;
-      this.gameSpeed = this.preVoidSpeed * VOID_SPEED_MULTIPLIER;
+      this.gameSpeed = voidSpeedFor(this.preVoidSpeed);
       this.gateSliceState.currentWager = roundHalf(wager);
       this.screenFlash = { active: true, duration: 16, color: '#00ffff', intensity: 0.32 };
       document.getElementById('game-container')?.classList.add('void-active');

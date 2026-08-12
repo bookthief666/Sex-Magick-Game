@@ -55,9 +55,15 @@ function testCatalogContracts() {
 }
 
 function testSeedDeterminism() {
-  const seed = hashStringToSeed('run_example|HEX|grammar-1');
-  assert.equal(seed, hashStringToSeed('run_example|HEX|grammar-1'));
-  assert.notEqual(seed, hashStringToSeed('run_other|HEX|grammar-1'));
+  // Track GRAMMAR_VERSION rather than a hardcoded "grammar-1", so this stays tied
+  // to the string the runtime actually derives seeds from.
+  const seedInput = `run_example|HEX|grammar-${GRAMMAR_VERSION}`;
+  const seed = hashStringToSeed(seedInput);
+  assert.equal(seed, hashStringToSeed(seedInput));
+  assert.notEqual(seed, hashStringToSeed(`run_other|HEX|grammar-${GRAMMAR_VERSION}`));
+  // A version bump must change every run's seed, which is the point of carrying
+  // the version in the derivation at all.
+  assert.notEqual(seed, hashStringToSeed(`run_example|HEX|grammar-${GRAMMAR_VERSION + 1}`));
 
   const first = simplify(generate(seed, 'HEX'));
   const second = simplify(generate(seed, 'HEX'));

@@ -297,3 +297,14 @@ State deduplication also discarded all but one representative `initialStateId` w
 **Consequences:** The D-018 acceptance signal is met — the 2026-08-12 Fold 6 pilot recorded a 46.4% Gate entry rate with affirmative comprehension, intentionality, feel, and replay. The four "unsafe crossings" it reported were a symptom of the sampling defect, not a collision failure. The input-buffer question is closed at three frames and D-018's R-1 prerequisite is retired, because the buffer never engaged in 1768 inputs. Risk-zone balance, near-miss threshold, and the wager ratio stay untouched pending re-measurement on corrected instrumentation. The Gate reads as a skill challenge rather than a wager, so the in-game telegraph is now inconsistent with observed behaviour and is owed a later change.
 
 **Full record:** `docs/decisions/d026-gate-fairness-and-measurement-truth.md`
+
+## D-027 — Extend the difficulty curve to KETHER and give walls motion and width, inside the verified envelope
+
+**Date:** 2026-08-12
+**Status:** Accepted
+
+**Decision:** Add CHESED, BINAH, CHOKMAH and KETHER past GEBURAH, ending at speed 8.5 / gap 122. Replace the single global sine that moved every wall in lockstep with per-pillar motion, where amplitude and gap scale are declared by the named pattern and phase is hashed from (seed, spawnIndex) so the seeded stream is untouched. Cap Void speed at 8.5 and floor its gap at 110.
+
+**Consequences:** The 2026-08-12 pilot spent 196 of its 507 gate clears past the old ceiling, on a flat curve; that is now the escalation the owner asked for as "more variety". Safety rests on one fact — a gap of width G swinging by ±A always contains a static corridor of G − 2A — so clamping every pattern's request against a verified floor of 110 makes motion clearable at any phase. 110 is measured: the audit degrades to marginal at 105 and invalid at 96. Motion and narrowing therefore self-limit, dramatic in wide early bands and near-still at KETHER. The Void cap also corrects a pre-existing overreach, since GEBURAH already exceeded the audited ceiling at 9.3. Evidence: 1008 new reachability cases all verified at margin 8, the original 252-case audit unchanged, and a 20 000-frame browser run confirming 102 distinct phases and a narrowest gap of exactly 110. Double-gap walls are deferred — they break the solver's single-corridor model and need solver support before shipping.
+
+**Full record:** `docs/decisions/d027-difficulty-curve-and-obstacle-variety.md`

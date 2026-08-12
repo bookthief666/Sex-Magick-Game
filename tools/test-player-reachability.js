@@ -101,6 +101,48 @@ function testReachabilityMatrix() {
   assert.ok(Object.values(audit.patternVerdicts).every(value => value === 'verified'));
   assert.ok(audit.cases.every(entry => entry.witnessValid));
   assert.ok(audit.cases.every(entry => entry.verifiedMargin === 8));
+
+  // M17 extended the difficulty curve past GEBURAH, where it used to stop. Every
+  // new band is audited at its own speed and at the bottom of the +/-10px
+  // breathing getCurrentGap applies, because those are the configurations the
+  // game can now actually reach - the 2026-08-12 pilot spent 196 of its 507 gate
+  // clears past the old ceiling.
+  //
+  // The variety runtime guarantees that scaling and wall motion never leave a
+  // corridor narrower than VERIFIED_STATIC_GAP, and that floor is the phone-hard
+  // scenario already audited above, so these scenarios cover the static geometry
+  // and the clamp covers the moving geometry on top of it.
+  const gate = require('./gate-slice-runtime.js');
+  const variety = require('./obstacle-variety-runtime.js');
+  const extendedBands = gate.BANDS.filter(band => band.gateThreshold > 32);
+  assert.equal(extendedBands.length, 4, 'M17 added four bands past GEBURAH');
+
+  const bandScenarios = extendedBands.flatMap(band => {
+    const gap = band.gap - 10;
+    assert.ok(
+      gap >= variety.VERIFIED_STATIC_GAP,
+      `${band.name} breathes below the verified corridor floor at ${gap}px`
+    );
+    assert.ok(
+      band.speed <= 8.5,
+      `${band.name} exceeds the audited speed envelope at ${band.speed}`
+    );
+    return [
+      { id: `${band.name}-phone`, width: 390, height: 844, mobile: true, speed: band.speed, gap, breathPhases: [0] },
+      { id: `${band.name}-fold`, width: 884, height: 1104, mobile: false, speed: band.speed, gap, breathPhases: [0, 31] }
+    ];
+  });
+
+  const bandAudit = reachability.auditPatternLibrary(grammar, {
+    patternResolver: policy.applyPatternOverride,
+    scenarios: bandScenarios,
+    beamWidth: 1000
+  });
+  assert.equal(bandAudit.totalCases, 1008);
+  assert.deepEqual(bandAudit.summary, { verified: 1008, marginal: 0, invalid: 0 });
+  assert.ok(bandAudit.cases.every(entry => entry.witnessValid));
+  assert.ok(bandAudit.cases.every(entry => entry.verifiedMargin === 8));
+  assert.ok(bandAudit.cases.every(entry => entry.minimumClearance >= 8 - 1e-9));
   assert.ok(audit.cases.every(entry => entry.minimumClearance >= 8 - 1e-9));
 
   const representativePatterns = [
