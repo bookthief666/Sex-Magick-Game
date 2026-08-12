@@ -28,6 +28,33 @@
   const EFFECTIVE_PLAYER_HALF = 12;
   const REQUIRED_QUERY_VALUE = '1';
 
+  // The Gate is entered when the player's centre reaches GATE_ENTRY_RADIUS of the
+  // offer's centre, and that circle is the one drawn brightly, so the ring the
+  // player aims at is the ring they hit. The 2026-08-12 Fold 6 pilot ran with an
+  // entry radius of 31 against an outer ring drawn at 52 and produced a clean
+  // bimodal miss distribution: five banks between 31.08 and 41.95 px, then
+  // nothing until 82.17 px. Those five were failed entries, not declines - one
+  // missed by 0.08 px. A 44 px aperture captures that whole near population and
+  // still sits 16 px inside the outer glow, so aim is still required.
+  const GATE_ENTRY_RADIUS = 44;
+  const GATE_OUTER_RADIUS = 60;
+
+  // Vertical placement bounds for a Gate offer, as a fraction of canvas height,
+  // plus a hard pixel margin so the offer never hugs the ceiling clamp or floor.
+  const GATE_MIN_RATIO = 0.2;
+  const GATE_MAX_RATIO = 0.8;
+  const GATE_EDGE_MARGIN_PX = 96;
+  // Consecutive Gates must differ by at least this fraction of canvas height,
+  // so a seeded stream cannot accidentally reproduce the fixed two-position
+  // alternation it replaces.
+  const GATE_MIN_SEPARATION_RATIO = 0.12;
+  // Measured, not guessed: in the 2026-08-12 pilot the owner closed 289.65 px of
+  // vertical error inside the 133 frames a Gate stayed visible. Holding placement
+  // within this sustained rate keeps every offer physically reachable from
+  // wherever the player happens to be when it spawns.
+  const GATE_VERTICAL_PX_PER_FRAME = 2.2;
+  const GATE_MIN_REACH_PX = 60;
+
   const BANDS = Object.freeze([
     Object.freeze({ name: 'MALKUTH', gateThreshold: 0, speed: 2.9, gap: 220, riskActive: false }),
     Object.freeze({ name: 'YESOD', gateThreshold: 6, speed: 3.8, gap: 190, riskActive: true }),
@@ -122,6 +149,59 @@
       topRiskBoundary,
       bottomRiskBoundary
     };
+  }
+
+  // Samples a point from `intervals` (a list of [low, high] pairs) in proportion
+  // to their widths, so a window with a hole in it stays uniformly distributed.
+  function sampleIntervals(intervals, unitRandom) {
+    const usable = intervals.filter(([low, high]) => high > low);
+    const total = usable.reduce((sum, [low, high]) => sum + (high - low), 0);
+    if (total <= 0) return null;
+    let cursor = clamp(unitRandom, 0, 1) * total;
+    for (const [low, high] of usable) {
+      const width = high - low;
+      if (cursor <= width) return low + cursor;
+      cursor -= width;
+    }
+    const [low, high] = usable[usable.length - 1];
+    return high === low ? low : high;
+  }
+
+  // Chooses where a Gate offer sits vertically. Replaces the `gateSerial % 2`
+  // alternation that put all 28 offers of the 2026-08-12 pilot on exactly two Y
+  // values. Pure and deterministic given `unitRandom`, so it is unit-testable and
+  // reproducible from a run seed.
+  function chooseGateY(options = {}) {
+    const height = Math.max(1, finiteNumber(Number(options.canvasHeight), 0));
+    const unitRandom = clamp(finiteNumber(Number(options.unitRandom), 0.5), 0, 1);
+    const centre = height / 2;
+
+    const margin = Math.min(GATE_EDGE_MARGIN_PX, height / 2);
+    let low = Math.max(margin, height * GATE_MIN_RATIO);
+    let high = Math.min(height - margin, height * GATE_MAX_RATIO);
+    if (high <= low) return centre;
+
+    // Keep the offer within reach of where the player actually is right now.
+    const travelFrames = Math.max(1, finiteNumber(Number(options.travelFrames), 1));
+    const reach = Math.max(GATE_MIN_REACH_PX, travelFrames * GATE_VERTICAL_PX_PER_FRAME);
+    const playerY = finiteNumber(Number(options.playerY), centre);
+    const reachLow = Math.max(low, playerY - reach);
+    const reachHigh = Math.min(high, playerY + reach);
+    // If the player is outside the corridor entirely, the reach window can come
+    // out empty. Fall back to the nearest legal point rather than to the centre.
+    if (reachHigh <= reachLow) return clamp(playerY, low, high);
+
+    // Carve out a band around the previous Gate so consecutive offers differ.
+    const previousY = Number(options.previousY);
+    if (!Number.isFinite(previousY)) return reachLow + unitRandom * (reachHigh - reachLow);
+    const separation = height * GATE_MIN_SEPARATION_RATIO;
+    const sampled = sampleIntervals([
+      [reachLow, Math.min(reachHigh, previousY - separation)],
+      [Math.max(reachLow, previousY + separation), reachHigh]
+    ], unitRandom);
+    // A window narrower than the separation band leaves nothing to carve; take
+    // the whole window rather than refusing to place a Gate.
+    return sampled === null ? reachLow + unitRandom * (reachHigh - reachLow) : sampled;
   }
 
   function createSliceState(options = {}) {
@@ -468,17 +548,43 @@
     }
   }
 
+  // One seeded stream per run, derived from the run id, so Gate placement is
+  // reproducible from a recorded run rather than dependent on Math.random.
+  function nextGateRandom(gameInstance) {
+    if (typeof gameInstance.__gateSliceRandom !== 'function') {
+      const grammar = root.SexMagickObstacleGrammar;
+      const runId = gameInstance.gateSliceState?.runId || '';
+      if (typeof grammar?.createSeededRandom === 'function' && typeof grammar?.hashStringToSeed === 'function') {
+        gameInstance.__gateSliceRandom = grammar.createSeededRandom(grammar.hashStringToSeed(runId));
+      } else {
+        gameInstance.__gateSliceRandom = Math.random;
+      }
+    }
+    return gameInstance.__gateSliceRandom();
+  }
+
   function createGateOffer(gameInstance) {
     gateSerial += 1;
-    const upper = gateSerial % 2 === 1;
-    const targetRatio = upper ? 0.36 : 0.64;
-    const y = clamp(gameInstance.canvas.height * targetRatio, 96, gameInstance.canvas.height - 96);
+    const spawnX = gameInstance.canvas.width + 68;
+    const playerX = finiteNumber(Number(gameInstance.player?.x), 0);
+    const speed = Math.max(0.1, finiteNumber(Number(gameInstance.gameSpeed), 1));
+    const y = chooseGateY({
+      canvasHeight: gameInstance.canvas.height,
+      playerY: gameInstance.player?.y,
+      previousY: gameInstance.__gateSlicePreviousOfferY,
+      travelFrames: Math.max(1, (spawnX - playerX) / speed),
+      unitRandom: nextGateRandom(gameInstance)
+    });
+    gameInstance.__gateSlicePreviousOfferY = y;
     const offer = {
       serial: gateSerial,
-      x: gameInstance.canvas.width + 68,
+      x: spawnX,
       y,
-      outerRadius: 52,
-      innerRadius: 31,
+      outerRadius: GATE_OUTER_RADIUS,
+      entryRadius: GATE_ENTRY_RADIUS,
+      // Retained as an alias so older evidence readers keep working. It now
+      // reports the true aperture rather than a decorative inner circle.
+      innerRadius: GATE_ENTRY_RADIUS,
       pulse: 0,
       resolved: false,
       offeredAtFrame: gameInstance.frames
@@ -513,16 +619,20 @@
     ctx.beginPath();
     ctx.arc(0, 0, offer.outerRadius * pulse, 0, Math.PI * 2);
     ctx.stroke();
+    // The bright circle is the aperture itself, not decoration. Anything that
+    // changes the entry radius must change this arc with it.
+    const entryRadius = finiteNumber(Number(offer.entryRadius), GATE_ENTRY_RADIUS);
     ctx.strokeStyle = '#f8fbff';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(0, 0, offer.innerRadius, 0, Math.PI * 2);
+    ctx.arc(0, 0, entryRadius, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.lineWidth = 2;
     ctx.rotate(Math.PI / 6);
     for (let index = 0; index < 6; index += 1) {
       ctx.rotate(Math.PI / 3);
       ctx.beginPath();
-      ctx.moveTo(offer.innerRadius + 5, 0);
+      ctx.moveTo(entryRadius + 5, 0);
       ctx.lineTo(offer.outerRadius - 5, 0);
       ctx.stroke();
     }
@@ -602,7 +712,8 @@
     const player = gameInstance.player;
     if (!player) return;
     const distance = Math.hypot(player.x - offer.x, player.y - offer.y);
-    if (distance <= offer.innerRadius) {
+    const entryRadius = finiteNumber(Number(offer.entryRadius), GATE_ENTRY_RADIUS);
+    if (distance <= entryRadius) {
       offer.resolved = true;
       const entered = enterGateState(gameInstance.gateSliceState);
       gameInstance.gateSliceState = entered.state;
@@ -639,15 +750,47 @@
     try { return callback(); } finally { CONFIG.PILLAR_SPAWN_BASE = previous; }
   }
 
+  // Records, for every live pillar, the player's position at the frame of closest
+  // horizontal approach. Must run every frame after the pillars and the player
+  // have moved.
+  //
+  // Without this, `handleClearedPillars` classified a clear using `player.y` read
+  // once the pillar was already marked passed. At fall speeds up to
+  // CONFIG.MAX_FALL_SPEED that samples the player well below where they actually
+  // threaded the gap, which misattributes the risk zone of every clear and was
+  // the sole cause of the four phantom "unsafe crossings" in the 2026-08-12
+  // pilot. Pillar geometry breathes too, so `top` and `gap` are captured in the
+  // same instant as `playerY` rather than read live later.
+  function samplePillarApproaches(gameInstance) {
+    const player = gameInstance.player;
+    if (!player) return;
+    const playerX = finiteNumber(Number(player.x), 0);
+    for (const pillar of gameInstance.obstacles || []) {
+      const centre = finiteNumber(Number(pillar.x), 0) + finiteNumber(Number(pillar.w), 0) / 2;
+      const dx = Math.abs(playerX - centre);
+      const best = pillar.__gateSliceApproach;
+      if (best && dx >= best.dx) continue;
+      pillar.__gateSliceApproach = {
+        dx,
+        playerY: finiteNumber(Number(player.y), 0),
+        gapTop: finiteNumber(Number(pillar.top), 0),
+        gapSize: finiteNumber(Number(pillar.gap), 0)
+      };
+    }
+  }
+
   function handleClearedPillars(gameInstance, previouslyMarked) {
     const state = gameInstance.gateSliceState;
     if (!state) return;
     for (const pillar of gameInstance.obstacles) {
       if (!pillar.marked || previouslyMarked.has(pillar)) continue;
+      // Classify from the closest-approach snapshot. Live values are only a
+      // fallback for a pillar that was somehow marked before it was ever sampled.
+      const approach = pillar.__gateSliceApproach;
       const classification = classifyGateClear({
-        playerY: gameInstance.player?.y,
-        gapTop: pillar.top,
-        gapSize: pillar.gap,
+        playerY: approach ? approach.playerY : gameInstance.player?.y,
+        gapTop: approach ? approach.gapTop : pillar.top,
+        gapSize: approach ? approach.gapSize : pillar.gap,
         playerHalf: EFFECTIVE_PLAYER_HALF
       });
       const band = BANDS[state.bandIndex] || BANDS[0];
@@ -792,6 +935,10 @@
       this.gateSliceOffer = null;
       this.__gateSliceVoidActive = false;
       this.__gateSliceVoidStartedAt = 0;
+      // Reseed Gate placement from the new run id and forget the previous run's
+      // last offer, so run N+1 does not inherit run N's separation constraint.
+      this.__gateSliceRandom = null;
+      this.__gateSlicePreviousOfferY = null;
       this.collectibles = [];
       applyBand(this, false);
       renderHud(this);
@@ -806,6 +953,10 @@
       this.gateSliceOffer = null;
       this.__gateSliceVoidActive = false;
       this.__gateSliceVoidStartedAt = 0;
+      // Reseed Gate placement from the new run id and forget the previous run's
+      // last offer, so run N+1 does not inherit run N's separation constraint.
+      this.__gateSliceRandom = null;
+      this.__gateSlicePreviousOfferY = null;
       this.collectibles = [];
       applyBand(this, false);
       renderHud(this);
@@ -910,6 +1061,9 @@
         }
 
         this.collectibles = [];
+        // Ordering matters: sample before classifying, so the pillar being marked
+        // this frame already carries its closest-approach snapshot.
+        samplePillarApproaches(this);
         handleClearedPillars(this, previouslyMarked);
         updateOffer(this);
         renderHud(this);
@@ -1010,6 +1164,13 @@
     VOID_MULTIPLIER,
     NEAR_MISS_PX,
     EFFECTIVE_PLAYER_HALF,
+    GATE_ENTRY_RADIUS,
+    GATE_OUTER_RADIUS,
+    GATE_MIN_RATIO,
+    GATE_MAX_RATIO,
+    GATE_EDGE_MARGIN_PX,
+    GATE_MIN_SEPARATION_RATIO,
+    GATE_VERTICAL_PX_PER_FRAME,
     BANDS,
     clamp,
     roundHalf,
@@ -1017,6 +1178,9 @@
     getBand,
     familyWeight,
     streakBonus,
+    sampleIntervals,
+    chooseGateY,
+    samplePillarApproaches,
     classifyGateClear,
     createSliceState,
     applyGateClearState,

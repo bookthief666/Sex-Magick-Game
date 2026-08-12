@@ -286,3 +286,14 @@ State deduplication also discarded all but one representative `initialStateId` w
 **Consequences:** Production findings and high/critical QA findings fail CI; current moderate BrowserStack-chain findings remain explicit and provisional; dependency and Action updates require the full visual matrix and bounded BrowserStack revalidation when transport changes.
 
 **Full record:** `docs/decisions/d025-reproducible-qa-supply-chain.md`
+
+## D-026 — Correct Gate fairness and measurement truth before building on the slice
+
+**Date:** 2026-08-12
+**Status:** Accepted
+
+**Decision:** Act on the first human playtest of the Gate slice. Make the entry aperture the circle the player aims at (44 px, drawn, inside a 60 px glow — it was a 31 px hitbox behind a 52 px ring). Replace fixed two-position Gate placement with seeded, corridor-constrained, reachability-bounded placement. Classify a gate clear from the frame of closest approach rather than after the pillar is marked passed. Change no balance constant.
+
+**Consequences:** The D-018 acceptance signal is met — the 2026-08-12 Fold 6 pilot recorded a 46.4% Gate entry rate with affirmative comprehension, intentionality, feel, and replay. The four "unsafe crossings" it reported were a symptom of the sampling defect, not a collision failure. The input-buffer question is closed at three frames and D-018's R-1 prerequisite is retired, because the buffer never engaged in 1768 inputs. Risk-zone balance, near-miss threshold, and the wager ratio stay untouched pending re-measurement on corrected instrumentation. The Gate reads as a skill challenge rather than a wager, so the in-game telegraph is now inconsistent with observed behaviour and is owed a later change.
+
+**Full record:** `docs/decisions/d026-gate-fairness-and-measurement-truth.md`
