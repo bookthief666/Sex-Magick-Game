@@ -298,12 +298,24 @@ async function main() {
     // --- the Void is visibly worse than ordinary play ----------------------
     const voidLook = await evaluate(client, `
       (() => {
+        // Transient overlays are cleared before every sample. This measures the
+        // *field's* Void treatment, and applyScreenFlash paints the whole canvas
+        // on top of it - so a pickup that happened moments earlier would drown the
+        // measurement. That is not hypothetical: once orbs and pentagrams became
+        // collectible again, triggerOrbGlitch's gold #ffd700 flash turned this
+        // assertion into a coin flip (0.94 lit with a flash up, 0.43 without),
+        // while the field buffer's own corner stayed 0/0/0 black in both cases.
+        const settle = () => { game.screenFlash = null; game.glitchEffect = false; GlitchFX.active = false; };
+
+        settle();
         game.__gateSliceVoidActive = false; game.voidMode = false;
         game.drawScene(performance.now());
         const normal = ${LIT};
+        settle();
         game.__gateSliceVoidActive = true; game.voidMode = true; game.voidTimer = 60;
         game.drawScene(performance.now());
         const inVoid = ${LIT};
+        settle();
         game.__gateSliceVoidActive = false; game.voidMode = false;
         game.drawScene(performance.now());
         const restored = ${LIT};
@@ -380,7 +392,13 @@ async function main() {
           return sum / (d.length / 4);
         };
 
-        const levels = game.gameLevels;
+        // The picture on screen comes from the Gate slice's background gallery,
+        // which rotates the whole image pool - not from gameLevels, which holds
+        // only the eight band levels. Setting images on gameLevels alone drew
+        // nothing, so this targets whichever entry is actually being rendered.
+        const levels = game.gameLevels.slice();
+        const galleryEntry = globalThis.__SEX_MAGICK_GATE_SLICE__?.getBackgroundEntry?.();
+        if (galleryEntry && !levels.includes(galleryEntry)) levels.push(galleryEntry);
         const saved = levels.map(l => ({ img: l.img, loaded: l.loaded }));
 
         levels.forEach(l => { l.img = null; l.loaded = false; });

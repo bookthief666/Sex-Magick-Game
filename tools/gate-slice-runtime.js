@@ -705,6 +705,14 @@
     const band = BANDS[state.bandIndex] || BANDS[0];
     const matching = gameInstance.gameLevels.find(level => String(level.name).toUpperCase() === band.name);
     if (matching) {
+      // Everything visual reads currentLevelIdx, not the band: drawLevelArtwork,
+      // drawScene's tunnelColor, and the accent wash all look up
+      // gameLevels[currentLevelIdx]. Until this assignment existed the pointer sat
+      // at 0 for an entire session, so ascending the Tree changed the HUD text and
+      // nothing else - roughly 24 band changes in a ten-minute session, none of
+      // them visible.
+      const matchedIndex = gameInstance.gameLevels.indexOf(matching);
+      if (matchedIndex >= 0) gameInstance.currentLevelIdx = matchedIndex;
       document.getElementById('levelUi').textContent = matching.name;
       document.getElementById('levelUi').style.color = matching.accent;
       document.getElementById('levelUi').style.textShadow = `0 0 15px ${matching.accent}`;
@@ -722,6 +730,97 @@
     }
     renderHud(gameInstance);
     return matching || null;
+  }
+
+  /**
+   * The background gallery.
+   *
+   * Bands own progression - difficulty, speed, gap, the Sephirah name - and there
+   * are only eight of them, drawn from the eleven Sephirah-named images. The
+   * original game cycled the whole ~71-image pool as you played, and
+   * `prepareOrderedLevels` narrowing `gameLevels` to eight is what removed that.
+   *
+   * So the picture gets its own rotation, independent of the band, over the full
+   * pool. The index is derived from `gatesCleared` rather than tracked, so it
+   * cannot drift out of sync and resets with the run for free.
+   */
+  const GALLERY_ADVANCE_GATES = 4;
+  let gallery = [];
+
+  function buildGallery() {
+    // Referenced, never copied: `preloadAllImages` mutates `img`/`loaded` on the
+    // pool entries themselves, so a copy taken at startGame could hold a stale
+    // `loaded: false` for anything that finished loading later.
+    const pool = typeof MASTER_POOL !== 'undefined' && Array.isArray(MASTER_POOL) ? MASTER_POOL : [];
+    const shuffled = [...pool];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swap = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[swap]] = [shuffled[swap], shuffled[index]];
+    }
+    gallery = shuffled;
+    return gallery;
+  }
+
+  function galleryEntryFor(gatesCleared) {
+    if (!gallery.length) return null;
+    const step = Math.floor(Math.max(0, finiteNumber(Number(gatesCleared), 0)) / GALLERY_ADVANCE_GATES);
+    return gallery[step % gallery.length] || null;
+  }
+
+  function currentGalleryEntry(gameInstance) {
+    const state = gameInstance?.gateSliceState;
+    if (!state) return null;
+    return galleryEntryFor(state.gatesCleared);
+  }
+
+  /**
+   * The pentagram bonus corridor.
+   *
+   * The original ran one of these between levels: obstacles stopped and spinning
+   * pentagrams flew past at +10 each. M16 reused the name "Void" for the Gate
+   * wager and the bonus section was lost with it - `pentagrams.push` sits inside
+   * `if (this.voidMode ...)`, and the Gate slice's Void branch clears that flag so
+   * pillars spawn instead, making the line unreachable in HEX mode.
+   *
+   * This is a separate state from `__gateSliceVoidActive` on purpose: the wager
+   * stays exactly as it is, and the reward corridor comes back alongside it.
+   */
+  // The original ran a bonus every 5 levels, and levels advanced every 5 score -
+  // so roughly every 25 pillars. Gates cleared are this game's pillars (367 in the
+  // owner's ten-minute session, about one every 1.6s), which makes 25 the faithful
+  // translation: a corridor every ~40s of play. Every 5 would have handed the
+  // player a bonus every eight seconds.
+  const BONUS_EVERY_GATES = 25;
+  const BONUS_DURATION_FRAMES = 5 * 60;
+
+  function tickBonusCorridor(gameInstance) {
+    const state = gameInstance.gateSliceState;
+    if (!state) return false;
+
+    if (gameInstance.__bonusCorridorFrames > 0) {
+      gameInstance.__bonusCorridorFrames -= 1;
+      if (gameInstance.__bonusCorridorFrames === 0) setTelegraph('THE PATH RESUMES', 700);
+      return gameInstance.__bonusCorridorFrames > 0;
+    }
+
+    // Never inside the wager or while an offer is on screen - those are the
+    // player's decision moments and a bonus corridor would talk over them.
+    if (gameInstance.__gateSliceVoidActive || gameInstance.gateSliceOffer) return false;
+
+    const gates = Math.max(0, Math.floor(finiteNumber(Number(state.gatesCleared), 0)));
+    if (gates <= 0 || gates % BONUS_EVERY_GATES !== 0) return false;
+    if (gameInstance.__bonusCorridorLastGate === gates) return false;
+
+    gameInstance.__bonusCorridorLastGate = gates;
+    gameInstance.__bonusCorridorFrames = BONUS_DURATION_FRAMES;
+    setTelegraph('GATHER THE SIGILS', 900);
+    return true;
+  }
+
+  function resetBonusCorridor(gameInstance) {
+    gameInstance.__bonusCorridorFrames = 0;
+    gameInstance.__bonusCorridorLastGate = -1;
+    gameInstance.pentagrams = [];
   }
 
   function prepareOrderedLevels(gameInstance, originalPrepareLevels) {
@@ -993,6 +1092,9 @@
       this.__gateSliceRandom = null;
       this.__gateSlicePreviousOfferY = null;
       this.collectibles = [];
+      // A fresh shuffle per run, so two runs do not walk the same picture order.
+      buildGallery();
+      resetBonusCorridor(this);
       applyBand(this, false);
       renderHud(this);
       return result;
@@ -1011,6 +1113,9 @@
       this.__gateSliceRandom = null;
       this.__gateSlicePreviousOfferY = null;
       this.collectibles = [];
+      // A fresh shuffle per run, so two runs do not walk the same picture order.
+      buildGallery();
+      resetBonusCorridor(this);
       applyBand(this, false);
       renderHud(this);
       return result;
@@ -1092,8 +1197,17 @@
       const offerActive = Boolean(this.gateSliceOffer);
       const shouldSpawnOffer = this.gateSliceState.gateReady && !offerActive && !this.__gateSliceVoidActive && isSpawnFrame(this);
       const forceVoidSpawn = this.__gateSliceVoidActive;
+      const bonusActive = tickBonusCorridor(this);
+      // Held by reference: the original marks `collected` before splicing, so any
+      // entry still flagged in this snapshot after the call was taken this frame.
+      const pentagramsBefore = this.pentagrams?.length ? [...this.pentagrams] : null;
       const previousOrbChance = CONFIG.ORB_SPAWN_CHANCE;
-      CONFIG.ORB_SPAWN_CHANCE = 0;
+      // Orbs are suppressed only where they would interfere: while a Gate offer is
+      // on screen and inside the Void wager. Outside those, they are the original
+      // game's constant source of glitch, hit-stop and gold particles, and killing
+      // them everywhere is what made the effects feel absent.
+      const suppressOrbs = offerActive || shouldSpawnOffer || forceVoidSpawn || bonusActive;
+      if (suppressOrbs) CONFIG.ORB_SPAWN_CHANCE = 0;
 
       try {
         if (shouldSpawnOffer) createGateOffer(this);
@@ -1109,11 +1223,32 @@
           } finally {
             this.voidMode = visibleVoid;
           }
+        } else if (bonusActive) {
+          // The mirror image of the Void branch above. Pentagrams only spawn
+          // inside the original's `if (this.voidMode ...)` arm, so the bonus
+          // corridor borrows that flag for the spawn and suppresses pillars,
+          // which is exactly the shape the original's between-levels bonus had.
+          const visibleVoid = this.voidMode;
+          this.voidMode = true;
+          try {
+            result = withSpawnSuppressed(() => originalUpdateGameObjects.apply(this, args));
+          } finally {
+            this.voidMode = visibleVoid;
+          }
         } else {
           result = originalUpdateGameObjects.apply(this, args);
         }
 
-        this.collectibles = [];
+        if (suppressOrbs) this.collectibles = [];
+
+        // Orb pickup was the original's constant source of glitch and hit-stop.
+        // Pentagrams award score, particles and sound but never had that punch,
+        // because in the original they only appeared in a mode that had its own.
+        // Giving it to them restores the cadence inside bonus corridors.
+        if (pentagramsBefore && pentagramsBefore.some(pentagram => pentagram.collected)) {
+          this.hitStop = 3;
+          this.triggerOrbGlitch();
+        }
         // Ordering matters: sample before classifying, so the pillar being marked
         // this frame already carries its closest-approach snapshot.
         samplePillarApproaches(this);
@@ -1174,6 +1309,22 @@
           gateEntryRate: gateEntryRate(game.gateSliceState),
           band: game.gateSliceState ? { ...BANDS[game.gateSliceState.bandIndex] } : null,
           bufferFrames: root.__SEX_MAGICK_COLLISION__?.getInputBufferFrames?.() ?? null
+        };
+      },
+      /**
+       * The picture currently on screen, which is the background gallery's, not
+       * the band's. Read by occult-field-runtime so the artwork, the tunnel
+       * colour and the accent wash all follow the same rotation.
+       */
+      getBackgroundEntry() {
+        if (typeof game === 'undefined' || !game) return null;
+        return currentGalleryEntry(game);
+      },
+      getGalleryInfo() {
+        return {
+          size: gallery.length,
+          advanceEveryGates: GALLERY_ADVANCE_GATES,
+          names: gallery.slice(0, 12).map(entry => entry?.name ?? null)
         };
       },
       getHistory() { return cloneState(history); },

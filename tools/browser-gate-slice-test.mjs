@@ -457,8 +457,97 @@ async function main() {
     `);
     assert.deepEqual(quiet, { shake: 0, hitStop: 0, particleCount: 0, glitchActive: false }, 'a gate clear that does not cross a band boundary must not repeat the punch');
 
+    // M24: the picture on screen must actually advance.
+    //
+    // Every previous "backgrounds change" claim was verified against hand-set
+    // accents, which is why it took three milestones to notice that
+    // currentLevelIdx was never assigned at all. This drives the real pointer and
+    // the real gallery instead.
+    const backgrounds = await evaluate(client, `
+      (() => {
+        const seen = [];
+        for (const gates of [0, 4, 8, 12, 16, 20]) {
+          game.gateSliceState.gatesCleared = gates;
+          game.gateSliceState.bandIndex = -1; // force applyBand through checkLevel
+          game.checkLevel();
+          const entry = __SEX_MAGICK_GATE_SLICE__.getBackgroundEntry();
+          seen.push({
+            gates,
+            levelIdx: game.currentLevelIdx,
+            galleryName: entry ? entry.name : null,
+            galleryAccent: entry ? entry.accent : null
+          });
+        }
+        return { seen, gallery: __SEX_MAGICK_GATE_SLICE__.getGalleryInfo() };
+      })();
+    `);
+    assert.ok(
+      backgrounds.gallery.size > 20,
+      `the gallery must span the whole image pool, saw ${backgrounds.gallery.size}`
+    );
+    assert.ok(
+      new Set(backgrounds.seen.map(s => s.levelIdx)).size > 1,
+      `currentLevelIdx must advance with the band, saw ${JSON.stringify(backgrounds.seen.map(s => s.levelIdx))}`
+    );
+    assert.ok(
+      new Set(backgrounds.seen.map(s => s.galleryName)).size >= 4,
+      `the background picture must rotate as gates are cleared, saw ${JSON.stringify(backgrounds.seen.map(s => s.galleryName))}`
+    );
+
+    // M24: bonus corridors are back, and the Void wager is untouched by them.
+    const corridors = await evaluate(client, `
+      (() => {
+        const runWindow = (frames) => {
+          let pillarsSpawned = 0;
+          const before = game.obstacles.length;
+          for (let f = 0; f < frames; f += 1) { game.frames += 1; game.updateGameObjects(); }
+          pillarsSpawned = Math.max(0, game.obstacles.length - before);
+          return pillarsSpawned;
+        };
+
+        // Land exactly on a bonus multiple with no offer and no wager running.
+        game.__gateSliceVoidActive = false;
+        game.gateSliceOffer = null;
+        game.obstacles = [];
+        game.pentagrams = [];
+        game.__bonusCorridorFrames = 0;
+        game.__bonusCorridorLastGate = -1;
+        game.gateSliceState.gatesCleared = 25;
+        const bonusPillars = runWindow(90);
+        const bonus = { pentagrams: game.pentagrams.length, pillars: bonusPillars };
+
+        // Now the wager: pillars keep coming and pentagrams must not appear.
+        game.__bonusCorridorFrames = 0;
+        game.__bonusCorridorLastGate = -1;
+        game.pentagrams = [];
+        game.obstacles = [];
+        game.__gateSliceVoidActive = true;
+        const voidPillars = runWindow(90);
+        const wager = { pentagrams: game.pentagrams.length, pillars: voidPillars };
+        game.__gateSliceVoidActive = false;
+        return { bonus, wager };
+      })();
+    `);
+    assert.ok(
+      corridors.bonus.pentagrams > 0,
+      `a bonus corridor must spawn pentagrams, saw ${corridors.bonus.pentagrams}`
+    );
+    assert.equal(
+      corridors.bonus.pillars, 0,
+      'a bonus corridor must suppress pillars - it is a reward, not another wall run'
+    );
+    assert.equal(
+      corridors.wager.pentagrams, 0,
+      'the Void wager must stay a wager: no pentagrams inside the challenge tunnel'
+    );
+    assert.ok(
+      corridors.wager.pillars > 0,
+      'the Void wager must still spawn pillars - the challenge tunnel must survive this change'
+    );
+
+
     console.log('gate-slice-browser: all integration checks passed');
-    console.log(JSON.stringify({ ...result, requestedUrls, punch, quiet }, null, 2));
+    console.log(JSON.stringify({ ...result, requestedUrls, punch, quiet, backgrounds: { gallerySize: backgrounds.gallery.size, seen: backgrounds.seen }, corridors }, null, 2));
   } finally {
     client.close();
     for (const child of children.reverse()) {

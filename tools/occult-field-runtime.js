@@ -316,6 +316,27 @@
   }
 
   /**
+   * The level whose *picture* is currently on screen.
+   *
+   * Bands cover only eight of the Sephirah-named images, so the Gate slice
+   * rotates the full pool independently and the photograph changes as you play,
+   * the way the original did. Deliberately scoped to the artwork alone: colour
+   * identity - the accent wash and the tunnel stroke - stays with the band.
+   * Driving those from the gallery too measurably changed how the Void reads
+   * (its lit-pixel ratio went from 0.45 to 0.94), and the wager's look is not
+   * something a background rotation should be able to move.
+   *
+   * Falls back to the band level so an offline build still renders something.
+   */
+  function activeLevel(gameInstance) {
+    try {
+      const entry = root.__SEX_MAGICK_GATE_SLICE__?.getBackgroundEntry?.();
+      if (entry) return entry;
+    } catch (_error) {}
+    return gameInstance?.gameLevels?.[gameInstance.currentLevelIdx] || null;
+  }
+
+  /**
    * The per-level accent, washed across the ground.
    *
    * The eight band palettes carry the Tree's identity, but bands change rarely -
@@ -600,7 +621,6 @@
      * with no reimplementation left to drift.
      */
     Game.prototype.drawHyperspaceTunnel = function drawOccultField(color) {
-      const level = this.gameLevels?.[this.currentLevelIdx];
 
       /**
        * The original function draws two things: the eight rotating pentagrams and
@@ -614,14 +634,19 @@
        */
       const drawPentagrams = target => {
         const realCtx = this.ctx;
-        const loaded = level?.loaded;
-        if (level) level.loaded = false;
+        // Suppress the object the *original* reads - gameLevels[currentLevelIdx] -
+        // which is the band level, not the gallery entry drawn afterwards. Flipping
+        // the gallery entry instead would leave the band's picture drawing softly
+        // inside the buffer underneath the real one.
+        const bandLevel = this.gameLevels?.[this.currentLevelIdx];
+        const loaded = bandLevel?.loaded;
+        if (bandLevel) bandLevel.loaded = false;
         this.ctx = target;
         try {
           originalTunnel.call(this, color);
         } finally {
           this.ctx = realCtx;
-          if (level) level.loaded = loaded;
+          if (bandLevel) bandLevel.loaded = loaded;
         }
       };
 
@@ -695,7 +720,7 @@
    */
   function drawLevelArtwork(gameInstance) {
     if (gameInstance.voidMode || gameInstance.__gateSliceVoidActive) return false;
-    const level = gameInstance.gameLevels?.[gameInstance.currentLevelIdx];
+    const level = activeLevel(gameInstance);
     const image = level?.img;
     if (!level?.loaded || !image || !image.complete) return false;
     if (image.__sexMagickFallback) return false;
