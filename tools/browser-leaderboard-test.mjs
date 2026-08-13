@@ -158,6 +158,66 @@ async function openGame(query, seed = true) {
   await context.close();
 }
 
+// --- a real run reaches the board -------------------------------------------------
+//
+// Not a seeded fixture: start a run through the game's own entry point, clear gates
+// through checkLevel(), end it, and walk back to the menu the way the player does.
+
+{
+  const { context, page } = await openGame('assetMode=offline&gateSlice=1', false);
+  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITE_BOARD__), null, { timeout: 20000 });
+
+  const before = await page.evaluate(() => window.__SEX_MAGICK_RITE_BOARD__.getBoard().totalRuns);
+
+  const after = await page.evaluate(async () => {
+    game.gameMode = 'HEX';
+    game.startGame();
+    for (let gate = 0; gate < 9; gate += 1) {
+      game.gateSliceState.gatesCleared += 1;
+      game.checkLevel();
+    }
+
+    // A scripted run takes no wall-clock time at all, and the pace rule correctly
+    // refuses 9 gates in zero seconds - that rejection is the validator working, not
+    // a bug. Stand the clock forward by a plausible run length so the run under test
+    // is the one a player would produce. Nothing in the game state is touched.
+    const RealDate = Date;
+    const finishedAt = RealDate.now() + 20_000;
+    // eslint-disable-next-line no-global-assign
+    Date = class extends RealDate {
+      constructor(...args) { super(...(args.length ? args : [finishedAt])); }
+      static now() { return finishedAt; }
+    };
+    try {
+      game.gameOver();
+      game.returnToMenu();
+    } finally {
+      // eslint-disable-next-line no-global-assign
+      Date = RealDate;
+    }
+    return {
+      totalRuns: window.__SEX_MAGICK_RITE_BOARD__.getBoard().totalRuns,
+      entries: window.__SEX_MAGICK_RITE_BOARD__.getBoard().entries.map(entry => ({
+        gates: entry.gatesCleared, band: entry.bandName, verified: entry.verified
+      })),
+      rendered: (document.getElementById('leaderboardList')?.textContent || '').replace(/\s+/g, ' ').trim()
+    };
+  });
+
+  report.realRun = { totalRunsBefore: before, ...after };
+  try {
+    assert.equal(before, 0, 'the board starts empty on a fresh profile');
+    assert.equal(after.totalRuns, 1, 'the finished run reached the history');
+    assert.equal(after.entries.length, 1, 'and it is on the board');
+    assert.equal(after.entries[0].gates, 9, 'with the gates it actually cleared');
+    assert.equal(after.entries[0].verified, true, 'a genuine run passes its own consistency checks');
+    assert.match(after.rendered, /9 GATES/, 'and the menu shows it without a reload');
+  } catch (error) {
+    failures.push(`real run: ${error.message}`);
+  }
+  await context.close();
+}
+
 // --- no network traffic leaves the page ------------------------------------------
 
 {
