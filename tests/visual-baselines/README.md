@@ -3,9 +3,14 @@
 `m14-signatures.json` holds a sha256 per (project, state) screenshot of
 `#game-container`, for four reference geometries and seven states — 28 in total.
 
-**Currently being regenerated** — the file is absent while the phase-lock fix
-below lands, and `visual-state.spec.ts` guards its comparison with `if (baseline)`
-so the suite stays green in the meantime.
+## Provenance of the current file
+
+Established from **CI run [31691080584](https://github.com/bookthief666/Sex-Magick-Game/actions/runs/31691080584)**,
+a green `M14 Visual-state QA` run (77 passed, 23 skipped, 0 failed) on commit
+`ca4dc54` — the first run with the phase lock below in place. The hashes are the
+`M14_VISUAL_SIGNATURE` lines emitted by `visual-state.spec.ts` for
+`chromium-small-phone`, `chromium-fold-cover`, `chromium-fold-inner` and
+`chromium-desktop`.
 
 The signatures were removed in M21, when the aesthetic pass legitimately changed
 every rendered state, and stayed unestablished through M22–M24. Restoring them is
