@@ -1,0 +1,38 @@
+{
+  "chromium-desktop": {
+    "death": "ddf904d6b85870f0aff69a2437eaeb9a9d3dccbedae604712a8b7eb8c7a0fd9e",
+    "gameplay": "adbb0249631ff57d6e56d2071432f9eb1e693f1c17855a9b38535eb40d0ecbfd",
+    "gate-bank": "d930c05339c879ab9df9a3aa5bc693d6a2c8d0a24c7766e19217dfb463750d41",
+    "gate-offer": "1610415c67c2d40fe36fed8bf0c3d3a7879c1e016f3c49d2e6131691494bcfa3",
+    "menu": "55b7b130e27447041263cde24b6db2397b2f0a9087da96bc49907dd1279c9665",
+    "retry": "e76c4f13bad17f9f8657a5be0f1edb32fb52062f1e530fcd366949d6d2655bd0",
+    "void": "5c4cbdb57b1ac636fb945d273b41d149c81ccdbe9db17940a94e4d08023cd6de"
+  },
+  "chromium-fold-cover": {
+    "death": "a93d4d8a2cb9c24486dd3df0d201793ca4e0dca561dac744fdb1974c5e4673c4",
+    "gameplay": "8aa0ff0219ce2d0e88963dd18e1ea2773e72f9dffb0f2a1ace25cebd4f837f3f",
+    "gate-bank": "19d7fa1b3ccbd146b56b0386d6f9c5dfe401903ef7bb078fbb6107249250c401",
+    "gate-offer": "ac450766bcf43612352dc63ed420cc72f742ead2999adabcc693181556dfb52a",
+    "menu": "204cf31c2fa49f770ca9cf77b0b6ddb1bb5d17382170d558b0325f5126bc0916",
+    "retry": "f7d79a0671d83269da479999ab72942b15012974734b9793019c59de4f0abe63",
+    "void": "9c875712fa82649b29e006db0862da470bd93a42927378be419a1c2e675c30f9"
+  },
+  "chromium-fold-inner": {
+    "death": "9ee4fe8d162763d9366bf4659dbbfa31a0a7d27657327ac2c63e9e76c84df434",
+    "gameplay": "82fcfd763eae78ff49c3d9919c41e9b11e3d5a593fc23ca08d561be4fa130ee2",
+    "gate-bank": "b812f2c285e07b4305b41b9928751beba55ffc64564c82deef36d537101db605",
+    "gate-offer": "4f84b244f4cb36177a367642632249734a1093163e05ca8e3d6b01b81799caa7",
+    "menu": "a369c578fcdc87082dfed437d67ae4e620265f52061f365f2dc3d2e5d6aecacd",
+    "retry": "d47b421c2f6b39b0040c01cbce02b96431f4e3fc04dbfb62324c284f038f6568",
+    "void": "a5633f3bedb25986b63b3aefa7b52f4df3983b6efe9dbbb1e1467e9a449bda8a"
+  },
+  "chromium-small-phone": {
+    "death": "2edf67c7d0ffd3cae3c32db7e8846cf68c6924cf407d6a0692e618c6165ccfc0",
+    "gameplay": "9d6bb2a4993790ff6a3ffb466db4e18ce7e487e3a41a9e41505baee890dcc327",
+    "gate-bank": "6f3f0f40bf809081d0f31db840423dff596df8d26b12a868c61f013aef06a91b",
+    "gate-offer": "86c63152ee0a321dadf335d1186b84c992755596908a67a21a404cfdb2df403a",
+    "menu": "4233bc2e6d95fc5fe90d685c2f26ee1c0b40fec5f47c012aa8ea65f573683955",
+    "retry": "08ee7865b8c506956e9e4bfddea8a37d1af3ef5c3cbcb947e0c5ffd24b0624df",
+    "void": "403c0e2817f606730e252a51669cfd02a244935345124f382905e9681736283c"
+  }
+}
