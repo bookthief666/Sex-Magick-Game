@@ -1,7 +1,11 @@
-# M14 visual signatures
+# M14 visual signatures — regenerating after the blank-canvas fix
 
 `m14-signatures.json` holds a sha256 per (project, state) screenshot of
 `#game-container`, for four reference geometries and seven states — 28 in total.
+
+**Currently being regenerated.** The signatures established from run 31686044845
+hashed a blank canvas (see below); the harness is fixed and the file is replaced
+from a fresh green run.
 
 ## Provenance of the current file
 

@@ -207,6 +207,10 @@ async function showState(page: Page, state: string) {
   await resetStateRandom(page, state);
   const snapshot = await page.evaluate(stateName => (window as any).__SEX_MAGICK_VISUAL_QA__.showState(stateName), state);
   await waitForVisualSettlement(page);
+  // Settling calls __SEX_MAGICK_RENDER__.refresh(), and resizing a canvas clears
+  // it - so without this repaint every signature was hashing a blank canvas over
+  // the DOM. Repaint after the geometry has settled, before anything is captured.
+  await page.evaluate(() => (window as any).__SEX_MAGICK_VISUAL_QA__.redraw?.());
   if (state === 'menu') {
     await expect(page.locator('#leaderboardList')).toHaveText('VISUAL QA · LOCAL ONLY');
     await page.waitForTimeout(50);

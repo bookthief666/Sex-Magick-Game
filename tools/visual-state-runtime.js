@@ -389,6 +389,20 @@
       showGateBank,
       showVoid,
       snapshot,
+      /**
+       * Repaint the posed scene onto the canvas.
+       *
+       * Every pose ends in `drawNow()`, but the suite then settles geometry with
+       * `__SEX_MAGICK_RENDER__.refresh()`, and resizing a canvas clears it. The
+       * screenshot was therefore taken of a blank canvas: measured, the posed
+       * gameplay canvas is 100% painted before the refresh and 0% after. That is
+       * why the M14 signatures covered DOM, HUD and layout but never the field.
+       * Callers settle first, then call this, then capture.
+       */
+      redraw() {
+        drawNow();
+        return snapshot();
+      },
       clearRafQueue() { rafQueue = []; return 0; }
     });
 
