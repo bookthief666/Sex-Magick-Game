@@ -23,6 +23,8 @@ on:
       - 'tools/obstacle-variety-runtime.js'
       - 'tools/missions-runtime.js'
       - 'tools/powerup-runtime.js'
+      - 'tools/occult-art-runtime.js'
+      - 'tools/occult-field-runtime.js'
       - '.github/workflows/cross-screen-qa.yml'
   workflow_dispatch:
 

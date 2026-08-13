@@ -364,7 +364,10 @@
             </div>
         </div>
         
-        <div id="startScreen" class="ui-layer" style="background-image: url('https://lh3.googleusercontent.com/d/1BXrXXd9TKSqCFNwvS-cJpNORbyvP6fkR=s0');">
+        <!-- The title backdrop is generated locally by occult-field-runtime.js.
+             It used to hotlink a Google Drive image here, which meant the very
+             first frame of the game depended on a network fetch. -->
+        <div id="startScreen" class="ui-layer">
             <div style="z-index: 2;">
                 <h1 class="title-text">Sex Magick</h1>
                 <p style="letter-spacing: 6px; color: #ff003c; margin-bottom: 30px; font-size: 0.9rem; text-shadow: 0 0 5px #ff003c; font-family: 'Orbitron'; text-transform: uppercase;">Do Your Will Foo</p>

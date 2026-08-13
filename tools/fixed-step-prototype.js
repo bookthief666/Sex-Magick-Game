@@ -194,6 +194,46 @@
   document.head.appendChild(script);
 })();
 
+// The art foundation loads before the field that consumes it. Neither touches
+// gameplay: the field replaces drawHyperspaceTunnel and nothing else.
+(function bootstrapOccultArtRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickOccultArt ||
+    document.querySelector('script[data-sex-magick-occult-art]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./occult-art-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickOccultArt = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Occult art runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapOccultFieldRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickOccultField ||
+    document.querySelector('script[data-sex-magick-occult-field]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./occult-field-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickOccultField = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Occult field runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
 // Waits for the Gate slice before installing, so its gameOver wrapper is the
 // outermost one and still sees __gateSliceVoidActive when the shield decides
 // whether to absorb.
