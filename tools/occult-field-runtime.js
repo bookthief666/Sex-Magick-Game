@@ -22,6 +22,12 @@
 
   const VOID_COLOR = '#05060a';
   const GLYPH_RAIN_COUNT = 26;
+  // Strong enough that a level change is unmistakable, low enough that the band's
+  // own colour is still the thing underneath it.
+  const ACCENT_WASH_ALPHA = 0.34;
+  // The original level-artwork treatment, restored verbatim. M21 changed these
+  // and lost the backgrounds; they are asserted in the browser suite.
+  const ARTWORK_ALPHA = 0.6;
 
   let installed = false;
   let installTimer = null;
@@ -270,7 +276,7 @@
    * Drive fetch costs enrichment rather than producing the "SIGIL CHANNEL
    * OFFLINE" error screen the owner hit in the first pilot.
    */
-  function drawField(gameInstance) {
+  function drawField(gameInstance, overlay) {
     const ctx = gameInstance?.ctx;
     if (!ctx || !art()) return false;
     const width = gameInstance.canvas.width;
@@ -283,17 +289,61 @@
       // No offscreen canvas available: draw straight to the target rather than
       // lose the field entirely.
       drawGround(ctx, bandName, width, height, voidActive);
+      applyAccentWash(ctx, gameInstance, width, height, voidActive);
       drawStrata(ctx, gameInstance, bandName, width, height, voidActive);
       if (voidActive) drawVoid(ctx, gameInstance, width, height);
+      if (typeof overlay === 'function') overlay(ctx);
       return true;
     }
 
     // The ground is opaque and painted first, so the buffer needs no clear.
     drawGround(buffer.ctx, bandName, buffer.width, buffer.height, voidActive);
+    applyAccentWash(buffer.ctx, gameInstance, buffer.width, buffer.height, voidActive);
     drawStrata(buffer.ctx, gameInstance, bandName, buffer.width, buffer.height, voidActive);
     if (voidActive) drawVoid(buffer.ctx, gameInstance, buffer.width, buffer.height);
+
+    // Anything else that belongs to the backdrop - the original hyperspace tunnel
+    // and the level artwork - joins the same buffer rather than paying full device
+    // resolution on the main canvas. The overlay draws in logical coordinates.
+    if (typeof overlay === 'function') {
+      buffer.ctx.save();
+      buffer.ctx.scale(buffer.width / Math.max(1, width), buffer.height / Math.max(1, height));
+      try { overlay(buffer.ctx); } finally { buffer.ctx.restore(); }
+    }
+
     ctx.drawImage(buffer.canvas, 0, 0, width, height);
     return true;
+  }
+
+  /**
+   * The per-level accent, washed across the ground.
+   *
+   * The eight band palettes carry the Tree's identity, but bands change rarely -
+   * so on their own they lost what the original game had: 27 shuffled levels each
+   * repainting the background. The accent supplies that turnover again.
+   *
+   * Deliberately a plain source-over fill. A 'color' composite maps hue while
+   * preserving luminance and looks better in principle, but it is a non-separable
+   * blend mode: measured at the Fold's open geometry it cost ~167ms a frame on its
+   * own, three times the entire rest of the field. Separable blending is the
+   * budget here.
+   *
+   * Applied over the ground and *before* the strata, so the seal-work and the
+   * tunnel stay crisp on top of a recoloured floor - which is also what the
+   * original did, where the accent coloured the tunnel and not the whole frame.
+   * The Void keeps its drained look and is exempt.
+   */
+  function applyAccentWash(ctx, gameInstance, width, height, voidActive) {
+    if (voidActive) return;
+    const accent = gameInstance?.gameLevels?.[gameInstance.currentLevelIdx]?.accent;
+    const artApi = art();
+    if (!accent || !artApi?.normalizeHex(accent)) return;
+
+    ctx.save();
+    ctx.globalAlpha = ACCENT_WASH_ALPHA;
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
   }
 
   function beginRun(gameInstance) {
@@ -539,14 +589,45 @@
     const originalStartGame = Game.prototype.startGame;
     const originalRestartGame = Game.prototype.restartGame;
 
+    /**
+     * The field is a backdrop *beneath* the original tunnel, not a replacement
+     * for it.
+     *
+     * M21 replaced the eight rotating pentagrams and reimplemented the artwork
+     * composite, which lost both the tunnel and - because the reimplementation
+     * used additive blending - most of the owner's Drive backgrounds. Running the
+     * original function unmodified over the field restores every original effect
+     * with no reimplementation left to drift.
+     */
     Game.prototype.drawHyperspaceTunnel = function drawOccultField(color) {
-      if (drawField(this)) {
-        // The owner's Drive artwork still composites over the generated field
-        // when it loads, so their images remain part of the game.
-        drawLevelArtwork(this);
-        return undefined;
-      }
-      return originalTunnel.call(this, color);
+      const level = this.gameLevels?.[this.currentLevelIdx];
+
+      /**
+       * The original function draws two things: the eight rotating pentagrams and
+       * the level artwork. They want different treatment, so the artwork is
+       * suppressed here and drawn afterwards at full resolution.
+       *
+       * Pentagrams are glow line-work and lose nothing at CSS resolution, where
+       * they measured free (253.7ms with them, 254.5ms without). The artwork is
+       * the thing the owner actually wants to look at, so it keeps every device
+       * pixel.
+       */
+      const drawPentagrams = target => {
+        const realCtx = this.ctx;
+        const loaded = level?.loaded;
+        if (level) level.loaded = false;
+        this.ctx = target;
+        try {
+          originalTunnel.call(this, color);
+        } finally {
+          this.ctx = realCtx;
+          if (level) level.loaded = loaded;
+        }
+      };
+
+      if (!drawField(this, drawPentagrams)) drawPentagrams(this.ctx);
+      drawLevelArtwork(this);
+      return undefined;
     };
 
     // Wrapped from outside so gate-slice-runtime.js needs no knowledge of the
@@ -599,16 +680,25 @@
     return root.__SEX_MAGICK_OCCULT_FIELD__;
   }
 
-  // Preserved from the original tunnel: the level image, blurred, at the same
-  // alpha it always had. Enrichment over the field rather than the field itself.
+  /**
+   * The level artwork, at full device resolution and at the original treatment.
+   *
+   * This mirrors the tail of `Game.prototype.drawHyperspaceTunnel` deliberately:
+   * alpha 0.6, source-over, `blur(1px)`, same contain-fit maths. M21 rewrote it
+   * as alpha 0.45 with `globalCompositeOperation = 'lighter'`, and additive
+   * blending over a dark ground is why the owner's backgrounds read as missing -
+   * the dark half of a photograph adds almost nothing. The numbers below are the
+   * contract, and `browser-m21-aesthetic-test` asserts them.
+   *
+   * The one intended difference from the original: M10's procedural placeholder
+   * is an error card, not artwork, so it never draws.
+   */
   function drawLevelArtwork(gameInstance) {
-    if (gameInstance.voidMode || gameInstance.__gateSliceVoidActive) return;
+    if (gameInstance.voidMode || gameInstance.__gateSliceVoidActive) return false;
     const level = gameInstance.gameLevels?.[gameInstance.currentLevelIdx];
     const image = level?.img;
-    if (!level?.loaded || !image || !image.complete) return;
-    // The M10 procedural placeholder is an error card, not artwork. Now that the
-    // field is real art, drawing it over the top would be strictly worse.
-    if (image.__sexMagickFallback) return;
+    if (!level?.loaded || !image || !image.complete) return false;
+    if (image.__sexMagickFallback) return false;
 
     const ctx = gameInstance.ctx;
     const canvas = gameInstance.canvas;
@@ -628,13 +718,15 @@
         drawY = (canvas.height - drawHeight) / 2;
       }
       ctx.save();
-      ctx.globalAlpha = 0.45;
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = ARTWORK_ALPHA;
       ctx.filter = 'blur(1px)';
       ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
       ctx.filter = 'none';
       ctx.restore();
-    } catch (_error) {}
+      return true;
+    } catch (_error) {
+      return false;
+    }
   }
 
   function scheduleInstall(timeoutMs = 8000) {
@@ -653,8 +745,12 @@
     STRATA,
     VOID_COLOR,
     GLYPH_RAIN_COUNT,
+    ACCENT_WASH_ALPHA,
+    ARTWORK_ALPHA,
     currentBandName,
+    drawLevelArtwork,
     drawField,
+    applyAccentWash,
     drawGateSummoning,
     decoratePillar,
     chargeRiskEdges,

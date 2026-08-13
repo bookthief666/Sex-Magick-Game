@@ -202,6 +202,12 @@ async function main() {
   await client.send('Runtime.enable');
   await client.send('Network.enable');
   await client.send('Network.setBlockedURLs', { urls: EXTERNAL_BLOCKED_URLS });
+  // The shipped path is the phone's. `isMobile` in index.html is user-agent
+  // based, and it is what turns off shadow blur - so without this the suite
+  // measured a desktop glow path the owner's Fold 6 never takes.
+  await client.send('Emulation.setUserAgentOverride', {
+    userAgent: 'Mozilla/5.0 (Linux; Android 16; SM-F956U) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36'
+  });
   await client.send('Emulation.setDeviceMetricsOverride', {
     width: 390, height: 844, deviceScaleFactor: 1, mobile: true
   });
@@ -343,6 +349,169 @@ async function main() {
     `);
     assert.ok(reduced.a > 0, 'reduced motion must keep the artwork, not blank it');
 
+    // --- M22: the original effects must still be there ---------------------
+    // M21 removed the rotating tunnel and reimplemented the level artwork with
+    // additive blending at a lower alpha, which is why the owner's backgrounds
+    // read as missing. Every one of those is pinned here.
+
+    // A stub stands in for a Drive photograph: deliberately dark, because
+    // `globalCompositeOperation = 'lighter'` is invisible on dark pixels and a
+    // source-over composite at 0.6 is not. That difference is the whole test.
+    const artwork = await evaluate(client, `
+      (async () => {
+        // Uniform on purpose: a flat colour makes the composite arithmetic
+        // predictable, which is what separates source-over from 'lighter'.
+        const make = (fallback) => new Promise(resolve => {
+          const c = document.createElement('canvas');
+          c.width = 512; c.height = 512;
+          const x = c.getContext('2d');
+          x.fillStyle = '#241a2e'; x.fillRect(0, 0, 512, 512);
+          const img = new Image();
+          img.onload = () => { if (fallback) img.__sexMagickFallback = true; resolve(img); };
+          img.src = c.toDataURL('image/png');
+        });
+        const STUB_SUM = 0x24 + 0x1a + 0x2e;
+
+        const sample = () => {
+          const w = game.canvas.width, h = game.canvas.height;
+          const d = game.ctx.getImageData(Math.floor(w * 0.5), Math.floor(h * 0.5), 8, 8).data;
+          let sum = 0;
+          for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2];
+          return sum / (d.length / 4);
+        };
+
+        const levels = game.gameLevels;
+        const saved = levels.map(l => ({ img: l.img, loaded: l.loaded }));
+
+        levels.forEach(l => { l.img = null; l.loaded = false; });
+        game.drawScene(performance.now());
+        const withoutArt = sample();
+
+        const real = await make(false);
+        levels.forEach(l => { l.img = real; l.loaded = true; });
+        game.drawScene(performance.now());
+        const withArt = sample();
+
+        const placeholder = await make(true);
+        levels.forEach(l => { l.img = placeholder; l.loaded = true; });
+        game.drawScene(performance.now());
+        const withFallback = sample();
+
+        levels.forEach((l, i) => { l.img = saved[i].img; l.loaded = saved[i].loaded; });
+        const alpha = SexMagickOccultField.ARTWORK_ALPHA;
+        return {
+          withoutArt, withArt, withFallback,
+          artworkAlpha: alpha,
+          // What source-over at that alpha predicts, and what 'lighter' would.
+          sourceOverPrediction: (1 - alpha) * withoutArt + alpha * STUB_SUM,
+          lighterPrediction: Math.min(765, withoutArt + alpha * STUB_SUM)
+        };
+      })();
+    `);
+
+    assert.equal(artwork.artworkAlpha, 0.6, 'the level artwork must composite at the original 0.6 alpha');
+    // The arithmetic is the test. Source-over replaces 60% of the frame with the
+    // photograph; 'lighter' adds to it. On a dark photograph over a lit field the
+    // two predictions diverge by a wide margin, and only one of them is the
+    // original treatment.
+    assert.ok(
+      Math.abs(artwork.withArt - artwork.sourceOverPrediction) < 10,
+      `the artwork must composite source-over at ${artwork.artworkAlpha}: expected ~${artwork.sourceOverPrediction.toFixed(1)}, ` +
+      `saw ${artwork.withArt.toFixed(1)} (additive blending would give ~${artwork.lighterPrediction.toFixed(1)})`
+    );
+    assert.ok(
+      Math.abs(artwork.withArt - artwork.withoutArt) > 12,
+      `a loaded background must visibly change the frame, saw ${artwork.withoutArt.toFixed(1)} -> ${artwork.withArt.toFixed(1)}`
+    );
+    assert.ok(
+      Math.abs(artwork.withFallback - artwork.withoutArt) < 3,
+      `M10's placeholder is an error card and must not draw, saw ${artwork.withFallback.toFixed(1)} vs ${artwork.withoutArt.toFixed(1)}`
+    );
+
+    // The eight rotating pentagrams, in the level accent, are back.
+    const tunnel = await evaluate(client, `
+      (() => {
+        // Not every entry in the level pool carries an accent - the original
+        // levels predate the palette - so pin a known one and test the contract.
+        game.gameLevels[game.currentLevelIdx].accent = '#00ff9d';
+        const strokes = [];
+        const original = CanvasRenderingContext2D.prototype.stroke;
+        CanvasRenderingContext2D.prototype.stroke = function (...args) {
+          strokes.push(String(this.strokeStyle));
+          return original.apply(this, args);
+        };
+        try { game.drawScene(performance.now()); } finally {
+          CanvasRenderingContext2D.prototype.stroke = original;
+        }
+        const level = game.gameLevels[game.currentLevelIdx] || {};
+        const accent = String(level.accent || '').toLowerCase();
+        return {
+          total: strokes.length,
+          inAccent: accent ? strokes.filter(s => s === accent).length : 0,
+          accent,
+          levelIdx: game.currentLevelIdx,
+          levelCount: game.gameLevels.length,
+          distinctStrokes: Array.from(new Set(strokes)).slice(0, 8)
+        };
+      })();
+    `);
+    assert.ok(
+      tunnel.inAccent >= 5,
+      `expected the pentagram tunnel stroked in the level accent ${tunnel.accent}, saw ${tunnel.inAccent} of ${tunnel.total} strokes`
+    );
+
+    // Backgrounds change often again: a different level must repaint the field.
+    const turnover = await evaluate(client, `
+      (() => {
+        const edge = () => {
+          const d = game.ctx.getImageData(4, Math.floor(game.canvas.height * 0.5), 6, 6).data;
+          let r = 0, g = 0, b = 0;
+          for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; b += d[i+2]; }
+          const n = d.length / 4;
+          return [r / n, g / n, b / n];
+        };
+        const started = game.currentLevelIdx;
+        const seen = [];
+        const forced = ['#ff003c', '#00f0ff', '#d4ff00'];
+        for (let step = 0; step < forced.length; step += 1) {
+          game.currentLevelIdx = [0, 6, 14][step] % game.gameLevels.length;
+          game.gameLevels[game.currentLevelIdx].accent = forced[step];
+          game.drawScene(performance.now());
+          seen.push({ accent: game.gameLevels[game.currentLevelIdx].accent, rgb: edge() });
+        }
+        game.currentLevelIdx = started;
+        const spread = (a, b) => Math.abs(a[0]-b[0]) + Math.abs(a[1]-b[1]) + Math.abs(a[2]-b[2]);
+        return {
+          seen,
+          accentWashAlpha: SexMagickOccultField.ACCENT_WASH_ALPHA,
+          maxSpread: Math.max(spread(seen[0].rgb, seen[1].rgb), spread(seen[1].rgb, seen[2].rgb))
+        };
+      })();
+    `);
+    assert.ok(
+      turnover.maxSpread > 12,
+      `the field must visibly recolour per level, saw a max channel spread of ${turnover.maxSpread.toFixed(1)}: ` +
+      JSON.stringify(turnover.seen)
+    );
+
+    // The glitch layer was never touched by the aesthetic pass; prove it still bites.
+    const glitch = await evaluate(client, `
+      (() => {
+        const before = ${LIT};
+        GlitchFX.trigger(200, 'all');
+        const active = GlitchFX.active;
+        let changed = 0;
+        for (let attempt = 0; attempt < 40 && !changed; attempt += 1) {
+          GlitchFX.trigger(200, 'all');
+          game.drawScene(performance.now());
+          if (${LIT} !== before) changed = 1;
+        }
+        return { active, changed, glitchEffect: typeof game.applyGlitchEffect === 'function' };
+      })();
+    `);
+    assert.equal(glitch.active, true, 'GlitchFX must still arm');
+    assert.equal(glitch.glitchEffect, true, 'the scanline glitch pass must still exist');
+
     // --- draw cost stays inside the frame budget ---------------------------
     const cost = await evaluate(client, `
       (() => {
@@ -353,6 +522,26 @@ async function main() {
       })();
     `);
     assert.ok(cost < 12, `per-frame draw cost ${cost.toFixed(2)}ms leaves no room in a 16.6ms frame`);
+
+    // The desktop path additionally strokes the tunnel with a 15px shadow blur,
+    // which `optimizedShadow` skips on mobile. Compositing the backdrop in an
+    // offscreen buffer makes that blur synchronous, and under --disable-gpu it is
+    // rasterised on the CPU - so this bound is deliberately looser than the phone
+    // budget above. It exists to catch a real regression, not to certify desktop
+    // frame timing, which is GPU-accelerated in practice.
+    const glowCost = await evaluate(client, `
+      (() => {
+        const original = optimizedShadow.apply;
+        optimizedShadow.apply = (ctx, blur, color) => { ctx.shadowBlur = blur; ctx.shadowColor = color; };
+        try {
+          for (let f = 0; f < 10; f += 1) game.drawScene(performance.now());
+          const start = performance.now();
+          for (let f = 0; f < 30; f += 1) game.drawScene(performance.now());
+          return (performance.now() - start) / 30;
+        } finally { optimizedShadow.apply = original; }
+      })();
+    `);
+    assert.ok(glowCost < 30, `desktop glow path cost ${glowCost.toFixed(2)}ms/frame has regressed`);
 
     assert.equal(
       requestedUrls.some(url => url.includes('googleusercontent') || url.includes('drive.google')),
@@ -370,7 +559,13 @@ async function main() {
       voidDarkening: Number((1 - voidLook.inVoid / voidLook.normal).toFixed(3)),
       distinctBandLooks: new Set(Object.values(bands)).size,
       perFrameDrawMs: Number(cost.toFixed(2)),
-      gateApertureUnchanged: signals.entryRadius === 44
+      gateApertureUnchanged: signals.entryRadius === 44,
+      artworkVisible: `${artwork.withoutArt.toFixed(1)} -> ${artwork.withArt.toFixed(1)} at alpha ${artwork.artworkAlpha}`,
+      fallbackStillSuppressed: Math.abs(artwork.withFallback - artwork.withoutArt) < 3,
+      tunnelStrokesInAccent: tunnel.inAccent,
+      perLevelColourSpread: Number(turnover.maxSpread.toFixed(1)),
+      glitchStillFires: Boolean(glitch.active && glitch.glitchEffect),
+      desktopGlowPathMs: Number(glowCost.toFixed(2))
     }, null, 2));
   } finally {
     await client.close();
