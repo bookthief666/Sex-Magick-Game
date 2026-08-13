@@ -513,7 +513,9 @@
     if (typeof Leaderboard !== 'undefined' && Leaderboard) {
       const localOnly = async function gateSliceLocalOnlyLeaderboard() {
         const list = document.getElementById('leaderboardList');
-        if (list) list.textContent = 'GATE SLICE — LOCAL ONLY';
+        // The Rite board owns this list once it is installed; without this guard a
+        // later fetchTop() would paint over a rendered board with the stub text.
+        if (list && !globalThis.__SEX_MAGICK_RITE_BOARD__) list.textContent = 'GATE SLICE — LOCAL ONLY';
         const status = document.getElementById('uploadStatus');
         if (status) status.textContent = 'GATE SLICE — LOCAL ONLY';
         return { localOnly: true };
@@ -553,6 +555,18 @@
   script.dataset.sexMagickGateSliceRuntime = 'true';
   script.onerror = () => console.error('[SEX MAGICK] Gate slice runtime failed to load', script.src);
   document.head.appendChild(script);
+
+  if (
+    globalThis.SexMagickRiteBoard ||
+    document.querySelector('script[data-sex-magick-rite-board-runtime]')
+  ) return;
+
+  const boardScript = document.createElement('script');
+  boardScript.src = new URL('./leaderboard-runtime.js', currentSource).href;
+  boardScript.async = false;
+  boardScript.dataset.sexMagickRiteBoardRuntime = 'true';
+  boardScript.onerror = () => console.error('[SEX MAGICK] Rite board runtime failed to load', boardScript.src);
+  document.head.appendChild(boardScript);
 })();
 
 (function bootstrapViewportRuntime() {

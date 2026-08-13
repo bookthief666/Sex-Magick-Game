@@ -998,8 +998,9 @@
       hex.textContent = 'RITE OF HEXAGRAM — THE GATE';
       hex.title = 'Sharp, precise, unforgiving. Court the edge to summon the Gate.';
     }
-    const leaderboard = document.querySelector('.leaderboard-container');
-    if (leaderboard) leaderboard.hidden = true;
+    // The board itself is no longer hidden - the Rite board fills it from local
+    // run history (D-040). Only the network connection test stays gone, because
+    // shared submission is still an open owner decision.
     const testButton = document.querySelector('button[onclick="testLeaderboardConnection()"]');
     if (testButton) testButton.hidden = true;
     const menuButtons = document.getElementById('menuButtons');
@@ -1287,6 +1288,13 @@
        * constants above rather than written as a literal, so a playtest report
        * states its own provenance and that failure can never be silent again.
        */
+      /**
+       * The stored run history, newest first. Exposed so the Rite board can rank
+       * runs without a second copy of the storage key to drift out of step.
+       */
+      getHistory() {
+        return history.map(entry => JSON.parse(JSON.stringify(entry)));
+      },
       getFingerprint() {
         return {
           sliceVersion: SLICE_VERSION,

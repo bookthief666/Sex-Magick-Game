@@ -256,7 +256,10 @@ async function main() {
           monasDisabled: document.getElementById('startMonasBtn').disabled,
           monasText: document.getElementById('startMonasBtn').textContent,
           hexText: document.getElementById('startHexBtn').textContent,
-          leaderboardHidden: document.querySelector('.leaderboard-container').hidden
+          leaderboardHidden: document.querySelector('.leaderboard-container').hidden,
+          leaderboardTitle: document.querySelector('.leaderboard-title')?.textContent?.trim() ?? null,
+          riteBoardInstalled: Boolean(window.__SEX_MAGICK_RITE_BOARD__),
+          riteBoardNetwork: window.__SEX_MAGICK_RITE_BOARD__?.networkSubmission ?? null
         };
         const preflight = __SEX_MAGICK_GATE_PREFLIGHT__.getSnapshot();
         const orderedLevels = game.gameLevels.map(level => level.name);
@@ -341,7 +344,13 @@ async function main() {
     assert.equal(result.menu.monasDisabled, true);
     assert.match(result.menu.monasText, /SEALED/);
     assert.match(result.menu.hexText, /THE GATE/);
-    assert.equal(result.menu.leaderboardHidden, true);
+    // The board is shown again as of D-040 - it now carries the local Rite board
+    // rather than a shared score list. Submission stays suppressed, which the
+    // preflight assertions below and the lootlocker traffic check still cover.
+    assert.equal(result.menu.leaderboardHidden, false);
+    assert.match(result.menu.leaderboardTitle, /RITE BOARD/);
+    assert.equal(result.menu.riteBoardInstalled, true);
+    assert.equal(result.menu.riteBoardNetwork, false);
     assert.equal(result.preflight.leaderboardSuppressed, true);
     assert.equal(result.preflight.guestSessionAllowed, false);
     assert.equal(result.preflight.scoreSubmissionAllowed, false);
