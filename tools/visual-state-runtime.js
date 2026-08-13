@@ -146,6 +146,9 @@
       ];
       game.player.update = () => {};
     }
+    ambientBaseline = null;
+    offerPhase = null;
+    flashPhase = null;
   }
 
   function createPillar(xRatio, topRatio, gap, rotation) {
@@ -165,8 +168,73 @@
     return pillar;
   }
 
+  /**
+   * Ambient layers advance one step per `drawScene()` — `game.stars` drift and
+   * twinkle, `game.backgroundParticles` fall. `stars` is rebuilt by `startGame()`
+   * on every pose, but `backgroundParticles` is created once at page init, so its
+   * phase is a running total of every draw since load. That made each signature
+   * depend on how many times the scene happened to be drawn before the capture,
+   * and a single stray draw anywhere in the suite shifted the hash. Poses record
+   * the phase; every draw restores it, so a state renders identically no matter
+   * how many draws precede it.
+   */
+  let ambientBaseline = null;
+  let offerPhase = null;
+  let flashPhase = null;
+
+  /**
+   * The Gate offer's ring pulse advances 0.08 per draw, so it needs the same
+   * treatment. It is spawned during the pose rather than by `startGame()`, so its
+   * phase is pinned by identity: the first draw that sees a given offer records
+   * its pulse, and every later draw of the same offer restores it.
+   */
+  function lockOfferPhase() {
+    const offer = game.gateSliceOffer;
+    if (!offer) { offerPhase = null; return; }
+    if (!offerPhase || offerPhase.offer !== offer) offerPhase = { offer, pulse: Number(offer.pulse || 0) };
+    else offer.pulse = offerPhase.pulse;
+  }
+
+  /**
+   * The Void entry leaves a live screen flash whose `duration` counts down one per
+   * draw, fading the overlay. Pinned by identity for the same reason as the offer:
+   * the pose decides the flash, not the number of times it has been rendered.
+   */
+  function lockFlashPhase() {
+    const flash = game.screenFlash;
+    if (!flash) { flashPhase = null; return; }
+    if (!flashPhase || flashPhase.flash !== flash) flashPhase = { flash, duration: flash.duration, intensity: flash.intensity };
+    else { flash.duration = flashPhase.duration; flash.intensity = flashPhase.intensity; }
+  }
+
+  function ambientLayers() {
+    const layers = [['stars', game.stars], ['warpStars', game.warpStars], ['backgroundParticles', game.backgroundParticles]];
+    try {
+      // The Void's glyph rain is seeded lazily on the first Void draw, which is why
+      // layers are recorded on first sight rather than all at pose time.
+      const rain = root.SexMagickOccultField?.getGlyphRain?.();
+      if (Array.isArray(rain)) layers.push(['glyphRain', rain]);
+    } catch (_error) {}
+    return layers.filter(([, list]) => Array.isArray(list) && list.length > 0);
+  }
+
+  function syncAmbientPhase() {
+    if (!ambientBaseline) ambientBaseline = new Map();
+    for (const [name, list] of ambientLayers()) {
+      const saved = ambientBaseline.get(name);
+      if (!saved || saved.length !== list.length) {
+        ambientBaseline.set(name, list.map(item => ({ ...item })));
+        continue;
+      }
+      for (let index = 0; index < list.length; index += 1) Object.assign(list[index], saved[index]);
+    }
+  }
+
   function drawNow() {
     ensureLevel();
+    syncAmbientPhase();
+    lockOfferPhase();
+    lockFlashPhase();
     if (typeof game.drawScene === 'function') game.drawScene();
     if (typeof root.__SEX_MAGICK_GATE_SLICE__?.getSnapshot === 'function') {
       const hud = document.getElementById('gate-slice-hud');

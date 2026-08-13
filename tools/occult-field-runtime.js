@@ -781,6 +781,9 @@
     chargeRiskEdges,
     buildTitleBackdrop,
     applyTitleBackdrop,
+    // The Void's glyph rain advances one step per draw. Exposed so deterministic
+    // visual QA can pin its phase for a screenshot; rendering never reads this.
+    getGlyphRain: () => glyphRain,
     beginRun,
     install,
     scheduleInstall

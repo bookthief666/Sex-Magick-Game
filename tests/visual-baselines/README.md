@@ -3,18 +3,53 @@
 `m14-signatures.json` holds a sha256 per (project, state) screenshot of
 `#game-container`, for four reference geometries and seven states — 28 in total.
 
-## Provenance of the current file
-
-Established from **CI run [31688307078](https://github.com/bookthief666/Sex-Magick-Game/actions/runs/31688307078)**,
-a green `M14 Visual-state QA` run (77 passed, 23 skipped, 0 failed) on commit
-`a23e671`. The hashes are the `M14_VISUAL_SIGNATURE` lines emitted by
-`visual-state.spec.ts` for `chromium-small-phone`, `chromium-fold-cover`,
-`chromium-fold-inner` and `chromium-desktop`.
+**Currently being regenerated** — the file is absent while the phase-lock fix
+below lands, and `visual-state.spec.ts` guards its comparison with `if (baseline)`
+so the suite stays green in the meantime.
 
 The signatures were removed in M21, when the aesthetic pass legitimately changed
-every rendered state, and stayed unestablished through M22–M24. This file restores
+every rendered state, and stayed unestablished through M22–M24. Restoring them is
 the pixel-regression coverage that D-024 requires and D-031 tracked as a release
 obligation.
+
+## The second defect: the signatures were phase-dependent
+
+Committing the painted-canvas baselines re-armed the comparison, and the very next
+CI run **failed** — narrowly and informatively. `chromium-desktop` disagreed on
+`gate-bank` on both attempts and on `void` on the retry only, while the other three
+geometries reproduced all 28 hashes exactly.
+
+The cause is that **the scene advances every time it is drawn**, so a signature
+depended on how many draws happened to precede the capture:
+
+| what moves | per draw | where it lives |
+|---|---|---|
+| `game.stars` | drift + twinkle | rebuilt by `startGame()` each pose |
+| `game.backgroundParticles` | fall | created once at page init — phase is a running total of every draw since load |
+| `game.gateSliceOffer.pulse` | `+0.08` | spawned during the gate poses |
+| `game.screenFlash.duration` | `-1` | left live by the Void entry |
+| the Void's `glyphRain` | `y += speed` | module-local in `occult-field-runtime.js` |
+
+`backgroundParticles` is the one that made this a *flake* rather than a constant
+offset: because its phase accumulates across the whole session, a single stray or
+missing draw anywhere — a resize-triggered repaint during settlement, say — shifted
+every later state. Desktop is where that extra repaint was most likely, and the
+gate states are posed last, so they carried the most accumulated drift.
+
+It also explains why `menu` was the one state that never moved across the
+blank-canvas fix: the start screen covers the canvas, so ambient drift behind it
+changes no pixels in the container screenshot.
+
+**The fix** phase-locks the scene for capture. Each pose clears the record; the
+first draw after a pose records the phase of every animated layer it can see, and
+every later draw restores it. Layers are recorded on first sight rather than all at
+pose time because the Void's glyph rain is seeded lazily by the first Void draw.
+`occult-field-runtime.js` gains a read-only `getGlyphRain()` accessor for this;
+rendering never reads it.
+
+Measured after the fix: all seven states are byte-identical across three
+consecutive draws, and identical across eight independent browser contexts. Before
+it, every one of the seven changed on every redraw.
 
 ## The blank-canvas defect, and the correction to what I said about it
 
@@ -69,8 +104,11 @@ insets **and the painted canvas**. With the repaint in place this is an
 art-regression net — a change to the field, strata, pillars, avatar or the level
 artwork flips the hash for the affected states.
 
-Two honest limits remain:
+Three honest limits remain:
 
+- Animation phase is pinned for capture, so the signatures assert *what* is drawn,
+  not that the ambient layers, offer pulse, flash decay and glyph rain still
+  animate. Those are covered by `browser-m21-aesthetic-test.mjs` instead.
 - It would still not have caught the M21/M22/M23 defects *by itself*, because
   those baselines predate the fix. The claim going forward is about future
   changes, not retroactive coverage.
