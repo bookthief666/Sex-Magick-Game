@@ -3,14 +3,9 @@
 `m14-signatures.json` holds a sha256 per (project, state) screenshot of
 `#game-container`, for four reference geometries and seven states — 28 in total.
 
-## Provenance of the current file
-
-Established from **CI run [31691080584](https://github.com/bookthief666/Sex-Magick-Game/actions/runs/31691080584)**,
-a green `M14 Visual-state QA` run (77 passed, 23 skipped, 0 failed) on commit
-`ca4dc54` — the first run with the phase lock below in place. The hashes are the
-`M14_VISUAL_SIGNATURE` lines emitted by `visual-state.spec.ts` for
-`chromium-small-phone`, `chromium-fold-cover`, `chromium-fold-inner` and
-`chromium-desktop`.
+**Currently being regenerated** — the file is absent while the telegraph fix
+below lands, and `visual-state.spec.ts` guards its comparison with `if (baseline)`
+so the suite stays green in the meantime.
 
 The signatures were removed in M21, when the aesthetic pass legitimately changed
 every rendered state, and stayed unestablished through M22–M24. Restoring them is
@@ -55,6 +50,39 @@ rendering never reads it.
 Measured after the fix: all seven states are byte-identical across three
 consecutive draws, and identical across eight independent browser contexts. Before
 it, every one of the seven changed on every redraw.
+
+## The third defect: the capture raced a 1100ms timer
+
+Arming the phase-locked baselines failed too, and again narrowly and again only on
+`chromium-desktop` — but this time the four standard states matched **exactly** on
+both attempts while all three gate states differed from the baseline *and* from
+each other between attempts. That pattern is the diagnosis: whatever moved was
+specific to the gate page.
+
+It is `setTelegraph()` in `gate-slice-runtime.js`, which hides its box with a
+**1100 ms `setTimeout`**. Only the three gate states raise a telegraph — "THE GATE
+OPENS", "GNOSIS BANKED +30", "WAGER ACCEPTED × 10" — and it is a large, high
+contrast panel. Between the pose and the capture the suite runs
+`waitForVisualSettlement()`, whose length is a variable number of 50 ms polls plus
+round-trips, so whether that panel is still on screen at capture time is a race
+against wall-clock. `chromium-desktop` is the largest geometry and the slowest to
+settle and screenshot, so it crossed 1100 ms while the three smaller geometries
+stayed under it.
+
+Measured directly: at 200 ms and at 1400 ms after the pose, the three gate states
+hash differently and the standard states do not.
+
+**The fix** cancels the pending hide (`pinTelegraph()`, called from `drawNow()`),
+so telegraph visibility is a function of the pose rather than of elapsed time.
+`resetUi()` hides it and clears the timer at the start of every pose, so nothing
+leaks from one state into the next.
+
+Verified against the spec's own flow — dynamic-text lock, geometry settlement,
+repaint, container screenshot — run three times, once with **2500 ms** of extra
+delay injected before the capture: all seven states identical in all three runs.
+Two other states looked time-dependent in a first, cruder probe; both were probe
+artifacts from skipping the text lock and the settle step, and neither reproduces
+under the faithful flow.
 
 ## The blank-canvas defect, and the correction to what I said about it
 

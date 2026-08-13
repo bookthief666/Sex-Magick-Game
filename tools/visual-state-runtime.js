@@ -100,7 +100,26 @@
     for (const id of ['startScreen', 'gameOverScreen', 'pauseScreen', 'settingsScreen']) setHidden(id, true);
     for (const id of ['scoreUi', 'pauseBtn', 'instructions', 'mobileControls']) setHidden(id, true);
     const telegraph = document.getElementById('gate-slice-telegraph');
-    if (telegraph) telegraph.hidden = true;
+    if (telegraph) {
+      clearTimeout(telegraph.__gateSliceTimer);
+      telegraph.hidden = true;
+    }
+  }
+
+  /**
+   * `setTelegraph()` hides its box on a 1100ms `setTimeout`, so whether the Gate
+   * telegraph is still on screen at capture time depended on how long the settle
+   * loop happened to take — measured, the three gate states hash differently at
+   * 200ms and at 1400ms after the pose while the standard states do not. That is
+   * what made `chromium-desktop` disagree on exactly `gate-offer`, `gate-bank` and
+   * `void`: the largest geometry takes the longest to settle and screenshot, so it
+   * crossed the boundary while the three smaller ones stayed under it. Cancelling
+   * the pending hide makes visibility a function of the pose alone. Every pose
+   * starts with `resetUi()`, which hides it again, so nothing leaks between states.
+   */
+  function pinTelegraph() {
+    const telegraph = document.getElementById('gate-slice-telegraph');
+    if (telegraph) clearTimeout(telegraph.__gateSliceTimer);
   }
 
   function ensureLevel() {
@@ -235,6 +254,7 @@
     syncAmbientPhase();
     lockOfferPhase();
     lockFlashPhase();
+    pinTelegraph();
     if (typeof game.drawScene === 'function') game.drawScene();
     if (typeof root.__SEX_MAGICK_GATE_SLICE__?.getSnapshot === 'function') {
       const hud = document.getElementById('gate-slice-hud');
