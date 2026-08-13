@@ -561,6 +561,15 @@
     document.querySelector('script[data-sex-magick-rite-board-runtime]')
   ) return;
 
+  if (!globalThis.SexMagickMonas && !document.querySelector('script[data-sex-magick-monas-runtime]')) {
+    const monasScript = document.createElement('script');
+    monasScript.src = new URL('./monas-runtime.js', currentSource).href;
+    monasScript.async = false;
+    monasScript.dataset.sexMagickMonasRuntime = 'true';
+    monasScript.onerror = () => console.error('[SEX MAGICK] Monas runtime failed to load', monasScript.src);
+    document.head.appendChild(monasScript);
+  }
+
   const boardScript = document.createElement('script');
   boardScript.src = new URL('./leaderboard-runtime.js', currentSource).href;
   boardScript.async = false;

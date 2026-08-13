@@ -989,9 +989,9 @@
   function configureMenu() {
     const monas = document.getElementById('startMonasBtn');
     if (monas) {
-      monas.disabled = true;
-      monas.textContent = 'RITE OF MONAS — SEALED';
-      monas.title = 'The Gate slice validates Hexagram before Monas returns.';
+      monas.disabled = false;
+      monas.textContent = 'RITE OF MONAS — THE GLIDE';
+      monas.title = 'Hold to rise, release to fall. Hold the centre to build Coherence.';
     }
     const hex = document.getElementById('startHexBtn');
     if (hex) {
@@ -1081,7 +1081,12 @@
     };
 
     Game.prototype.startGame = function startGateSlice(...args) {
-      if (this.gameMode !== 'HEX') return undefined;
+      // MONAS was sealed here, and this line was the seal: returning without calling
+      // the original meant pressing the button did nothing at all. The Gate slice
+      // still owns HEX only - every override below guards on gateSliceState, which a
+      // MONAS run never creates - so handing the other rite straight to the original
+      // is all that unsealing takes. See D-041.
+      if (this.gameMode !== 'HEX') return originalStartGame.apply(this, args);
       const result = originalStartGame.apply(this, args);
       currentRun = createSliceState({ runId: `gate_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}` });
       this.gateSliceState = currentRun;

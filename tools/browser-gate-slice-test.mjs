@@ -341,8 +341,12 @@ async function main() {
       })()
     `);
 
-    assert.equal(result.menu.monasDisabled, true);
-    assert.match(result.menu.monasText, /SEALED/);
+    // MONAS is unsealed as of D-041 and now runs its own rite - glide and Coherence -
+    // alongside HEX. The Gate slice still owns HEX exclusively, which the
+    // gateSliceState assertions throughout this suite continue to cover.
+    assert.equal(result.menu.monasDisabled, false);
+    assert.doesNotMatch(result.menu.monasText, /SEALED/);
+    assert.match(result.menu.monasText, /GLIDE/);
     assert.match(result.menu.hexText, /THE GATE/);
     // The board is shown again as of D-040 - it now carries the local Rite board
     // rather than a shared score list. Submission stays suppressed, which the
