@@ -386,3 +386,14 @@ State deduplication also discarded all but one representative `initialStateId` w
 
 **Full record:** `docs/decisions/d034-the-gallery-the-corridors-and-the-flash-that-hid-them.md`
 **Session analysis:** `docs/playtests/m23-fold-open-results.md`
+
+## D-035 — Visual signatures restored, and an honest note on what they cover
+
+**Date:** 2026-08-13
+**Status:** Accepted
+
+**Decision:** `tests/visual-baselines/m14-signatures.json` is re-established from CI run 31686044845 — a fully green `M14 Visual-state QA` run on `9d060d5` — restoring the 28 signatures deleted in M21 and closing the release obligation D-031 opened. Pixel comparison is on again for four geometries and seven states.
+
+**Consequences:** The obligation is discharged, but the coverage claim needs correcting rather than celebrating. I recommended this work on the grounds that it would have caught the M21/M22/M23 regressions. **Reviewing the renders shows it would not have.** The signatures hash the whole `#game-container`, so any pixel change does flip them — but in the posed gameplay states the canvas is almost entirely unpainted: measured at `chromium-fold-inner`, non-black pixels run 0.6% for `gameplay` and `retry`, 2.3–3.3% for `death`/`void`/`gate-bank`/`gate-offer`, against 79.9% for `menu` (whose richness is the CSS title backdrop, not canvas). `__SEX_MAGICK_VISUAL_QA__` poses UI state and calls `drawScene()`, but the posed scene yields no painted occult field. This is pre-existing and not an M24 regression — the measurements are byte-identical at `6c75677` — but it means the three defects the owner actually hit (additive blending erasing the backgrounds, missing `accent`, frozen `currentLevelIdx`) all lived in states this suite renders black. The net is genuine for DOM, HUD, layout and safe-area, and it will flag future canvas changes; it is not today an art-regression net. The high-value follow-up is to make the gameplay poses render a real field — pillar, avatar, strata — so the signatures cover the artwork the owner looks at. Also recorded: the CI screenshot artifact could not be downloaded from this session because the egress policy denies the Azure blob host that serves Actions artifacts, so the mandated screenshot review was done on locally rendered equivalents instead, with the hashes taken only from CI.
+
+**Full record:** `tests/visual-baselines/README.md`
