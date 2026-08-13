@@ -701,7 +701,7 @@
 
   function applyBand(gameInstance, announce = false) {
     const state = gameInstance.gateSliceState;
-    if (!state) return;
+    if (!state) return null;
     const band = BANDS[state.bandIndex] || BANDS[0];
     const matching = gameInstance.gameLevels.find(level => String(level.name).toUpperCase() === band.name);
     if (matching) {
@@ -721,6 +721,7 @@
       try { if (gameInstance.settings.sfx) SFX.levelUp(); } catch (_error) {}
     }
     renderHud(gameInstance);
+    return matching || null;
   }
 
   function prepareOrderedLevels(gameInstance, originalPrepareLevels) {
@@ -946,7 +947,27 @@
       const nextBand = getBandIndex(this.gateSliceState.gatesCleared);
       if (nextBand !== this.gateSliceState.bandIndex) {
         this.gateSliceState.bandIndex = nextBand;
-        applyBand(this, true);
+        const matching = applyBand(this, true);
+        // The original score-based checkLevel() gave every level-up this
+        // spectacle - shake, a freeze frame, an RGB-split glitch, a particle
+        // burst, and haptics. Ascending a band replaced levelling as the visual
+        // event, and it lost all of that in the rewrite; this restores it on the
+        // one event the Gate slice actually has left. triggerLevelUpGlitch
+        // already goes through the reduced-motion policy in
+        // collision-runtime.js's installEffectPolicy, so nothing here needs to
+        // re-check accessibility settings.
+        this.shake = 12;
+        this.hitStop = 3;
+        this.triggerLevelUpGlitch();
+        const burstColor = matching ? matching.accent : '#ffffff';
+        for (let i = 0; i < 30; i += 1) {
+          this.particles.push(new Particle(
+            this.canvas.width / 2, this.canvas.height / 2,
+            burstColor, 12,
+            Math.random() > 0.5 ? 'hexagram' : 'triangle'
+          ));
+        }
+        Haptics.levelUp();
       }
     };
 

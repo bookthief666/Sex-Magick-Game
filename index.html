@@ -499,6 +499,13 @@
             VOID_INTERVAL: 5, 
         };
 
+        // Same neon set newImageIDs cycles through below, hoisted so originalLevels
+        // can use it too. Without an accent, a level's HUD colour, tunnel stroke
+        // and particle burst all silently no-op - canvas and CSS both ignore an
+        // undefined colour and keep whatever was drawn last, so nothing visibly
+        // changes even when the level does.
+        const palette = ["#ff003c", "#ff00ff", "#9d00ff", "#00f0ff", "#00ff9d", "#d4ff00", "#ff8800"];
+
         const originalLevels = [
             { name: "MALKUTH", id: "1jI7bl3hsVOuzYf6u35L4bhHq5JUiBDa1" },
             { name: "YESOD", id: "1tHgxNvDO5md4z24hS81eTa9uva25mtr5" },
@@ -543,9 +550,19 @@
             "STAR SAPPHIRE", "MASS OF PHOENIX", "LIBER AL", "RESH", "SAMEKH", "TZADDI"
         ];
         
-        let MASTER_POOL = [...originalLevels];
-        
-        const palette = ["#ff003c", "#ff00ff", "#9d00ff", "#00f0ff", "#00ff9d", "#d4ff00", "#ff8800"];
+        // originalLevels never carried accent/color of its own - these are the 11
+        // Sephirah-named images, and the Gate slice's band system (gate-slice-
+        // runtime.js) draws its 8 in-game backgrounds exclusively from this pool.
+        // Cycling the same palette newImageIDs uses below gives every one of them
+        // a real colour rather than leaving it undefined.
+        let MASTER_POOL = originalLevels.map((level, index) => ({
+            ...level,
+            color: "#000",
+            accent: palette[index % palette.length],
+            img: null,
+            loaded: false
+        }));
+
         newImageIDs.forEach((id, index) => {
             const nameIndex = index % esotericNames.length;
             MASTER_POOL.push({

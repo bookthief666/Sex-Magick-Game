@@ -386,8 +386,79 @@ async function main() {
     assert.equal(result.localOnlyStatus, 'GATE SLICE — LOCAL ONLY');
     assert.equal(exceptions.length, 0, `Browser exceptions: ${JSON.stringify(exceptions)}`);
 
+    // The original score-based level-up gave shake, a freeze frame, a glitch
+    // and a particle burst every time. The Gate slice replaced levelling with
+    // bands and, for a while, lost all of that on the transition. This proves
+    // it through the real checkLevel() path - driving gatesCleared and calling
+    // checkLevel(), not setting bandIndex directly, which is what the earlier
+    // probe above does and would bypass the branch entirely.
+    const punch = await evaluate(client, `
+      (() => {
+        game.gameLevels.forEach(l => { l.img = null; l.loaded = false; });
+        game.gateSliceState.gatesCleared = 5;
+        game.gateSliceState.bandIndex = 0;
+        game.shake = 0;
+        game.hitStop = 0;
+        game.particles = [];
+        GlitchFX.active = false;
+        GlitchFX.duration = 0;
+
+        game.gateSliceState.gatesCleared = 6; // crosses into YESOD (band 1)
+        game.checkLevel();
+
+        const matched = game.gameLevels.find(l => l.name.toUpperCase() === 'YESOD');
+        return {
+          bandIndex: game.gateSliceState.bandIndex,
+          shake: game.shake,
+          hitStop: game.hitStop,
+          particleCount: game.particles.length,
+          particleColors: [...new Set(game.particles.map(p => p.c))],
+          expectedAccent: matched ? matched.accent : null,
+          glitchActive: GlitchFX.active,
+          glitchType: GlitchFX.type
+        };
+      })();
+    `);
+    assert.equal(punch.bandIndex, 1, 'gatesCleared=6 must cross into band 1 (YESOD)');
+    assert.equal(punch.shake, 12, 'a band change must shake the screen like the original level-up did');
+    assert.equal(punch.hitStop, 3, 'a band change must freeze-frame like the original level-up did');
+    assert.equal(punch.particleCount, 30, 'a band change must burst 30 particles like the original level-up did');
+    assert.deepEqual(punch.particleColors, [punch.expectedAccent], "the burst must use the new band's own accent colour");
+    assert.equal(punch.glitchActive, true, 'a band change must fire the RGB-split glitch');
+    assert.equal(punch.glitchType, 'level', 'the band-change glitch must be the level-up variant');
+
+    // The whole punch above only proved itself against band 1. Every one of the
+    // 8 real in-game levels needs its own accent, or this class of bug - a level
+    // whose colour is silently undefined, so canvas/CSS both no-op and keep
+    // whatever was drawn last - comes back the moment a different band is hit.
+    const accentCoverage = await evaluate(client, `
+      game.gameLevels.map(l => ({ name: l.name, accent: l.accent }));
+    `);
+    for (const level of accentCoverage) {
+      assert.match(
+        String(level.accent),
+        /^#[0-9a-f]{6}$/i,
+        `level ${level.name} must have a real accent colour, saw ${JSON.stringify(level.accent)}`
+      );
+    }
+
+    // A gate clear that does not cross a band boundary must stay quiet - the
+    // owner chose the punch on band changes only, not on every gate.
+    const quiet = await evaluate(client, `
+      (() => {
+        game.shake = 0;
+        game.hitStop = 0;
+        game.particles = [];
+        GlitchFX.active = false;
+        game.gateSliceState.gatesCleared = 7; // still inside YESOD (next boundary is 16)
+        game.checkLevel();
+        return { shake: game.shake, hitStop: game.hitStop, particleCount: game.particles.length, glitchActive: GlitchFX.active };
+      })();
+    `);
+    assert.deepEqual(quiet, { shake: 0, hitStop: 0, particleCount: 0, glitchActive: false }, 'a gate clear that does not cross a band boundary must not repeat the punch');
+
     console.log('gate-slice-browser: all integration checks passed');
-    console.log(JSON.stringify({ ...result, requestedUrls }, null, 2));
+    console.log(JSON.stringify({ ...result, requestedUrls, punch, quiet }, null, 2));
   } finally {
     client.close();
     for (const child of children.reverse()) {
