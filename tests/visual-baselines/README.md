@@ -3,14 +3,16 @@
 `m14-signatures.json` holds a sha256 per (project, state) screenshot of
 `#game-container`, for four reference geometries and seven states — 28 in total.
 
-## Provenance of the current file
+## Status: withdrawn, and why
 
-Established from **CI run [31712163991](https://github.com/bookthief666/Sex-Magick-Game/actions/runs/31712163991)**,
-a green `M14 Visual-state QA` run (77 passed, 23 skipped, 0 failed) on commit
-`400d818` — the first run with all three fixes below in place. The hashes are the
-`M14_VISUAL_SIGNATURE` lines emitted by `visual-state.spec.ts` for
-`chromium-small-phone`, `chromium-fold-cover`, `chromium-fold-inner` and
-`chromium-desktop`.
+**The file is absent and the comparison is disarmed.** `visual-state.spec.ts`
+guards with `if (baseline)`, so the suite is green; it emits signatures and
+asserts structure, but does not yet compare pixels.
+
+Three real harness defects were found and fixed by arming it (below). A fourth
+is not fixed, and shipping a baseline that fails about half the time would be
+worse than shipping none — so the obligation D-031 opened stays open, honestly,
+rather than being closed with a net that cries wolf.
 
 The signatures were removed in M21, when the aesthetic pass legitimately changed
 every rendered state, and stayed unestablished through M22–M24. Restoring them is
@@ -152,6 +154,36 @@ Three honest limits remain:
   changes, not retroactive coverage.
 - The gallery entry drawn under `assetMode=offline` is a deterministic fallback,
   not a live Drive image, so image-fetch regressions are out of scope here.
+
+## The fourth defect: still open
+
+With the telegraph pinned, `chromium-desktop` reproduced **all 7 signatures
+exactly**. The failure moved to the fold geometries:
+
+| project | attempt 1 | retry |
+|---|---|---|
+| `chromium-desktop` | 7/7 match | — |
+| `chromium-fold-cover` | 3 gate states differ | 7/7 match (flaky) |
+| `chromium-fold-inner` | 3 gate states differ | also differs on `death`, `gameplay`, `retry` |
+
+So it is still the gate page, still those three states, now on the narrower
+geometries and at roughly a coin-flip rate. `menu` has never moved once, in any
+run, on any geometry.
+
+What is *not* the cause, each ruled out by measurement rather than argument:
+random spawning (eight contexts byte-identical with identical inputs), animation
+phase (locked, and verified stable across three consecutive draws), and elapsed
+wall-clock time (verified stable with 2500 ms injected before capture, under the
+spec's own flow).
+
+**The recommendation is to stop fixing and change the comparison.** Three rounds
+have each found something real, but the underlying demand — that a whole-container
+screenshot be *byte-identical* across runs and machines — is a brittle contract
+for a canvas game with a live HUD. Playwright's `toHaveScreenshot({ maxDiffPixels })`
+stores PNG baselines and compares with a tolerance, which is the standard tool for
+exactly this and would absorb sub-pixel rasterisation noise while still catching
+the art regressions this net is meant to catch. That is a design change and the
+owner's call, so it is written down here rather than done unasked.
 
 ## How to re-establish it
 
