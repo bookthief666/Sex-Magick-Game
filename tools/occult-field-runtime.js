@@ -333,6 +333,15 @@
       const entry = root.__SEX_MAGICK_GATE_SLICE__?.getBackgroundEntry?.();
       if (entry) return entry;
     } catch (_error) {}
+    // MONAS has no Gate slice state, and until M28 nothing rotated its backdrop at
+    // all - `currentLevelIdx` was never assigned for it either, so the fallback
+    // below returned the same picture for a run's entire length. monas-runtime.js
+    // runs its own gallery on the same pattern as the Gate slice's, scoped to the
+    // photograph only for the reason given above `applyAccentWash`.
+    try {
+      const entry = root.__SEX_MAGICK_MONAS__?.getBackgroundEntry?.();
+      if (entry) return entry;
+    } catch (_error) {}
     return gameInstance?.gameLevels?.[gameInstance.currentLevelIdx] || null;
   }
 

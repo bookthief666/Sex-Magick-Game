@@ -18,13 +18,24 @@
  * is the scoring model that rewards flying the way the physics wants to be flown.
  *
  * **The Warp Surge.** A full Coherence meter spends itself on speed rather than on a
- * wager. The tunnel opens up, the warp starfield streaks — `WarpStar` and its
- * `voidMode` branch have been in `index.html` since 1.0, drawn only in MONAS and,
- * until now, only reachable in a mode that could not start.
+ * wager. The corridor widens, the warp starfield streaks and a gold bloom breathes
+ * from the same point the stars radiate from - `WarpStar` has been in `index.html`
+ * since 1.0, drawn only in MONAS and, until now, only reachable in a mode that could
+ * not start.
  *
  * The Gate slice owns HEX and does not run here: every one of its overrides guards on
  * `gateSliceState`, which only exists for a HEX run, so MONAS falls through to the
  * original loop and this module layers on top of that.
+ *
+ * **The look.** Nothing ever moved `currentLevelIdx` for a MONAS run, so the photo,
+ * the accent wash and the tunnel/warp-star colour were pinned to whichever picture
+ * happened to be first, for the whole game. MONAS runs its own gallery and its own
+ * colour rotation on `gatesPassed`, on the same pattern the Gate slice already uses
+ * for HEX, plus a small set of visuals of its own - a fractal spark in place of
+ * `WarpStar`'s flat dot, a gentler glitch signature for a perfect pass, and a rare
+ * ambient glyph flicker - none of it borrowed from `voidMode`, which belongs to HEX's
+ * Void and would otherwise arm its expensive vignette and paint its reserved cyan
+ * over a rite that has nothing to do with either.
  */
 (function attachSexMagickMonas(root) {
   'use strict';
@@ -56,9 +67,44 @@
   const SURGE_SPEED_MULTIPLIER = 1.45;
   const SURGE_SCORE_MULTIPLIER = 2;
 
+  /**
+   * The look, in place of HEX's bands.
+   *
+   * MONAS had no way to change its own backdrop at all. `activeLevel()` in
+   * occult-field-runtime.js falls back to `gameLevels[currentLevelIdx]` when no
+   * gallery claims the frame, and nothing ever moved `currentLevelIdx` for a MONAS
+   * run - `checkLevel()` is the Gate slice's, and it no-ops for anything that is not
+   * HEX. The photo, the accent wash and the tunnel/warp-star stroke colour were all
+   * pinned to whatever `gameLevels[0]` happened to be, for the entire run.
+   *
+   * Two independent rotations replace that, on different beats so the picture and
+   * the colour do not always turn over on the same gate and start to feel like one
+   * event: the photo every `GALLERY_ADVANCE_GATES` gates (parity with HEX's own
+   * gallery cadence), the colour identity - accent wash, tunnel stroke, warp-star
+   * tint - every `COLOR_ADVANCE_GATES`. Both are driven by `gatesPassed`, which is
+   * the Coherence system's own counter, so nothing new has to be tracked.
+   */
+  const GALLERY_ADVANCE_GATES = 4;
+  const COLOR_ADVANCE_GATES = 6;
+
+  // --- ambient effects -----------------------------------------------------------
+  // A rare atmospheric stutter during ordinary flight, distinct from the surge and
+  // from HEX's RGB-split. Interval is randomised per occurrence so it never reads
+  // as a metronome.
+  const AMBIENT_GLYPH_MIN_FRAMES = 260;
+  const AMBIENT_GLYPH_JITTER_FRAMES = 200;
+  const AMBIENT_GLYPH_DURATION_FRAMES = 14;
+
+  // A pixel-square dot reads as nothing at the tiny sizes warp stars are drawn at,
+  // so the sprite is drawn larger than the original footprint specifically so the
+  // fractal shape has a chance to be seen, not just implied.
+  const SPARK_SIZE_SCALE = 2.1;
+  const SPARK_SPRITE_PX = 32;
+
   let installed = false;
   let installTimer = null;
   let held = false;
+  let monasGallery = [];
 
   function finite(value, fallback = 0) {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -70,6 +116,108 @@
 
   function isMonas(gameInstance) {
     return gameInstance?.gameMode === 'MONAS';
+  }
+
+  function art() {
+    return root.SexMagickOccultArt || null;
+  }
+
+  /**
+   * Which gallery picture a run's progress points to.
+   *
+   * Same arithmetic as the Gate slice's `galleryEntryFor` - a step every
+   * `advanceEvery` gates, wrapped around whatever pool was shuffled for the run -
+   * kept here as a pure function so the rotation can be asserted without a browser.
+   */
+  function galleryEntryFor(gatesPassed, gallery, advanceEvery = GALLERY_ADVANCE_GATES) {
+    if (!Array.isArray(gallery) || gallery.length === 0) return null;
+    const step = Math.floor(Math.max(0, finite(gatesPassed, 0)) / Math.max(1, advanceEvery));
+    return gallery[step % gallery.length] || null;
+  }
+
+  /**
+   * Which of the (band-sized) `gameLevels` slots the accent wash and tunnel stroke
+   * should read this run. Bounded to whatever the array actually holds, since
+   * `prepareOrderedLevels` reduces `gameLevels` to the band count regardless of mode.
+   */
+  function levelIdxForGatesPassed(gatesPassed, levelCount, advanceEvery = COLOR_ADVANCE_GATES) {
+    const count = Math.max(1, Math.floor(finite(levelCount, 1)));
+    const step = Math.floor(Math.max(0, finite(gatesPassed, 0)) / Math.max(1, advanceEvery));
+    return step % count;
+  }
+
+  function shuffled(list, random = Math.random) {
+    const copy = Array.isArray(list) ? [...list] : [];
+    for (let index = copy.length - 1; index > 0; index -= 1) {
+      const swap = Math.floor(random() * (index + 1));
+      [copy[index], copy[swap]] = [copy[swap], copy[index]];
+    }
+    return copy;
+  }
+
+  /**
+   * A small self-similar sparkle: four cardinal spikes, each forking into two
+   * shorter sub-spikes at its tip, plus four shorter unforked diagonal rays and a
+   * diamond core. One level of branching is a real fractal, not just a decorated
+   * star, and it is what makes MONAS's warp field read as its own shape rather than
+   * a recoloured copy of HEX's line-work.
+   *
+   * Returned as line segments in a -1..1 space, independent of any canvas, so the
+   * geometry can be asserted directly. `sparkSprite` is what rasterises it.
+   */
+  function buildFractalSpark() {
+    const segments = [];
+    const cardinals = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
+    const diagonals = [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4];
+    const point = (angle, radius) => [Math.cos(angle) * radius, Math.sin(angle) * radius];
+
+    for (const angle of cardinals) {
+      const inner = point(angle, 0.16);
+      const forkAt = point(angle, 0.6);
+      const tip = point(angle, 1);
+      segments.push([...inner, ...forkAt]);
+      segments.push([...forkAt, ...tip]);
+      for (const spread of [-0.42, 0.42]) {
+        const branchTip = point(angle + spread, 0.86);
+        segments.push([...forkAt, ...branchTip]);
+      }
+    }
+
+    for (const angle of diagonals) {
+      segments.push([...point(angle, 0.14), ...point(angle, 0.5)]);
+    }
+
+    const diamond = [0, -0.12, 0.12, 0, 0, 0.12, -0.12, 0];
+    for (let index = 0; index < diamond.length; index += 2) {
+      const next = (index + 2) % diamond.length;
+      segments.push([diamond[index], diamond[index + 1], diamond[next], diamond[next + 1]]);
+    }
+
+    return segments;
+  }
+
+  /**
+   * Rasterise the spark once per colour and hand back the cached bitmap - the same
+   * `getCachedLayer` primitive `wallStrip` uses in occult-field-runtime.js, so fifty
+   * warp stars a frame cost fifty `drawImage` calls, not fifty stroked paths.
+   */
+  function sparkSprite(color) {
+    const artApi = art();
+    if (!artApi) return null;
+    const key = artApi.cacheKey(['monas-spark', color, SPARK_SPRITE_PX]);
+    return artApi.getCachedLayer(key, SPARK_SPRITE_PX, SPARK_SPRITE_PX, (ctx, width, height) => {
+      ctx.translate(width / 2, height / 2);
+      ctx.scale(width / 2, height / 2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.09;
+      ctx.lineCap = 'round';
+      for (const [x1, y1, x2, y2] of buildFractalSpark()) {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    });
   }
 
   /**
@@ -169,6 +317,100 @@
     return { state: { ...state, surgeActive: false, surgeFramesRemaining: 0 }, surgeEnded: true };
   }
 
+  /**
+   * The Warp Surge's own visual, distinct from HEX's channel-split glitch: a soft
+   * gold bloom breathing outward from the same centre point the warp starfield
+   * radiates from, widening as the surge runs down toward its climax. Chained onto
+   * `drawHyperspaceTunnel` (see `install()`) so it layers over the field and under
+   * the pillars and HUD, matching where the Void's own vignette sits for HEX.
+   */
+  /**
+   * `createRadialGradient` + a full-canvas `fillRect` evaluates the gradient
+   * function per pixel, every frame - measured, that alone cost most of an 18-19ms
+   * frame during a surge on a mobile UA, over budget in a 16.6ms frame. Rasterising
+   * it once into a small cached sprite and blitting that instead - the same trick
+   * `sparkSprite` uses - moves the per-pixel cost to the first surge only; every
+   * frame after that is a single scaled `drawImage`. The pulse becomes an alpha
+   * multiplier on the blit rather than a new gradient, so it stays free to animate.
+   */
+  const BLOOM_SPRITE_PX = 256;
+
+  function bloomSprite() {
+    const artApi = art();
+    if (!artApi) return null;
+    const key = artApi.cacheKey(['monas-bloom', BLOOM_SPRITE_PX]);
+    return artApi.getCachedLayer(key, BLOOM_SPRITE_PX, BLOOM_SPRITE_PX, (ctx, width, height) => {
+      const cx = width / 2;
+      const cy = height / 2;
+      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, width / 2);
+      gradient.addColorStop(0, 'rgba(255, 215, 0, 1)');
+      gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+    });
+  }
+
+  function drawSurgeBloom(ctx, gameInstance) {
+    const state = gameInstance.monasState;
+    if (!state?.surgeActive) return;
+    const sprite = bloomSprite();
+    if (!sprite) return;
+
+    const progress = 1 - clamp(finite(state.surgeFramesRemaining, 0) / SURGE_FRAMES, 0, 1);
+    const pulse = 0.75 + (Math.sin(finite(gameInstance.frames, 0) * 0.2) * 0.25);
+    const width = ctx.canvas.width;
+    const height = ctx.canvas.height;
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = Math.max(width, height) * (0.3 + (progress * 0.2));
+
+    ctx.save();
+    ctx.globalAlpha = clamp(0.24 * pulse, 0, 1);
+    ctx.drawImage(sprite, cx - radius, cy - radius, radius * 2, radius * 2);
+    ctx.restore();
+  }
+
+  /**
+   * A brief flicker of invented sigil-script near the avatar, at a random interval
+   * roughly every 4-8 seconds of ordinary flight. This is the "something is not
+   * quite right with reality" reading of a glitch rather than HEX's hard RGB split -
+   * appropriate to a rite whose whole character is holding a steady line rather than
+   * reacting to a shock. Reuses `buildGlyphRun`/`drawGlyphRun`, the same primitives
+   * the Void's falling script is built from, so no new drawing code is needed for
+   * the mark itself - only for when and where it appears.
+   */
+  function tickAmbientGlyph(ctx, gameInstance) {
+    const artApi = art();
+    if (!artApi) return;
+    const frames = finite(gameInstance.frames, 0);
+
+    if (!Number.isFinite(gameInstance.__monasNextGlyphAt)) {
+      gameInstance.__monasNextGlyphAt = frames + AMBIENT_GLYPH_MIN_FRAMES;
+    }
+    if (frames >= gameInstance.__monasNextGlyphAt && !(frames < finite(gameInstance.__monasGlyphActiveUntil, -1))) {
+      gameInstance.__monasGlyphActiveUntil = frames + AMBIENT_GLYPH_DURATION_FRAMES;
+      gameInstance.__monasGlyphSeedX = Math.random();
+      gameInstance.__monasGlyphSeedY = Math.random();
+      gameInstance.__monasNextGlyphAt = frames + AMBIENT_GLYPH_MIN_FRAMES
+        + Math.floor(Math.random() * AMBIENT_GLYPH_JITTER_FRAMES);
+    }
+
+    const activeUntil = finite(gameInstance.__monasGlyphActiveUntil, -1);
+    if (frames >= activeUntil) return;
+
+    const remaining = activeUntil - frames;
+    const alpha = clamp(remaining / AMBIENT_GLYPH_DURATION_FRAMES, 0, 1) * 0.55;
+    const x = finite(gameInstance.__monasGlyphSeedX, 0.5) * ctx.canvas.width;
+    const y = ctx.canvas.height * (0.2 + (finite(gameInstance.__monasGlyphSeedY, 0.5) * 0.5));
+    const random = artApi.seededRandom(artApi.hashSeed(`monas-glyph-${activeUntil}`));
+    const run = artApi.buildGlyphRun({ random, count: 3, size: 14 });
+
+    ctx.save();
+    ctx.translate(x, y);
+    artApi.drawGlyphRun(ctx, run, { color: '#ffd700', alpha, lineWidth: 1 });
+    ctx.restore();
+  }
+
   // --- DOM / runtime installation ------------------------------------------------
 
   function ensureHud() {
@@ -260,12 +502,24 @@
     const originalUpdateGameObjects = Game.prototype.updateGameObjects;
     const originalGetCurrentGap = Game.prototype.getCurrentGap;
     const originalPlayerUpdate = Player.prototype.update;
+    const originalTunnel = Game.prototype.drawHyperspaceTunnel;
+    const originalWarpStarDraw = typeof WarpStar !== 'undefined' ? WarpStar.prototype.draw : null;
+    const originalWarpStarUpdate = typeof WarpStar !== 'undefined' ? WarpStar.prototype.update : null;
 
     Game.prototype.startGame = function startMonasRun(...args) {
       const result = originalStartGame.apply(this, args);
       if (isMonas(this)) {
         this.monasState = createMonasState();
         this.voidMode = false;
+        this.currentLevelIdx = 0;
+        this.__monasNextGlyphAt = null;
+        this.__monasGlyphActiveUntil = -1;
+        // A fresh shuffle per run, mirroring the Gate slice's own gallery, so two
+        // MONAS runs in the same session do not walk the same picture order.
+        const pool = typeof MASTER_POOL !== 'undefined' && Array.isArray(MASTER_POOL)
+          ? MASTER_POOL
+          : this.gameLevels;
+        monasGallery = shuffled(pool);
         renderHud(this);
       } else {
         this.monasState = null;
@@ -313,19 +567,17 @@
       }
       this.__monasPreviousVy = currentVy;
 
-      // The surge borrows the original's warp-star branch for its streak visual, and
-      // that branch is read by drawScene(), which the game loop calls *after* this
-      // method returns. So the flag has to survive past the end of this function or
-      // the surge has a HUD and no visual at all.
-      //
-      // Leaving it set has its own hazard: the loop runs
-      // `if (this.voidMode) { this.voidTimer--; if (this.voidTimer <= 0) this.endVoidMode(); }`
-      // and `endVoidMode()` assigns `this.gameSpeed = this.preVoidSpeed`, which a
-      // MONAS run never sets - so gameSpeed would become NaN. Holding the timer above
-      // zero for the length of the surge keeps that path from ever running, and the
-      // surge clears the flag itself when it ends.
-      this.voidMode = Boolean(this.monasState.surgeActive);
-      if (this.monasState.surgeActive) this.voidTimer = SURGE_FRAMES + 60;
+      // An earlier version of the surge set `this.voidMode = true` to reach the warp
+      // starfield's existing fast-streak branch in drawScene(), which reads that flag
+      // for both the star speed and the tunnel colour. That was two bugs at once:
+      // `occult-field-runtime.js`'s `voidActive` check is `voidMode ||
+      // __gateSliceVoidActive`, so it also armed HEX's Void vignette and falling
+      // glyph rain - a second full field pass every frame, which is where the
+      // 49ms-a-frame draw cost measured below came from. And drawScene's own
+      // `tunnelColor = this.voidMode ? '#00ffff' : lvl.accent` would have painted
+      // the Hexagram's reserved cyan - inviolable per M7 - over a MONAS event that
+      // has nothing to do with HEX. `WarpStar.prototype.update` is wrapped below
+      // instead, so the streak speeds up without touching `voidMode` at all.
       const surgeSpeed = this.monasState.surgeActive ? SURGE_SPEED_MULTIPLIER : 1;
       const baseSpeed = this.gameSpeed;
       if (surgeSpeed !== 1) this.gameSpeed = baseSpeed * surgeSpeed;
@@ -346,6 +598,13 @@
           this.monasState = applied.state;
           this.__monasReversals = 0;
 
+          // The look advances on the same event Coherence does, on its own two
+          // beats (see the constants above) rather than on the Gate slice's bands,
+          // which a MONAS run never has.
+          if (Array.isArray(this.gameLevels) && this.gameLevels.length > 0) {
+            this.currentLevelIdx = levelIdxForGatesPassed(this.monasState.gatesPassed, this.gameLevels.length);
+          }
+
           if (this.monasState.surgeActive && SURGE_SCORE_MULTIPLIER > 1) {
             this.score += SURGE_SCORE_MULTIPLIER - 1;
             const scoreUi = document.getElementById('scoreUi');
@@ -356,6 +615,14 @@
             for (let i = 0; i < 8; i += 1) {
               this.particles.push(new Particle(this.player.x, this.player.y, '#ffd700', 8, 'triangle'));
             }
+            // Coherence's own glitch signature: a short, gentle pulse rather than
+            // HEX's hard RGB split, reusing the same screen-flash and GlitchFX
+            // engines the base game already renders every frame, so a perfect pass
+            // gets a felt visual with no new renderer.
+            if (!this.screenFlash || !this.screenFlash.active) {
+              this.screenFlash = { active: true, duration: 8, color: '#ffd700', intensity: 0.16 };
+            }
+            try { if (Math.random() > 0.5) GlitchFX.trigger(30, 'coherence'); } catch (_error) {}
           }
           if (applied.surgeStarted) {
             this.shake = 10;
@@ -372,16 +639,75 @@
       if (this.monasState.surgeActive) {
         const ticked = tickSurge(this.monasState);
         this.monasState = ticked.state;
-        if (ticked.surgeEnded) {
-          this.voidMode = false;
-          this.voidTimer = 0;
-          try { document.getElementById('game-container')?.classList.remove('void-active'); } catch (_error) {}
-        }
       }
 
       renderHud(this);
       return result;
     };
+
+    /**
+     * Chained onto whatever `drawHyperspaceTunnel` already is - the original for a
+     * build without the aesthetic pass, or occult-field-runtime's field-drawing
+     * wrap when it is present. Either way this runs after the backdrop and before
+     * pillars and HUD, which is where the Void's own vignette sits for HEX.
+     */
+    Game.prototype.drawHyperspaceTunnel = function monasOverlay(color) {
+      const result = originalTunnel.call(this, color);
+      if (isMonas(this) && this.monasState) {
+        drawSurgeBloom(this.ctx, this);
+        if (!this.monasState.surgeActive) tickAmbientGlyph(this.ctx, this);
+      }
+      return result;
+    };
+
+    /**
+     * The surge's streak speed, read from `monasState.surgeActive` directly instead
+     * of from `drawScene`'s `this.voidMode ? this.gameSpeed : this.gameSpeed*0.05` -
+     * see the comment above `updateGameObjects` for why that flag is off limits.
+     * `speed*20` reproduces the same jump `voidMode` used to buy (its branch fed the
+     * full `gameSpeed` in instead of the slow `gameSpeed*0.05`), and `isVoid || true`
+     * reproduces the steeper 25-vs-10 z-speed factor the original reserves for it -
+     * same visual payoff, nothing borrowed from HEX.
+     */
+    if (originalWarpStarUpdate) {
+      WarpStar.prototype.update = function monasWarpStarUpdate(speed, isVoid) {
+        const surging = Boolean(typeof game !== 'undefined' && game?.monasState?.surgeActive);
+        const effectiveSpeed = surging ? speed * 20 : speed;
+        return originalWarpStarUpdate.call(this, effectiveSpeed, isVoid || surging);
+      };
+    }
+
+    /**
+     * The fractal spark, in place of a bare filled square. Position, depth-alpha and
+     * the perspective/rotation projection are reproduced exactly from the original -
+     * only the render step changes, so the warp field's motion is unaffected and
+     * only its shape is. Falls back to the original flat dot if the art module is
+     * unavailable, matching the rest of this codebase's degrade-gracefully style.
+     */
+    if (originalWarpStarDraw) {
+      WarpStar.prototype.draw = function monasWarpStarDraw(ctx, cx, cy, color) {
+        const sprite = sparkSprite(color);
+        if (!sprite) return originalWarpStarDraw.call(this, ctx, cx, cy, color);
+
+        const sx = (this.x / this.z) * 100;
+        const sy = (this.y / this.z) * 100;
+        const rx = (sx * Math.cos(this.rotation)) - (sy * Math.sin(this.rotation));
+        const ry = (sx * Math.sin(this.rotation)) + (sy * Math.cos(this.rotation));
+        const finalX = rx + cx;
+        const finalY = ry + cy;
+
+        const alpha = (window.innerWidth - this.z) / window.innerWidth;
+        const size = (1 - (this.z / window.innerWidth)) * (3 * SPARK_SIZE_SCALE);
+        if (size <= 0.05) return;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(finalX, finalY);
+        ctx.rotate(this.rotation);
+        ctx.drawImage(sprite, -size, -size, size * 2, size * 2);
+        ctx.restore();
+      };
+    }
 
     root.__SEX_MAGICK_MONAS__ = Object.freeze({
       mode: 'rite-of-monas',
@@ -396,12 +722,31 @@
           maxFall: MAX_FALL,
           coherenceCapacity: COHERENCE_CAPACITY,
           surgeFrames: SURGE_FRAMES,
-          surgeSpeedMultiplier: SURGE_SPEED_MULTIPLIER
+          surgeSpeedMultiplier: SURGE_SPEED_MULTIPLIER,
+          galleryAdvanceGates: GALLERY_ADVANCE_GATES,
+          colorAdvanceGates: COLOR_ADVANCE_GATES
         };
       },
       getSnapshot() {
         if (typeof game === 'undefined' || !game?.monasState) return null;
-        return { ...game.monasState, held };
+        return { ...game.monasState, held, currentLevelIdx: game.currentLevelIdx };
+      },
+      /**
+       * The picture MONAS's own gallery currently points to, read by
+       * occult-field-runtime.js's `activeLevel()` the same way it already reads the
+       * Gate slice's `getBackgroundEntry()` for HEX. Scoped to the photograph only -
+       * colour identity is `currentLevelIdx`, advanced separately above - matching
+       * the split HEX already draws between the two.
+       */
+      getBackgroundEntry() {
+        if (typeof game === 'undefined' || !game || !isMonas(game) || !game.monasState) return null;
+        return galleryEntryFor(game.monasState.gatesPassed, monasGallery);
+      },
+      getGalleryInfo() {
+        return {
+          size: monasGallery.length,
+          advanceEveryGates: GALLERY_ADVANCE_GATES
+        };
       },
       setHeldForTest(value) { held = Boolean(value); return held; },
       renderHud() { renderHud(typeof game !== 'undefined' ? game : null); }
@@ -426,12 +771,18 @@
     GRAVITY, DAMPING, LIFT, MAX_RISE, MAX_FALL,
     COHERENCE_CAPACITY, CENTRE_TOLERANCE, SMOOTH_REVERSALS, SMOOTHNESS_SHARE,
     SURGE_FRAMES, SURGE_SPEED_MULTIPLIER, SURGE_SCORE_MULTIPLIER,
+    GALLERY_ADVANCE_GATES, COLOR_ADVANCE_GATES,
+    AMBIENT_GLYPH_MIN_FRAMES, AMBIENT_GLYPH_JITTER_FRAMES, AMBIENT_GLYPH_DURATION_FRAMES,
     clamp,
     advanceGlide,
     scoreCoherence,
     createMonasState,
     applyCoherence,
     tickSurge,
+    galleryEntryFor,
+    levelIdxForGatesPassed,
+    shuffled,
+    buildFractalSpark,
     install,
     scheduleInstall
   });
