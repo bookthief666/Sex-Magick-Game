@@ -23,20 +23,23 @@ The query flag is retained as a diagnostic interface:
 - ordinary URL: full HEX stack on by default;
 - `?gateSlice=0`: explicit legacy/diagnostic opt-out;
 - `?legacyHex=1` or `?productMode=legacy`: explicit legacy opt-out;
-- `?visualQa=1`: untouched so M14 named-state visual QA retains its deterministic topology.
+- `?visualQa=1`: untouched so M14 named-state visual QA retains its deterministic topology;
+- `?telemetryQa=...`: untouched because that fixture deliberately drives the base telemetry/Void/retry primitives rather than product HEX semantics.
 
 M33 does not merge HEX and MONAS semantics. Starting MONAS must still clear Gate state and use the M32 gate-count progression ladder.
 
-### 2. Fold-open high-DPR sessions default to 2x backing
+### 2. Fold rendering follows posture unless the caller explicitly overrides it
 
 When the caller has not explicitly supplied `renderDpr`, the parser-ordered product integration layer selects `renderDpr=2` only when both are true:
 
 - logical viewport area is at least 700,000 CSS pixels;
 - device DPR is greater than 2.25.
 
-This captures the measured Fold-open geometry without depending on UA model strings, which modern Chromium may reduce or omit. Fold-cover geometry remains native by default. Any explicit `renderDpr=css|2|native|...` remains authoritative.
+This captures the measured Fold-open geometry without depending on UA model strings, which modern Chromium may reduce or omit. Fold-cover geometry remains native by default. Any explicit `renderDpr=css|2|native|...` remains authoritative for the page lifecycle.
 
-This is a conservative default, not an adaptive-performance system. Physical Fold evidence still decides whether 2x is smooth enough and whether a different policy is warranted.
+A Fold is one device with changing geometry, not two cold-load profiles. M33 therefore owns only the DPR value it injected itself. While that automatic policy is active, a resize from open → cover removes the automatic `renderDpr=2` and refreshes the backing store at native DPR; cover → open restores 2x. If any caller supplies a non-M33 DPR value, the adaptive layer relinquishes ownership rather than fighting it.
+
+This is a conservative posture policy, not a frame-time auto-scaler. Physical Fold evidence still decides whether 2x is smooth enough and whether a different quality/performance policy is warranted.
 
 ### 3. Product-facing discoverability should describe the rites that actually exist
 
@@ -55,6 +58,8 @@ The manifest is suppressed under `visualQa=1` so M14 visual construction remains
 
 This avoids the unsafe alternative of loading Gate after MONAS, which would reverse wrapper order and reopen the Void/shield/MONAS ownership problems the earlier milestones explicitly solved.
 
+The adaptive resize listener is registered at that same early boundary. It updates the M33-managed query synchronously before later viewport/render resize listeners observe the new posture; the render refresh is retained as a fail-safe rather than as the only update path.
+
 ## Automated acceptance
 
 M33 must prove:
@@ -62,8 +67,9 @@ M33 must prove:
 - ordinary product URL gains `gateSlice=1` before Gate bootstrap;
 - Fold-open `884×1104 @ 2.625` gains `renderDpr=2` and the canvas actually uses effective DPR 2;
 - Fold-cover `368×869 @ 2.625` keeps native unless explicitly overridden;
+- an in-page open → cover transition returns to native DPR and cover → open returns to 2x;
 - explicit Gate/render choices are never overwritten;
-- visual QA is not default-mutated;
+- visual QA and the low-level telemetry fixture are not product-default-mutated;
 - Gate preflight, Gate runtime, missions, power-ups, Rite Board, MONAS and M32 progression all install on the normal product path;
 - starting HEX creates Gate state and surfaces three missions;
 - starting MONAS creates MONAS state, clears Gate state and retains zero Gate residue;
@@ -73,8 +79,8 @@ M33 must prove:
 
 ## Claim boundary
 
-A green M33 establishes product-path integration and a safer default rendering policy. It does **not** establish that the Fold 6 is now smooth, that 2x is the final shipping DPR, that every Claude-era feature is visually strong enough, or that the game is release-ready.
+A green M33 establishes product-path integration and a safer posture-aware rendering policy. It does **not** establish that the Fold 6 is now smooth, that 2x is the final shipping DPR, that every Claude-era feature is visually strong enough, or that the game is release-ready.
 
-The next physical Fold block must compare the new ordinary URL directly against the M32 physical report, specifically checking frame smoothness, Gate/missions/power-up discoverability, background/gallery turnover, bonus corridors, band-change punch, MONAS feel, and whether the two rites now read as a coherent finished product rather than hidden subsystems.
+The next physical Fold block must compare the new ordinary URL directly against the M32 physical report, specifically checking frame smoothness in both postures and during a live fold/unfold, Gate/missions/power-up discoverability, background/gallery turnover, bonus corridors, band-change punch, MONAS feel, and whether the two rites now read as a coherent finished product rather than hidden subsystems.
 
 No merge to `develop`, no merge to `main`, and no itch.io deployment is authorized by this decision.
