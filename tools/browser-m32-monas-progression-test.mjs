@@ -50,7 +50,10 @@ try {
       return Boolean(button && !button.disabled);
     }, null, { timeout: 20000 });
 
-    await page.locator('#startMonasBtn').click();
+    // This suite owns runtime semantics, not animated-menu hit testing. M30 uses the
+    // same DOM invocation so loading/transition motion cannot turn a state contract
+    // into an actionability flake; dedicated UI suites retain physical click coverage.
+    await page.evaluate(() => document.getElementById('startMonasBtn').click());
     await page.waitForFunction(() => game?.gameMode === 'MONAS' && Boolean(game?.monasState), null, { timeout: 10000 });
 
     const result = await page.evaluate(() => {
