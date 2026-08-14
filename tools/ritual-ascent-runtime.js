@@ -185,6 +185,9 @@
         text-shadow: 0 0 12px var(--sm-ascent-accent, #00e5ff);
         animation: sm-ascent-arrive 1.35s ease-out both;
       }
+      #sex-magick-ascent-banner.sm-ascent-restart {
+        animation: sm-ascent-arrive-restart 1.35s ease-out both;
+      }
       #sex-magick-ascent-banner[hidden] { display: none !important; }
       #sex-magick-ascent-kicker {
         font: 8px/1.2 'Orbitron', monospace;
@@ -209,7 +212,14 @@
         74% { opacity: 1; }
         100% { opacity: 0; }
       }
-      html.sex-magick-reduced-motion #sex-magick-ascent-banner {
+      @keyframes sm-ascent-arrive-restart {
+        0% { opacity: 0; transform: translate(-50%, 10px) scale(.985); }
+        16% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+        74% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+      html.sex-magick-reduced-motion #sex-magick-ascent-banner,
+      html.sex-magick-reduced-motion #sex-magick-ascent-banner.sm-ascent-restart {
         animation: none;
       }
       @media (max-width: 430px) {
@@ -311,6 +321,10 @@
     document.getElementById('sex-magick-ascent-subtitle').textContent = theme.meaning;
     banner.hidden = false;
 
+    // Alternate between two visually identical keyframes. Reflow while the base
+    // animation is active, then swap to the alternate name so every later band
+    // transition restarts from frame zero instead of inheriting a completed CSS
+    // animation from the initial MALKUTH banner.
     banner.classList.remove('sm-ascent-restart');
     void banner.offsetWidth;
     if (!access.reducedMotion) banner.classList.add('sm-ascent-restart');
