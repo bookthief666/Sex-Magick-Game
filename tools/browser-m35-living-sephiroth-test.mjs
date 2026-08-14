@@ -1,0 +1,189 @@
+import { chromium } from '@playwright/test';
+import { spawn, spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+
+const PORT = Number(process.env.PORT || 4597);
+const BASE = `http://127.0.0.1:${PORT}`;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const FOLD_UA = 'Mozilla/5.0 (Linux; Android 16; SM-F956U) AppleWebKit/537.36 Chrome/151 Mobile Safari/537.36';
+
+function which(name) {
+  const result = spawnSync('bash', ['-lc', `command -v ${name}`], { encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
+const python = which('python3') || which('python');
+assert.ok(python, 'python is required for the M35 browser integration server');
+
+const server = spawn(python, ['-m', 'http.server', String(PORT), '--bind', '127.0.0.1'], {
+  cwd: process.cwd(),
+  stdio: 'ignore'
+});
+
+let browser;
+try {
+  await sleep(1200);
+  browser = await chromium.launch();
+  const context = await browser.newContext({
+    viewport: { width: 884, height: 1104 },
+    deviceScaleFactor: 2.625,
+    userAgent: FOLD_UA
+  });
+  const page = await context.newPage();
+  const pageErrors = [];
+  const requests = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('request', request => requests.push(request.url()));
+
+  await page.goto(`${BASE}/index.html?assetMode=offline`, { waitUntil: 'domcontentloaded' });
+  await page.locator('#game-container').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_PRODUCT_DEFAULTS__), null, { timeout: 20000 });
+  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITUAL_ASCENT__), null, { timeout: 20000 });
+  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_M35_BOOTSTRAP__), null, { timeout: 20000 });
+  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_SEPHIRAH_IDENTITY__), null, { timeout: 20000 });
+  await page.waitForFunction(() => (
+    typeof game !== 'undefined' &&
+    Boolean(game) &&
+    Boolean(document.getElementById('menuButtons')) &&
+    !document.getElementById('menuButtons').classList.contains('hidden')
+  ), null, { timeout: 20000 });
+
+  const boot = await page.evaluate(() => ({
+    search: location.search,
+    bootstrapMode: window.__SEX_MAGICK_M35_BOOTSTRAP__?.mode,
+    identityMode: window.__SEX_MAGICK_SEPHIRAH_IDENTITY__?.mode,
+    bootstrapSrc: document.getElementById('sex-magick-living-sephiroth-bootstrap')?.getAttribute('src') || '',
+    identitySrc: document.getElementById('sex-magick-sephirah-identity-runtime')?.getAttribute('src') || '',
+    profileErrors: window.SexMagickSephirahIdentity.validateProfiles(window.SexMagickGateSlice.BANDS),
+    bandOrder: window.SexMagickSephirahIdentity.BAND_ORDER,
+    gateOrder: window.SexMagickGateSlice.BANDS.map(band => band.name),
+    baselineParticle: typeof game !== 'undefined' && game?.backgroundParticles?.[0]
+      ? { speed: game.backgroundParticles[0].speed, opacity: game.backgroundParticles[0].opacity, size: game.backgroundParticles[0].size }
+      : null
+  }));
+
+  const params = new URLSearchParams(boot.search);
+  assert.equal(params.get('gateSlice'), '1');
+  assert.equal(params.get('renderDpr'), '2');
+  assert.equal(boot.bootstrapMode, 'm35-living-sephiroth-bootstrap');
+  assert.equal(boot.identityMode, 'm35-living-sephiroth');
+  assert.equal(boot.bootstrapSrc, 'tools/sephirah-identity-bootstrap.js');
+  assert.equal(boot.identitySrc, 'tools/sephirah-identity-runtime.js');
+  assert.deepEqual(boot.profileErrors, []);
+  assert.deepEqual(boot.bandOrder, boot.gateOrder);
+  assert.ok(boot.baselineParticle && boot.baselineParticle.speed > 0);
+
+  await page.evaluate(() => document.getElementById('startHexBtn').click());
+  await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'MALKUTH', null, { timeout: 10000 });
+
+  const malkuth = await page.evaluate(() => ({
+    snapshot: window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot(),
+    particle: {
+      speed: game.backgroundParticles[0].speed,
+      opacity: game.backgroundParticles[0].opacity,
+      size: game.backgroundParticles[0].size,
+      color: game.backgroundParticles[0].color,
+      shape: game.backgroundParticles[0].shape
+    },
+    scanlineOpacity: document.querySelector('.scanlines')?.style.opacity || '',
+    scanlineSize: document.querySelector('.scanlines')?.style.backgroundSize || '',
+    vignetteOpacity: document.querySelector('.vignette')?.style.opacity || ''
+  }));
+  assert.equal(malkuth.snapshot.active, true);
+  assert.equal(malkuth.snapshot.band, 'MALKUTH');
+  assert.equal(malkuth.snapshot.datasetBand, 'MALKUTH');
+  assert.equal(Number(malkuth.scanlineOpacity), 0.52);
+  assert.equal(malkuth.scanlineSize, '100% 4px');
+  assert.equal(Number(malkuth.vignetteOpacity), 0.86);
+  assert.ok(Math.abs((malkuth.particle.speed / boot.baselineParticle.speed) - 0.62) < 0.001);
+  assert.ok(['#8a6747', '#b08a62', '#66503a'].includes(malkuth.particle.color));
+
+  await page.evaluate(() => {
+    game.gateSliceState.gatesCleared = 6;
+    game.checkLevel();
+  });
+  await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'YESOD');
+  const yesod = await page.evaluate(() => ({
+    snapshot: window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot(),
+    ascent: window.__SEX_MAGICK_RITUAL_ASCENT__.getSnapshot(),
+    scanlineOpacity: document.querySelector('.scanlines')?.style.opacity || '',
+    vignetteOpacity: document.querySelector('.vignette')?.style.opacity || ''
+  }));
+  assert.equal(yesod.snapshot.band, 'YESOD');
+  assert.equal(yesod.ascent.band.name, 'YESOD');
+  assert.equal(yesod.snapshot.audio.rootHz, 61.74);
+  assert.equal(Number(yesod.scanlineOpacity), 0.28);
+  assert.equal(Number(yesod.vignetteOpacity), 0.68);
+
+  await page.evaluate(() => {
+    game.gateSliceState.gatesCleared = 32;
+    game.checkLevel();
+  });
+  await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'GEBURAH');
+  const geburah = await page.evaluate(() => window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot());
+  assert.equal(geburah.band, 'GEBURAH');
+  assert.equal(geburah.profile.temperament, 'martial / cut / pressure');
+  assert.ok(geburah.profile.visual.particleSpeed > 1);
+
+  await page.evaluate(() => {
+    game.gateSliceState.gatesCleared = 120;
+    game.checkLevel();
+  });
+  await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'KETHER');
+  const kether = await page.evaluate(() => ({
+    snapshot: window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot(),
+    scanlineOpacity: document.querySelector('.scanlines')?.style.opacity || '',
+    vignetteOpacity: document.querySelector('.vignette')?.style.opacity || '',
+    particleOpacity: game.backgroundParticles[0].opacity
+  }));
+  assert.equal(kether.snapshot.band, 'KETHER');
+  assert.equal(kether.snapshot.audio.rootHz, 110);
+  assert.equal(Number(kether.scanlineOpacity), 0.07);
+  assert.equal(Number(kether.vignetteOpacity), 0.26);
+  assert.ok(kether.particleOpacity < malkuth.particle.opacity, 'KETHER must visibly shed atmospheric noise');
+
+  // M35 must retreat completely when the player changes rites. MONAS owns its own
+  // gold/coherence/warp visual grammar and should not inherit the HEX Tree veil.
+  await page.evaluate(() => {
+    game.returnToMenu();
+    document.getElementById('startMonasBtn').click();
+  });
+  await page.waitForFunction(() => game?.gameMode === 'MONAS' && !document.documentElement.dataset.sephirah);
+  const monas = await page.evaluate(() => ({
+    snapshot: window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot(),
+    rite: game.gameMode,
+    gateState: Boolean(game.gateSliceState),
+    monasState: Boolean(game.monasState),
+    datasetBand: document.documentElement.dataset.sephirah || null,
+    scanlineInline: document.querySelector('.scanlines')?.style.opacity || '',
+    vignetteInline: document.querySelector('.vignette')?.style.opacity || ''
+  }));
+  assert.equal(monas.rite, 'MONAS');
+  assert.equal(monas.gateState, false);
+  assert.equal(monas.monasState, true);
+  assert.equal(monas.snapshot.active, false);
+  assert.equal(monas.datasetBand, null);
+  assert.equal(monas.scanlineInline, '');
+  assert.equal(monas.vignetteInline, '');
+
+  assert.deepEqual(pageErrors, [], `page errors: ${pageErrors.join(', ')}`);
+  assert.equal(requests.some(url => /lootlocker\.io/i.test(url)), false, 'M35 must not create leaderboard traffic');
+  await context.close();
+
+  // Deterministic visual QA remains isolated until the replacement tolerance-based
+  // visual net is deliberately established. M35 must not silently mutate it.
+  const qaContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const qaPage = await qaContext.newPage();
+  const qaRequests = [];
+  qaPage.on('request', request => qaRequests.push(request.url()));
+  await qaPage.goto(`${BASE}/index.html?visualQa=1`, { waitUntil: 'domcontentloaded' });
+  await sleep(900);
+  assert.equal(qaRequests.some(url => url.endsWith('/tools/sephirah-identity-bootstrap.js')), false);
+  assert.equal(qaRequests.some(url => url.endsWith('/tools/sephirah-identity-runtime.js')), false);
+  await qaContext.close();
+
+  console.log(JSON.stringify({ boot, malkuth, yesod, geburah, kether, monas }, null, 2));
+} finally {
+  if (browser) await browser.close();
+  server.kill('SIGTERM');
+}
