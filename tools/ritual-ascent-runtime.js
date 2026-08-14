@@ -32,6 +32,9 @@
   let installTimer = null;
   let previousBandIndex = null;
   let bannerTimer = null;
+  let copyObserver = null;
+  let lastAscentSignature = null;
+  let uiActive = false;
 
   function finiteNumber(value, fallback = 0) {
     const resolved = Number(value);
@@ -48,8 +51,12 @@
   }
 
   function lowLevelDiagnosticActive() {
-    try { return new URLSearchParams(root.location?.search || '').has('telemetryQa'); }
-    catch (_error) { return false; }
+    try {
+      const params = new URLSearchParams(root.location?.search || '');
+      return params.has('telemetryQa') || params.has('gateSliceQa');
+    } catch (_error) {
+      return false;
+    }
   }
 
   function themeForBand(index, bands = root.SexMagickGateSlice?.BANDS || []) {
@@ -72,7 +79,9 @@
     const current = bands[index] || bands[0] || { name: 'MALKUTH', gateThreshold: 0 };
     const next = bands[index + 1] || null;
     const currentThreshold = Math.max(0, Math.floor(finiteNumber(current?.gateThreshold, 0)));
-    const nextThreshold = next ? Math.max(currentThreshold + 1, Math.floor(finiteNumber(next.gateThreshold, currentThreshold + 1))) : null;
+    const nextThreshold = next
+      ? Math.max(currentThreshold + 1, Math.floor(finiteNumber(next.gateThreshold, currentThreshold + 1)))
+      : null;
     const span = nextThreshold === null ? 0 : Math.max(1, nextThreshold - currentThreshold);
     const within = nextThreshold === null ? 0 : clamp(gates - currentThreshold, 0, span);
     const ratio = nextThreshold === null ? 1 : clamp(within / span, 0, 1);
@@ -110,9 +119,7 @@
   function rewriteMissionText(text) {
     const value = String(text ?? '');
     let next = value;
-    for (const [from, to] of Object.entries(MISSION_COPY)) {
-      next = next.replaceAll(from, to);
-    }
+    for (const [from, to] of Object.entries(MISSION_COPY)) next = next.replaceAll(from, to);
     return next;
   }
 
@@ -223,7 +230,10 @@
         animation: none;
       }
       @media (max-width: 430px) {
-        #sex-magick-ascent-banner { top: max(100px, calc(env(safe-area-inset-top) + 84px)); padding-inline: 10px; }
+        #sex-magick-ascent-banner {
+          top: max(100px, calc(env(safe-area-inset-top) + 84px));
+          padding-inline: 10px;
+        }
         #sex-magick-ascent-name { font-size: 15px; letter-spacing: 3px; }
         #sex-magick-ascent-subtitle { font-size: 8px; letter-spacing: 2px; }
       }
@@ -261,12 +271,14 @@
   function hideUi() {
     const row = document.getElementById('sex-magick-ascent-row');
     const banner = document.getElementById('sex-magick-ascent-banner');
-    if (row) row.hidden = true;
-    if (banner) banner.hidden = true;
+    if (row && !row.hidden) row.hidden = true;
+    if (banner && !banner.hidden) banner.hidden = true;
     if (bannerTimer) {
       clearTimeout(bannerTimer);
       bannerTimer = null;
     }
+    lastAscentSignature = null;
+    uiActive = false;
   }
 
   function rewriteVisibleCopy() {
@@ -282,27 +294,48 @@
     }
   }
 
+  function installCopyObservers() {
+    if (copyObserver || typeof MutationObserver === 'undefined') return Boolean(copyObserver);
+    const targets = [
+      document.getElementById('gate-slice-telegraph'),
+      document.getElementById('sex-magick-missions'),
+      document.getElementById('sex-magick-missions-announce')
+    ].filter(Boolean);
+    if (targets.length === 0) return false;
+
+    copyObserver = new MutationObserver(() => rewriteVisibleCopy());
+    for (const target of targets) {
+      copyObserver.observe(target, { childList: true, characterData: true, subtree: true });
+    }
+    return true;
+  }
+
   function renderAscent(gameInstance = currentGame()) {
-    const { row } = ensureHud();
     const state = gameInstance?.gateSliceState;
     const active = Boolean(state && gameInstance?.gameMode === 'HEX' && gameInstance?.state !== GameState.START);
-    if (!active) {
-      if (row) row.hidden = true;
-      return null;
-    }
+    if (!active) return null;
 
     const bands = root.SexMagickGateSlice.BANDS;
     const progress = bandProgress(state, bands);
     const theme = themeForBand(progress.index, bands);
-    const meaning = document.getElementById('sex-magick-ascent-meaning');
-    const next = document.getElementById('sex-magick-ascent-next');
-    if (meaning) meaning.textContent = theme.meaning;
-    if (next) {
-      next.textContent = progress.atCrown
+    const signature = `${progress.index}:${progress.gates}:${progress.nextThreshold ?? 'crown'}`;
+
+    // Gate count and band transitions are sparse. Avoid touching layout/text on the
+    // 60 Hz simulation path when nothing player-visible changed.
+    if (signature !== lastAscentSignature || !uiActive) {
+      const { row } = ensureHud();
+      const meaning = document.getElementById('sex-magick-ascent-meaning');
+      const next = document.getElementById('sex-magick-ascent-next');
+      if (meaning && meaning.textContent !== theme.meaning) meaning.textContent = theme.meaning;
+      const nextText = progress.atCrown
         ? 'CROWN · HELD'
         : `${progress.nextName} · ${progress.gatesToNext} GATES`;
+      if (next && next.textContent !== nextText) next.textContent = nextText;
+      if (row?.hidden) row.hidden = false;
+      lastAscentSignature = signature;
+      uiActive = true;
     }
-    if (row) row.hidden = false;
+
     return Object.freeze({ progress, theme });
   }
 
@@ -340,12 +373,13 @@
 
   function sync(gameInstance = currentGame(), options = {}) {
     if (!gameInstance?.gateSliceState || gameInstance.gameMode !== 'HEX') {
-      previousBandIndex = null;
-      hideUi();
+      if (uiActive || previousBandIndex !== null || bannerTimer) {
+        previousBandIndex = null;
+        hideUi();
+      }
       return null;
     }
 
-    rewriteVisibleCopy();
     const rendered = renderAscent(gameInstance);
     const index = Math.max(0, Math.floor(finiteNumber(gameInstance.gateSliceState.bandIndex, 0)));
     if (previousBandIndex === null) {
@@ -358,6 +392,11 @@
     return rendered;
   }
 
+  function refresh(gameInstance = currentGame()) {
+    rewriteVisibleCopy();
+    return sync(gameInstance);
+  }
+
   function install() {
     if (installed) return root.__SEX_MAGICK_RITUAL_ASCENT__ || null;
     if (visualQaActive() || lowLevelDiagnosticActive() || !dependenciesReady()) return null;
@@ -367,6 +406,9 @@
     }
 
     ensureHud();
+    installCopyObservers();
+    rewriteVisibleCopy();
+
     const originalStartGame = Game.prototype.startGame;
     const originalRestartGame = Game.prototype.restartGame;
     const originalUpdateGameObjects = Game.prototype.updateGameObjects;
@@ -375,6 +417,8 @@
     Game.prototype.startGame = function startGameWithRitualAscent(...args) {
       const result = originalStartGame.apply(this, args);
       previousBandIndex = null;
+      lastAscentSignature = null;
+      rewriteVisibleCopy();
       sync(this, { announceInitial: this.gameMode === 'HEX' });
       return result;
     };
@@ -382,6 +426,8 @@
     Game.prototype.restartGame = function restartGameWithRitualAscent(...args) {
       const result = originalRestartGame.apply(this, args);
       previousBandIndex = null;
+      lastAscentSignature = null;
+      rewriteVisibleCopy();
       sync(this, { announceInitial: this.gameMode === 'HEX' });
       return result;
     };
@@ -410,7 +456,7 @@
       rewriteGateText,
       rewriteMissionText,
       rewriteVisibleCopy,
-      refresh: () => sync(currentGame()),
+      refresh,
       getSnapshot() {
         const gameInstance = currentGame();
         if (!gameInstance?.gateSliceState || gameInstance.gameMode !== 'HEX') {
@@ -424,7 +470,8 @@
           progress,
           telegraph: document.getElementById('gate-slice-telegraph')?.textContent || '',
           rowVisible: !document.getElementById('sex-magick-ascent-row')?.hidden,
-          bannerVisible: !document.getElementById('sex-magick-ascent-banner')?.hidden
+          bannerVisible: !document.getElementById('sex-magick-ascent-banner')?.hidden,
+          eventDrivenCopy: Boolean(copyObserver)
         };
       }
     });
