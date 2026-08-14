@@ -462,15 +462,17 @@
 
 // MONAS is a player-facing Rite, not a Gate-slice feature. M27-M29 accidentally
 // loaded its enhanced runtime only inside the `?gateSlice=1` bootstrap, so the
-// normal game URL still exposed the old base-mode behavior. Load the module on
-// every page and leave the reachability policy above responsible for fail-closed
-// sealing. The Gate bootstrap below keeps its duplicate guard for compatibility.
+// normal game URL still exposed the old base-mode behavior. Load it independently
+// on ordinary pages, but preserve the established Gate -> MONAS wrapper order when
+// `gateSlice=1`; that path remains owned by the Gate bootstrap below.
 (function bootstrapMonasRuntime() {
   'use strict';
 
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('gateSlice') === '1') return;
+
   if (
-    typeof window === 'undefined' ||
-    typeof document === 'undefined' ||
     globalThis.SexMagickMonas ||
     document.querySelector('script[data-sex-magick-monas-runtime]')
   ) return;
