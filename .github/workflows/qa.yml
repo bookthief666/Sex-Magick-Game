@@ -93,6 +93,7 @@ jobs:
           node --check tools/browser-m19-powerups-test.mjs
           node --check tools/browser-m21-aesthetic-test.mjs
           node --check tools/browser-monas-test.mjs
+          node --check tools/run-browser-monas-diagnostic.mjs
           node --check tools/browser-leaderboard-test.mjs
           node --check tools/browser-m30-standard-entry-test.mjs
           node --check tools/browser-telemetry-test.mjs
@@ -173,7 +174,16 @@ jobs:
         run: node tools/browser-m21-aesthetic-test.mjs
 
       - name: Run MONAS Chrome integration
-        run: node tools/browser-monas-test.mjs
+        run: node tools/run-browser-monas-diagnostic.mjs
+
+      - name: Upload MONAS browser diagnostic
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: monas-browser-report-${{ github.run_attempt }}
+          path: artifacts/monas-browser-report.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Run Rite Board Chrome integration
         run: node tools/browser-leaderboard-test.mjs
