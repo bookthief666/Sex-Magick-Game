@@ -1,5 +1,7 @@
-// M32 integration truth: MONAS progression must be gate-count driven and identical
-// on the ordinary game URL and the optional ?gateSlice=1 URL, including retry.
+// M32/M33 integration truth: MONAS progression must be gate-count driven and
+// independent of the HEX wrapper underneath it. M33 makes the full Gate stack the
+// ordinary product default, so this suite now compares that product path with both
+// an explicit ?gateSlice=1 path and the retained ?gateSlice=0 legacy opt-out.
 import { chromium } from '@playwright/test';
 import { spawn, spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
@@ -103,9 +105,8 @@ try {
       const surge = snapshot();
       game.monasState.surgeActive = false;
 
-      // This is the path that used to diverge on ?gateSlice=1: Gate's restart
-      // wrapper creates HEX state unconditionally underneath us. M32 must erase it
-      // and rebuild a clean MONAS run before returning control to the player.
+      // Gate's restart wrapper creates HEX state underneath MONAS when Gate exists;
+      // M32 must erase it and rebuild a clean MONAS run before returning control.
       progression.forceGatesForTest(80);
       game.restartGame();
       game.gameLoop = () => undefined;
@@ -123,6 +124,7 @@ try {
         surge,
         afterRetry,
         gateSliceModule: Boolean(window.SexMagickGateSlice),
+        effectiveSearch: location.search,
         progressionFingerprint: progression.getFingerprint()
       };
     });
@@ -177,14 +179,16 @@ try {
     return result;
   }
 
-  const ordinary = await exercise('ordinary URL', '');
-  const gate = await exercise('Gate URL', '&gateSlice=1');
+  const product = await exercise('product default URL', '');
+  const gate = await exercise('explicit Gate URL', '&gateSlice=1');
+  const legacy = await exercise('legacy Gate opt-out URL', '&gateSlice=0');
 
-  assert.equal(ordinary.gateSliceModule, false, 'ordinary URL must not enable Gate slice');
-  assert.equal(gate.gateSliceModule, true, 'Gate URL should still load Gate slice');
+  assert.equal(product.gateSliceModule, true, 'M33 ordinary product URL must enable the completed Gate stack');
+  assert.equal(gate.gateSliceModule, true, 'explicit Gate URL must load Gate slice');
+  assert.equal(legacy.gateSliceModule, false, 'explicit gateSlice=0 must retain the diagnostic base-game path');
 
-  // Compare only progression semantics; the Gate module itself is intentionally an
-  // environment difference. Everything the MONAS player can feel here must match.
+  // Compare only progression semantics. The presence of the HEX wrapper is an
+  // environment difference; everything the MONAS player can feel must remain equal.
   const semantic = result => ({
     initial: result.initial,
     ladder: result.ladder,
@@ -193,9 +197,14 @@ try {
     surge: result.surge,
     afterRetry: result.afterRetry
   });
-  assert.deepEqual(semantic(gate), semantic(ordinary), 'ordinary and ?gateSlice=1 MONAS semantics must be identical');
+  assert.deepEqual(semantic(gate), semantic(product), 'product-default and explicit-Gate MONAS semantics must be identical');
+  assert.deepEqual(semantic(legacy), semantic(product), 'Gate opt-out must not change MONAS semantics');
 
-  console.log(JSON.stringify({ ordinary: semantic(ordinary), gate: semantic(gate) }, null, 2));
+  console.log(JSON.stringify({
+    product: { search: product.effectiveSearch, semantic: semantic(product) },
+    gate: { search: gate.effectiveSearch, semantic: semantic(gate) },
+    legacy: { search: legacy.effectiveSearch, semantic: semantic(legacy) }
+  }, null, 2));
 } finally {
   if (browser) await browser.close();
   server.kill('SIGTERM');
