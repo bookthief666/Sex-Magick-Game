@@ -24,34 +24,14 @@ try {
   await sleep(1200);
   browser = await chromium.launch();
 
-  async function openProduct({ label, width, height, deviceScaleFactor }) {
-    const context = await browser.newContext({
-      viewport: { width, height },
-      deviceScaleFactor,
-      userAgent: FOLD_UA
-    });
-    const page = await context.newPage();
-    const pageErrors = [];
-    const requestedUrls = [];
-    page.on('pageerror', error => pageErrors.push(error.message));
-    page.on('request', request => requestedUrls.push(request.url()));
-
-    // Deliberately omit gateSlice and renderDpr. M33 owns both product defaults.
-    await page.goto(`http://127.0.0.1:${PORT}/index.html?assetMode=offline`, { waitUntil: 'domcontentloaded' });
-    await page.locator('#game-container').waitFor({ state: 'visible' });
-    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_PRODUCT_DEFAULTS__), null, { timeout: 20000 });
-    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GATE_SLICE__), null, { timeout: 20000 });
-    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MISSIONS__), null, { timeout: 20000 });
-    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_POWERUPS__), null, { timeout: 20000 });
-    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITE_BOARD__), null, { timeout: 20000 });
-    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MONAS_PROGRESSION__), null, { timeout: 20000 });
-
-    const boot = await page.evaluate(() => {
+  async function snapshot(page) {
+    return page.evaluate(() => {
       const canvas = document.getElementById('gameCanvas');
       const manifest = document.getElementById('sex-magick-product-manifest');
       return {
         search: location.search,
         defaults: window.__SEX_MAGICK_PRODUCT_DEFAULTS__,
+        renderPolicy: window.__SEX_MAGICK_PRODUCT_RENDER_POLICY__?.getSnapshot?.() || null,
         productUi: window.__SEX_MAGICK_PRODUCT_UI__ || null,
         gate: Boolean(window.__SEX_MAGICK_GATE_SLICE__),
         gatePreflight: Boolean(window.__SEX_MAGICK_GATE_PREFLIGHT__),
@@ -80,7 +60,32 @@ try {
         })()
       };
     });
+  }
 
+  async function openProduct({ label, width, height, deviceScaleFactor }) {
+    const context = await browser.newContext({
+      viewport: { width, height },
+      deviceScaleFactor,
+      userAgent: FOLD_UA
+    });
+    const page = await context.newPage();
+    const pageErrors = [];
+    const requestedUrls = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    page.on('request', request => requestedUrls.push(request.url()));
+
+    // Deliberately omit gateSlice and renderDpr. M33 owns both product defaults.
+    await page.goto(`http://127.0.0.1:${PORT}/index.html?assetMode=offline`, { waitUntil: 'domcontentloaded' });
+    await page.locator('#game-container').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_PRODUCT_DEFAULTS__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_PRODUCT_RENDER_POLICY__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GATE_SLICE__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MISSIONS__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_POWERUPS__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITE_BOARD__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MONAS_PROGRESSION__), null, { timeout: 20000 });
+
+    const boot = await snapshot(page);
     const params = new URLSearchParams(boot.search);
     assert.equal(params.get('gateSlice'), '1', `${label}: normal product URL must activate the complete HEX stack`);
     assert.equal(boot.gate, true, `${label}: Gate runtime`);
@@ -90,6 +95,7 @@ try {
     assert.equal(boot.riteBoard, true, `${label}: Rite Board runtime`);
     assert.equal(boot.monas, true, `${label}: MONAS runtime`);
     assert.equal(boot.monasProgression, true, `${label}: MONAS progression runtime`);
+    assert.equal(boot.renderPolicy?.managed, true, `${label}: omitted DPR must remain M33-managed across posture changes`);
     assert.match(boot.boardTitle, /RITE BOARD/, `${label}: local Rite Board must own the menu board`);
     assert.match(boot.manifest, /HEX.*GATE.*GNOSIS.*MISSIONS.*POWER/i, `${label}: HEX manifest`);
     assert.match(boot.manifest, /MONAS.*HOLD.*COHERENCE.*WARP/i, `${label}: MONAS manifest`);
@@ -108,6 +114,33 @@ try {
   assert.equal(open.boot.effectiveDpr, 2, 'Fold-open canvas backing must actually use 2x');
   assert.equal(open.boot.backingWidth, 1768, 'Fold-open 2x backing width');
   assert.equal(open.boot.backingHeight, 2208, 'Fold-open 2x backing height');
+
+  // A Fold is not two separate devices. Exercise the actual posture transition in
+  // one page lifecycle: M33 must relinquish its injected 2x override on the cover,
+  // then restore it when the same session unfolds again.
+  await open.page.setViewportSize({ width: 368, height: 869 });
+  await open.page.waitForFunction(() => {
+    const canvas = document.getElementById('gameCanvas');
+    const params = new URLSearchParams(location.search);
+    return !params.has('renderDpr') && Number(canvas?.dataset?.smEffectiveDpr || 0) === 2.625;
+  }, null, { timeout: 10000 });
+  const foldedTransition = await snapshot(open.page);
+  assert.equal(new URLSearchParams(foldedTransition.search).has('renderDpr'), false, 'open→cover must remove the automatic 2x override');
+  assert.equal(foldedTransition.effectiveDpr, 2.625, 'open→cover must restore native DPR');
+  assert.equal(foldedTransition.backingWidth, 966);
+  assert.equal(foldedTransition.backingHeight, 2281);
+
+  await open.page.setViewportSize({ width: 884, height: 1104 });
+  await open.page.waitForFunction(() => {
+    const canvas = document.getElementById('gameCanvas');
+    const params = new URLSearchParams(location.search);
+    return params.get('renderDpr') === '2' && Number(canvas?.dataset?.smEffectiveDpr || 0) === 2;
+  }, null, { timeout: 10000 });
+  const unfoldedTransition = await snapshot(open.page);
+  assert.equal(new URLSearchParams(unfoldedTransition.search).get('renderDpr'), '2', 'cover→open must restore the automatic 2x override');
+  assert.equal(unfoldedTransition.effectiveDpr, 2, 'cover→open must return to 2x backing');
+  assert.equal(unfoldedTransition.backingWidth, 1768);
+  assert.equal(unfoldedTransition.backingHeight, 2208);
 
   const hex = await open.page.evaluate(() => {
     document.getElementById('startHexBtn').click();
@@ -146,9 +179,9 @@ try {
   assert.equal(monas.progression.gateResidue, false);
   await open.context.close();
 
-  // The physical M12 evidence distinguished the two Fold postures: open-2x was the
-  // provisional sustainable candidate while cover-native remained viable. M33 must
-  // not over-apply the open-screen performance trade to the narrow cover display.
+  // Also prove cold-load cover behavior independently. The physical M12 evidence
+  // distinguished the two postures: open-2x was the provisional sustainable
+  // candidate while cover-native remained viable.
   const cover = await openProduct({ label: 'Fold cover', width: 368, height: 869, deviceScaleFactor: 2.625 });
   assert.equal(cover.params.has('renderDpr'), false, 'Fold-cover product URL must not inject a render override');
   assert.equal(cover.boot.effectiveDpr, 2.625, 'Fold-cover canvas must retain native DPR');
@@ -156,7 +189,14 @@ try {
   assert.equal(cover.boot.backingHeight, 2281, 'Fold-cover native backing height');
   await cover.context.close();
 
-  console.log(JSON.stringify({ open: open.boot, hex, monas, cover: cover.boot }, null, 2));
+  console.log(JSON.stringify({
+    open: open.boot,
+    foldedTransition,
+    unfoldedTransition,
+    hex,
+    monas,
+    cover: cover.boot
+  }, null, 2));
 } finally {
   if (browser) await browser.close();
   server.kill('SIGTERM');
