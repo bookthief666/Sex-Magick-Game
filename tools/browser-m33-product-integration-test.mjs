@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 
 const PORT = Number(process.env.PORT || 4594);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const FOLD_UA = 'Mozilla/5.0 (Linux; Android 16; SM-F956U) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36';
 
 function which(name) {
   const result = spawnSync('bash', ['-lc', `command -v ${name}`], { encoding: 'utf8' });
@@ -22,66 +23,93 @@ let browser;
 try {
   await sleep(1200);
   browser = await chromium.launch();
-  const context = await browser.newContext({
-    viewport: { width: 884, height: 1104 },
-    deviceScaleFactor: 2.625,
-    userAgent: 'Mozilla/5.0 (Linux; Android 16; SM-F956U) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36'
-  });
-  const page = await context.newPage();
-  const pageErrors = [];
-  const requestedUrls = [];
-  page.on('pageerror', error => pageErrors.push(error.message));
-  page.on('request', request => requestedUrls.push(request.url()));
 
-  // Deliberately omit gateSlice and renderDpr. M33 owns both product defaults.
-  await page.goto(`http://127.0.0.1:${PORT}/index.html?assetMode=offline`, { waitUntil: 'domcontentloaded' });
-  await page.locator('#game-container').waitFor({ state: 'visible' });
-  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_PRODUCT_DEFAULTS__), null, { timeout: 20000 });
-  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GATE_SLICE__), null, { timeout: 20000 });
-  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MISSIONS__), null, { timeout: 20000 });
-  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_POWERUPS__), null, { timeout: 20000 });
-  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITE_BOARD__), null, { timeout: 20000 });
-  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MONAS_PROGRESSION__), null, { timeout: 20000 });
+  async function openProduct({ label, width, height, deviceScaleFactor }) {
+    const context = await browser.newContext({
+      viewport: { width, height },
+      deviceScaleFactor,
+      userAgent: FOLD_UA
+    });
+    const page = await context.newPage();
+    const pageErrors = [];
+    const requestedUrls = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    page.on('request', request => requestedUrls.push(request.url()));
 
-  const boot = await page.evaluate(() => ({
-    search: location.search,
-    defaults: window.__SEX_MAGICK_PRODUCT_DEFAULTS__,
-    productUi: window.__SEX_MAGICK_PRODUCT_UI__ || null,
-    gate: Boolean(window.__SEX_MAGICK_GATE_SLICE__),
-    gatePreflight: Boolean(window.__SEX_MAGICK_GATE_PREFLIGHT__),
-    missions: Boolean(window.__SEX_MAGICK_MISSIONS__),
-    powerups: Boolean(window.__SEX_MAGICK_POWERUPS__),
-    riteBoard: Boolean(window.__SEX_MAGICK_RITE_BOARD__),
-    monas: Boolean(window.__SEX_MAGICK_MONAS__),
-    monasProgression: Boolean(window.__SEX_MAGICK_MONAS_PROGRESSION__),
-    boardTitle: document.querySelector('.leaderboard-title')?.textContent?.trim() || '',
-    boardText: document.getElementById('leaderboardList')?.textContent?.trim() || '',
-    manifest: document.getElementById('sex-magick-product-manifest')?.textContent?.replace(/\s+/g, ' ').trim() || '',
-    effectiveDpr: Number(document.getElementById('gameCanvas')?.dataset?.smEffectiveDpr || 0),
-    legacyTestHidden: (() => {
-      const button = Array.from(document.querySelectorAll('button')).find(node => node.getAttribute('onclick')?.includes('testLeaderboardConnection'));
-      return Boolean(button?.hidden);
-    })()
-  }));
+    // Deliberately omit gateSlice and renderDpr. M33 owns both product defaults.
+    await page.goto(`http://127.0.0.1:${PORT}/index.html?assetMode=offline`, { waitUntil: 'domcontentloaded' });
+    await page.locator('#game-container').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_PRODUCT_DEFAULTS__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GATE_SLICE__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MISSIONS__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_POWERUPS__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITE_BOARD__), null, { timeout: 20000 });
+    await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MONAS_PROGRESSION__), null, { timeout: 20000 });
 
-  const params = new URLSearchParams(boot.search);
-  assert.equal(params.get('gateSlice'), '1', 'normal product URL must activate the complete HEX stack');
-  assert.equal(params.get('renderDpr'), '2', 'Fold-open high-DPR session must default to 2x rendering');
-  assert.equal(boot.effectiveDpr, 2, 'canvas backing must actually use the M33 Fold-open 2x policy');
-  assert.equal(boot.gate, true);
-  assert.equal(boot.gatePreflight, true);
-  assert.equal(boot.missions, true);
-  assert.equal(boot.powerups, true);
-  assert.equal(boot.riteBoard, true);
-  assert.equal(boot.monas, true);
-  assert.equal(boot.monasProgression, true);
-  assert.match(boot.boardTitle, /RITE BOARD/);
-  assert.match(boot.manifest, /HEX.*GATE.*GNOSIS.*MISSIONS.*POWER/i);
-  assert.match(boot.manifest, /MONAS.*HOLD.*COHERENCE.*WARP/i);
-  assert.equal(boot.legacyTestHidden, true, 'obsolete network leaderboard test control must not be product-facing');
-  assert.equal(requestedUrls.some(url => /lootlocker\.io/i.test(url)), false, 'normal M33 product bootstrap must remain local-only before play');
+    const boot = await page.evaluate(() => {
+      const canvas = document.getElementById('gameCanvas');
+      const manifest = document.getElementById('sex-magick-product-manifest');
+      return {
+        search: location.search,
+        defaults: window.__SEX_MAGICK_PRODUCT_DEFAULTS__,
+        productUi: window.__SEX_MAGICK_PRODUCT_UI__ || null,
+        gate: Boolean(window.__SEX_MAGICK_GATE_SLICE__),
+        gatePreflight: Boolean(window.__SEX_MAGICK_GATE_PREFLIGHT__),
+        missions: Boolean(window.__SEX_MAGICK_MISSIONS__),
+        powerups: Boolean(window.__SEX_MAGICK_POWERUPS__),
+        riteBoard: Boolean(window.__SEX_MAGICK_RITE_BOARD__),
+        monas: Boolean(window.__SEX_MAGICK_MONAS__),
+        monasProgression: Boolean(window.__SEX_MAGICK_MONAS_PROGRESSION__),
+        boardTitle: document.querySelector('.leaderboard-title')?.textContent?.trim() || '',
+        boardText: document.getElementById('leaderboardList')?.textContent?.trim() || '',
+        manifest: manifest?.textContent?.replace(/\s+/g, ' ').trim() || '',
+        manifestRect: manifest ? {
+          left: manifest.getBoundingClientRect().left,
+          right: manifest.getBoundingClientRect().right,
+          width: manifest.getBoundingClientRect().width
+        } : null,
+        effectiveDpr: Number(canvas?.dataset?.smEffectiveDpr || 0),
+        backingWidth: Number(canvas?.dataset?.smBackingWidth || 0),
+        backingHeight: Number(canvas?.dataset?.smBackingHeight || 0),
+        viewportWidth: innerWidth,
+        viewportHeight: innerHeight,
+        horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+        legacyTestHidden: (() => {
+          const button = Array.from(document.querySelectorAll('button')).find(node => node.getAttribute('onclick')?.includes('testLeaderboardConnection'));
+          return Boolean(button?.hidden);
+        })()
+      };
+    });
 
-  const hex = await page.evaluate(() => {
+    const params = new URLSearchParams(boot.search);
+    assert.equal(params.get('gateSlice'), '1', `${label}: normal product URL must activate the complete HEX stack`);
+    assert.equal(boot.gate, true, `${label}: Gate runtime`);
+    assert.equal(boot.gatePreflight, true, `${label}: Gate local-only preflight`);
+    assert.equal(boot.missions, true, `${label}: missions runtime`);
+    assert.equal(boot.powerups, true, `${label}: power-ups runtime`);
+    assert.equal(boot.riteBoard, true, `${label}: Rite Board runtime`);
+    assert.equal(boot.monas, true, `${label}: MONAS runtime`);
+    assert.equal(boot.monasProgression, true, `${label}: MONAS progression runtime`);
+    assert.match(boot.boardTitle, /RITE BOARD/, `${label}: local Rite Board must own the menu board`);
+    assert.match(boot.manifest, /HEX.*GATE.*GNOSIS.*MISSIONS.*POWER/i, `${label}: HEX manifest`);
+    assert.match(boot.manifest, /MONAS.*HOLD.*COHERENCE.*WARP/i, `${label}: MONAS manifest`);
+    assert.equal(boot.legacyTestHidden, true, `${label}: obsolete network leaderboard test control must not be product-facing`);
+    assert.equal(boot.horizontalOverflow, false, `${label}: product menu must not introduce horizontal overflow`);
+    assert.ok(boot.manifestRect && boot.manifestRect.left >= -0.5 && boot.manifestRect.right <= boot.viewportWidth + 0.5,
+      `${label}: rite manifest must stay inside viewport`);
+    assert.equal(requestedUrls.some(url => /lootlocker\.io/i.test(url)), false, `${label}: default M33 bootstrap must remain local-only before play`);
+    assert.deepEqual(pageErrors, [], `${label}: page errors: ${pageErrors.join(', ')}`);
+
+    return { context, page, boot, params, pageErrors };
+  }
+
+  const open = await openProduct({ label: 'Fold open', width: 884, height: 1104, deviceScaleFactor: 2.625 });
+  assert.equal(open.params.get('renderDpr'), '2', 'Fold-open high-DPR session must default to 2x rendering');
+  assert.equal(open.boot.effectiveDpr, 2, 'Fold-open canvas backing must actually use 2x');
+  assert.equal(open.boot.backingWidth, 1768, 'Fold-open 2x backing width');
+  assert.equal(open.boot.backingHeight, 2208, 'Fold-open 2x backing height');
+
+  const hex = await open.page.evaluate(() => {
     document.getElementById('startHexBtn').click();
     return {
       rite: game.gameMode,
@@ -99,8 +127,8 @@ try {
   assert.ok(hex.powerups >= 2, 'power-up ladder must be installed on the ordinary product path');
   assert.equal(hex.missionHudHidden, false, 'mission HUD must surface during normal HEX play');
 
-  await page.evaluate(() => game.returnToMenu());
-  const monas = await page.evaluate(() => {
+  await open.page.evaluate(() => game.returnToMenu());
+  const monas = await open.page.evaluate(() => {
     document.getElementById('startMonasBtn').click();
     return {
       rite: game.gameMode,
@@ -116,10 +144,19 @@ try {
   assert.equal(monas.gateState, false, 'MONAS remains its own rite even though full HEX is now the product default');
   assert.equal(Boolean(monas.progression), true);
   assert.equal(monas.progression.gateResidue, false);
+  await open.context.close();
 
-  assert.deepEqual(pageErrors, [], `M33 product-integration page errors: ${pageErrors.join(', ')}`);
-  console.log(JSON.stringify({ boot, hex, monas }, null, 2));
-  await context.close();
+  // The physical M12 evidence distinguished the two Fold postures: open-2x was the
+  // provisional sustainable candidate while cover-native remained viable. M33 must
+  // not over-apply the open-screen performance trade to the narrow cover display.
+  const cover = await openProduct({ label: 'Fold cover', width: 368, height: 869, deviceScaleFactor: 2.625 });
+  assert.equal(cover.params.has('renderDpr'), false, 'Fold-cover product URL must not inject a render override');
+  assert.equal(cover.boot.effectiveDpr, 2.625, 'Fold-cover canvas must retain native DPR');
+  assert.equal(cover.boot.backingWidth, 966, 'Fold-cover native backing width');
+  assert.equal(cover.boot.backingHeight, 2281, 'Fold-cover native backing height');
+  await cover.context.close();
+
+  console.log(JSON.stringify({ open: open.boot, hex, monas, cover: cover.boot }, null, 2));
 } finally {
   if (browser) await browser.close();
   server.kill('SIGTERM');
