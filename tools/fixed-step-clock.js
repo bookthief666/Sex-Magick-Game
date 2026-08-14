@@ -129,6 +129,12 @@
       globalName: 'SexMagickAssetResilience'
     },
     {
+      path: './monas-progression-runtime.js',
+      selector: 'script[data-sex-magick-monas-progression-runtime]',
+      attribute: 'data-sex-magick-monas-progression-runtime',
+      globalName: 'SexMagickMonasProgression'
+    },
+    {
       path: './performance-budget-runtime.js',
       selector: 'script[data-sex-magick-performance-budget-runtime]',
       attribute: 'data-sex-magick-performance-budget-runtime',
