@@ -51,6 +51,8 @@ try {
   const boot = await page.evaluate(() => ({
     search: location.search,
     bootstrapMode: window.__SEX_MAGICK_M35_BOOTSTRAP__?.mode,
+    bootstrapVersion: window.__SEX_MAGICK_M35_BOOTSTRAP__?.version,
+    lifecycle: window.__SEX_MAGICK_M35_BOOTSTRAP__?.lifecycle,
     identityMode: window.__SEX_MAGICK_SEPHIRAH_IDENTITY__?.mode,
     bootstrapSrc: document.getElementById('sex-magick-living-sephiroth-bootstrap')?.getAttribute('src') || '',
     identitySrc: document.getElementById('sex-magick-sephirah-identity-runtime')?.getAttribute('src') || '',
@@ -66,6 +68,8 @@ try {
   assert.equal(params.get('gateSlice'), '1');
   assert.equal(params.get('renderDpr'), '2');
   assert.equal(boot.bootstrapMode, 'm35-living-sephiroth-bootstrap');
+  assert.equal(boot.bootstrapVersion, 2);
+  assert.equal(boot.lifecycle, 'event-driven', 'M35 must not poll continuously during play');
   assert.equal(boot.identityMode, 'm35-living-sephiroth');
   assert.equal(boot.bootstrapSrc, 'tools/sephirah-identity-bootstrap.js');
   assert.equal(boot.identitySrc, 'tools/sephirah-identity-runtime.js');
@@ -73,6 +77,8 @@ try {
   assert.deepEqual(boot.bandOrder, boot.gateOrder);
   assert.ok(boot.baselineParticle && boot.baselineParticle.speed > 0);
 
+  // The identity application is synchronous with the real startGame path, which
+  // keeps WebAudio creation inside the user's start gesture on mobile browsers.
   await page.evaluate(() => document.getElementById('startHexBtn').click());
   await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'MALKUTH', null, { timeout: 10000 });
 
@@ -97,6 +103,38 @@ try {
   assert.equal(Number(malkuth.vignetteOpacity), 0.86);
   assert.ok(Math.abs((malkuth.particle.speed / boot.baselineParticle.speed) - 0.62) < 0.001);
   assert.ok(['#8a6747', '#b08a62', '#66503a'].includes(malkuth.particle.color));
+
+  // STILLNESS must constrain M35's extra atmospheric movement immediately and be
+  // reversible without waiting for another band transition.
+  const reduced = await page.evaluate(() => {
+    const toggle = document.getElementById('reducedMotionToggle');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      access: window.__SEX_MAGICK_COLLISION__.getAccessibility(),
+      maxSpeed: Math.max(...game.backgroundParticles.map(p => p.speed)),
+      maxOpacity: Math.max(...game.backgroundParticles.map(p => p.opacity)),
+      band: document.documentElement.dataset.sephirah || null
+    };
+  });
+  assert.equal(reduced.access.reducedMotion, true);
+  assert.ok(reduced.maxSpeed <= 0.080001, 'reduced motion caps M35 ambient travel');
+  assert.ok(reduced.maxOpacity <= 0.180001, 'reduced motion caps M35 ambient density');
+  assert.equal(reduced.band, 'MALKUTH');
+
+  const restoredMotion = await page.evaluate(() => {
+    const toggle = document.getElementById('reducedMotionToggle');
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      access: window.__SEX_MAGICK_COLLISION__.getAccessibility(),
+      speed: game.backgroundParticles[0].speed,
+      band: document.documentElement.dataset.sephirah || null
+    };
+  });
+  assert.equal(restoredMotion.access.reducedMotion, false);
+  assert.equal(restoredMotion.band, 'MALKUTH');
+  assert.ok(Math.abs((restoredMotion.speed / boot.baselineParticle.speed) - 0.62) < 0.001, 'leaving STILLNESS restores authored band motion from baseline');
 
   await page.evaluate(() => {
     game.gateSliceState.gatesCleared = 6;
@@ -142,6 +180,33 @@ try {
   assert.equal(Number(kether.vignetteOpacity), 0.26);
   assert.ok(kether.particleOpacity < malkuth.particle.opacity, 'KETHER must visibly shed atmospheric noise');
 
+  // Pausing follows the base game's audio lifecycle: M35 retreats while the game
+  // is suspended, then reconstructs KETHER from the unchanged Gate state on resume.
+  const paused = await page.evaluate(() => {
+    game.togglePause();
+    return {
+      state: game.state,
+      snapshot: window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot(),
+      band: document.documentElement.dataset.sephirah || null
+    };
+  });
+  assert.equal(paused.state, 'paused');
+  assert.equal(paused.snapshot.active, false);
+  assert.equal(paused.band, null);
+
+  const resumed = await page.evaluate(() => {
+    game.togglePause();
+    return {
+      state: game.state,
+      snapshot: window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot(),
+      band: document.documentElement.dataset.sephirah || null
+    };
+  });
+  assert.equal(resumed.state, 'playing');
+  assert.equal(resumed.snapshot.active, true);
+  assert.equal(resumed.snapshot.band, 'KETHER');
+  assert.equal(resumed.band, 'KETHER');
+
   // M35 must retreat completely when the player changes rites. MONAS owns its own
   // gold/coherence/warp visual grammar and should not inherit the HEX Tree veil.
   await page.evaluate(() => {
@@ -182,7 +247,7 @@ try {
   assert.equal(qaRequests.some(url => url.endsWith('/tools/sephirah-identity-runtime.js')), false);
   await qaContext.close();
 
-  console.log(JSON.stringify({ boot, malkuth, yesod, geburah, kether, monas }, null, 2));
+  console.log(JSON.stringify({ boot, malkuth, reduced, restoredMotion, yesod, geburah, kether, paused, resumed, monas }, null, 2));
 } finally {
   if (browser) await browser.close();
   server.kill('SIGTERM');
