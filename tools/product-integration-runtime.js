@@ -14,10 +14,9 @@
  * It also applies the M12 evidence-backed Fold rendering policy: large high-DPR
  * postures use 2x backing while the narrow cover posture retains native DPR.
  *
- * M34 keeps that parser truth unchanged and adds one player-facing enhancement
- * after DOM readiness: the lightweight ritual-ascent layer. It is intentionally
- * absent from visual QA, telemetry QA, raw Gate QA, and explicit Gate-off
- * diagnostic sessions.
+ * M34 adds the lightweight ritual-ascent layer. M35 adds the Living Sephiroth
+ * identity bootstrap after DOM readiness. Both player-facing layers are absent
+ * from visual QA, telemetry QA, raw Gate QA and explicit Gate-off diagnostics.
  */
 (function attachSexMagickProductIntegration(root, factory) {
   'use strict';
@@ -39,6 +38,7 @@
   const HIGH_DPR_THRESHOLD = 2.25;
   const FOLD_OPEN_DPR = 2;
   const RITUAL_ASCENT_SCRIPT_ID = 'sex-magick-ritual-ascent-script';
+  const LIVING_SEPHIROTH_SCRIPT_ID = 'sex-magick-living-sephiroth-bootstrap';
 
   let adaptiveRenderManaged = false;
   let adaptiveRenderInstalled = false;
@@ -254,13 +254,17 @@
     catch (_error) { return false; }
   }
 
+  function playerFacingLayerAllowed() {
+    return (
+      typeof document !== 'undefined' &&
+      !visualQaActive() &&
+      !lowLevelDiagnosticActive() &&
+      fullHexProductActive()
+    );
+  }
+
   function ensureRitualAscentRuntimeLoaded() {
-    if (
-      typeof document === 'undefined' ||
-      visualQaActive() ||
-      lowLevelDiagnosticActive() ||
-      !fullHexProductActive()
-    ) return null;
+    if (!playerFacingLayerAllowed()) return null;
 
     const existing = document.getElementById(RITUAL_ASCENT_SCRIPT_ID);
     if (existing) return existing;
@@ -268,6 +272,20 @@
     const script = document.createElement('script');
     script.id = RITUAL_ASCENT_SCRIPT_ID;
     script.src = 'tools/ritual-ascent-runtime.js';
+    script.async = false;
+    document.head.appendChild(script);
+    return script;
+  }
+
+  function ensureLivingSephirothBootstrapLoaded() {
+    if (!playerFacingLayerAllowed()) return null;
+
+    const existing = document.getElementById(LIVING_SEPHIROTH_SCRIPT_ID);
+    if (existing) return existing;
+
+    const script = document.createElement('script');
+    script.id = LIVING_SEPHIROTH_SCRIPT_ID;
+    script.src = 'tools/sephirah-identity-bootstrap.js';
     script.async = false;
     document.head.appendChild(script);
     return script;
@@ -324,6 +342,7 @@
   function installDomProductLayer() {
     const ui = installMenuIntegration();
     ensureRitualAscentRuntimeLoaded();
+    ensureLivingSephirothBootstrapLoaded();
     return ui;
   }
 
@@ -342,6 +361,7 @@
     HIGH_DPR_THRESHOLD,
     FOLD_OPEN_DPR,
     RITUAL_ASCENT_SCRIPT_ID,
+    LIVING_SEPHIROTH_SCRIPT_ID,
     truthy,
     isLargeHighDprViewport,
     autoRenderDprFor,
@@ -351,7 +371,9 @@
     applyAdaptiveRenderDefault,
     installAdaptiveRenderPolicy,
     fullHexProductActive,
+    playerFacingLayerAllowed,
     ensureRitualAscentRuntimeLoaded,
+    ensureLivingSephirothBootstrapLoaded,
     installMenuIntegration,
     installDomProductLayer,
     scheduleDomIntegration
