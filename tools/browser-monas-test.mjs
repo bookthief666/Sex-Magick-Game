@@ -268,12 +268,16 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
         const next = game.obstacles.find(pillar => !pillar.marked);
         game.frames += 1;
         if (next) {
-          // Pillar.update() applies its vertical breathing at this frame before the
-          // pass is marked/scored. Aim at that scoring-frame centre, not the stale
-          // previous-frame `top`, so "dead-centre" remains a geometric invariant
-          // instead of depending on which sine phase a given gameSpeed crosses at.
+          // Pillar.update() applies M17's per-pillar amplitude/phase at this frame
+          // before the pass is marked/scored. Follow that installed motion law so
+          // "dead-centre" is the actual scoring-frame centre, not a stock phase-0
+          // approximation whose result changes with horizontal crossing phase.
+          const variety = window.SexMagickObstacleVariety;
+          const scoringOffset = typeof variety?.pillarVerticalOffset === 'function'
+            ? variety.pillarVerticalOffset(next, game.frames)
+            : Math.sin(game.frames * 0.05) * 5;
           const scoringTop = Number.isFinite(next.baseTop)
-            ? next.baseTop + (Math.sin(game.frames * 0.05) * 5)
+            ? next.baseTop + scoringOffset
             : next.top;
           game.player.y = scoringTop + (next.gap / 2);
         }
