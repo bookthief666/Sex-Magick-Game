@@ -111,6 +111,15 @@
 
   const scripts = [
     {
+      // M33 must run before every other product runtime: it turns the completed
+      // Gate/HEX stack on for ordinary sessions and selects the Fold-open 2x
+      // backing policy before Gate/canvas bootstraps inspect the query string.
+      path: './product-integration-runtime.js',
+      selector: 'script[data-sex-magick-product-integration-runtime]',
+      attribute: 'data-sex-magick-product-integration-runtime',
+      globalName: 'SexMagickProductIntegration'
+    },
+    {
       path: './touch-target-runtime.js',
       selector: 'script[data-sex-magick-touch-target-runtime]',
       attribute: 'data-sex-magick-touch-target-runtime',
