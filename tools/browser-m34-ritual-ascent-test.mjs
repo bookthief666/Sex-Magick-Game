@@ -43,11 +43,12 @@ try {
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GATE_SLICE__), null, { timeout: 20000 });
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MISSIONS__), null, { timeout: 20000 });
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITUAL_ASCENT__), null, { timeout: 20000 });
-  // Runtime installation can precede the menu's own reveal/init sequence. Start a
-  // rite only after the real game singleton exists and the menu is actually open.
+  // `game` is a top-level lexical binding in index.html, not a window property.
+  // Match the established suites and wait on that actual singleton plus the real
+  // menu reveal before starting a rite.
   await page.waitForFunction(() => (
-    typeof window.game !== 'undefined' &&
-    Boolean(window.game) &&
+    typeof game !== 'undefined' &&
+    Boolean(game) &&
     Boolean(document.getElementById('menuButtons')) &&
     !document.getElementById('menuButtons').classList.contains('hidden')
   ), null, { timeout: 20000 });
@@ -70,7 +71,9 @@ try {
   // This suite validates state integration, not pointer hit-testing. The menu has
   // continuous visual motion, so use the direct DOM click pattern used by M33.
   await page.evaluate(() => document.getElementById('startHexBtn').click());
-  await page.waitForFunction(() => window.game?.gameMode === 'HEX' && Boolean(window.game?.gateSliceState));
+  await page.waitForFunction(() => (
+    typeof game !== 'undefined' && game?.gameMode === 'HEX' && Boolean(game?.gateSliceState)
+  ));
   await page.waitForFunction(() => window.__SEX_MAGICK_RITUAL_ASCENT__?.getSnapshot?.()?.active === true);
 
   const initial = await page.evaluate(() => {
