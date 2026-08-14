@@ -16,7 +16,8 @@
  *
  * M34 keeps that parser truth unchanged and adds one player-facing enhancement
  * after DOM readiness: the lightweight ritual-ascent layer. It is intentionally
- * absent from visual QA, telemetry QA and explicit Gate-off diagnostic sessions.
+ * absent from visual QA, telemetry QA, raw Gate QA, and explicit Gate-off
+ * diagnostic sessions.
  */
 (function attachSexMagickProductIntegration(root, factory) {
   'use strict';
@@ -240,8 +241,12 @@
   }
 
   function lowLevelDiagnosticActive() {
-    try { return new URLSearchParams(root.location?.search || '').has('telemetryQa'); }
-    catch (_error) { return false; }
+    try {
+      const params = new URLSearchParams(root.location?.search || '');
+      return params.has('telemetryQa') || params.has('gateSliceQa');
+    } catch (_error) {
+      return false;
+    }
   }
 
   function fullHexProductActive() {
