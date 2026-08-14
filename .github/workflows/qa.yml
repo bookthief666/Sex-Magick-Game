@@ -38,6 +38,7 @@ jobs:
           node --check tools/fixed-step-clock.js
           node --check tools/fixed-step-prototype.js
           node --check tools/product-integration-runtime.js
+          node --check tools/ritual-ascent-runtime.js
           node --check tools/collision-runtime.js
           node --check tools/input-feedback-policy.js
           node --check tools/gate-slice-runtime.js
@@ -65,6 +66,7 @@ jobs:
           node --check tools/run-m7-review-audit.js
           node --check tools/test-fixed-step-clock.js
           node --check tools/test-product-integration-runtime.js
+          node --check tools/test-ritual-ascent-runtime.js
           node --check tools/test-collision-runtime.js
           node --check tools/test-input-feedback-policy.js
           node --check tools/test-r1-playtest-harness.js
@@ -108,6 +110,7 @@ jobs:
           node --check tools/browser-leaderboard-test.mjs
           node --check tools/browser-m30-standard-entry-test.mjs
           node --check tools/browser-m33-product-integration-test.mjs
+          node --check tools/browser-m34-ritual-ascent-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -120,6 +123,7 @@ jobs:
         run: |
           node tools/test-fixed-step-clock.js
           node tools/test-product-integration-runtime.js
+          node tools/test-ritual-ascent-runtime.js
           node tools/test-collision-runtime.js
           node tools/test-input-feedback-policy.js
           node tools/test-r1-playtest-harness.js
@@ -207,3 +211,6 @@ jobs:
 
       - name: Run M33 normal-product Chrome integration
         run: node tools/browser-m33-product-integration-test.mjs
+
+      - name: Run M34 ritual-ascent Chrome integration
+        run: node tools/browser-m34-ritual-ascent-test.mjs
