@@ -43,6 +43,14 @@ try {
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GATE_SLICE__), null, { timeout: 20000 });
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MISSIONS__), null, { timeout: 20000 });
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITUAL_ASCENT__), null, { timeout: 20000 });
+  // Runtime installation can precede the menu's own reveal/init sequence. Start a
+  // rite only after the real game singleton exists and the menu is actually open.
+  await page.waitForFunction(() => (
+    typeof window.game !== 'undefined' &&
+    Boolean(window.game) &&
+    Boolean(document.getElementById('menuButtons')) &&
+    !document.getElementById('menuButtons').classList.contains('hidden')
+  ), null, { timeout: 20000 });
 
   const boot = await page.evaluate(() => ({
     search: location.search,
@@ -60,9 +68,7 @@ try {
   assert.equal(boot.snapshot.active, false, 'ritual ascent is not visible on the menu');
 
   // This suite validates state integration, not pointer hit-testing. The menu has
-  // continuous visual motion, so Playwright's actionability "stable" check can
-  // wait forever even though the real button is visible and enabled. Use the same
-  // direct DOM click pattern as the established M33 product integration harness.
+  // continuous visual motion, so use the direct DOM click pattern used by M33.
   await page.evaluate(() => document.getElementById('startHexBtn').click());
   await page.waitForFunction(() => window.game?.gameMode === 'HEX' && Boolean(window.game?.gateSliceState));
   await page.waitForFunction(() => window.__SEX_MAGICK_RITUAL_ASCENT__?.getSnapshot?.()?.active === true);
