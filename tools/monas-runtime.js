@@ -51,6 +51,10 @@
   const LIFT = -0.62;
   const MAX_RISE = -6.4;
   const MAX_FALL = 8.2;
+  // On release, gravity ramps in over this many frames rather than applying in full
+  // on the very next frame - the "slight lag" before the fall properly starts, so a
+  // quick tap-and-release reads as a hover rather than an instant reversal.
+  const HANG_FRAMES = 5;
 
   // --- coherence ---------------------------------------------------------------
   const COHERENCE_CAPACITY = 10;
@@ -226,6 +230,12 @@
    * Pure, so the feel can be reasoned about and tested without a browser: gravity
    * pulls, lift opposes it while held, damping bleeds momentum so neither a climb nor
    * a dive runs away, and the result is clamped to a rise and fall ceiling.
+   *
+   * `framesSinceRelease` ramps gravity in linearly over `HANG_FRAMES` after the hold
+   * ends, rather than applying it in full on the very next frame - the moment of
+   * lag the glyph should hang for before it properly starts to fall. It defaults to
+   * `HANG_FRAMES` (i.e. already fully ramped in), not 0, so a caller that omits it -
+   * every existing test - gets exactly the old immediate-gravity behaviour.
    */
   function advanceGlide(state, options = {}) {
     const lifting = Boolean(options.held);
@@ -234,9 +244,12 @@
     const lift = finite(options.lift, LIFT);
     const maxRise = finite(options.maxRise, MAX_RISE);
     const maxFall = finite(options.maxFall, MAX_FALL);
+    const framesSinceRelease = finite(options.framesSinceRelease, HANG_FRAMES);
+
+    const releaseRamp = lifting ? 1 : clamp(framesSinceRelease / HANG_FRAMES, 0, 1);
 
     let vy = finite(state?.vy, 0);
-    vy += gravity;
+    vy += gravity * releaseRamp;
     if (lifting) vy += lift;
     vy *= damping;
     vy = clamp(vy, maxRise, maxFall);
@@ -502,6 +515,7 @@
     const originalUpdateGameObjects = Game.prototype.updateGameObjects;
     const originalGetCurrentGap = Game.prototype.getCurrentGap;
     const originalPlayerUpdate = Player.prototype.update;
+    const originalPlayerJump = Player.prototype.jump;
     const originalTunnel = Game.prototype.drawHyperspaceTunnel;
     const originalWarpStarDraw = typeof WarpStar !== 'undefined' ? WarpStar.prototype.draw : null;
     const originalWarpStarUpdate = typeof WarpStar !== 'undefined' ? WarpStar.prototype.update : null;
@@ -529,20 +543,46 @@
 
     /**
      * Glide replaces the flap, and only in MONAS. The original update still runs for
-     * everything else it does - trail, rotation, squash, clamping - with the vertical
+     * everything else it does - trail, squash, clamping - with the vertical
      * integration handed to `advanceGlide` first and the original's own gravity step
      * neutralised by restoring the velocity it would have applied.
+     *
+     * The avatar rises only while held and falls only while released, with no
+     * discrete kick either way: `Player.prototype.jump` (below) is a no-op for
+     * MONAS now, so this is the *only* thing moving the glyph vertically. `rot` is
+     * zeroed after the original runs to remove its constant per-frame spin - the
+     * original already applies a velocity-based bank (`this.vy * 0.05`) at draw
+     * time regardless of `rot`, so banking still reads the movement, it just no
+     * longer spins independent of it.
      */
     Player.prototype.update = function monasPlayerUpdate(...args) {
       if (this.mode !== 'MONAS') return originalPlayerUpdate.apply(this, args);
 
-      const glided = advanceGlide({ y: this.y, vy: this.vy }, { held });
+      const framesSinceRelease = held ? 0 : finite(this.__monasFramesSinceRelease, HANG_FRAMES) + 1;
+      const glided = advanceGlide({ y: this.y, vy: this.vy }, { held, framesSinceRelease });
       // Hand the original the velocity that glide decided on, then undo the gravity
       // and damping it applies itself so the step is not integrated twice.
       this.vy = (glided.vy - GRAVITY) / DAMPING;
       const result = originalPlayerUpdate.apply(this, args);
+      this.rot = 0;
+      this.__monasFramesSinceRelease = framesSinceRelease;
       this.__monasHeld = held;
       return result;
+    };
+
+    /**
+     * The base game's tap-to-flap input (`playerJump()` in index.html, and
+     * `dispatchPlayerJump` in collision-runtime.js - both call `Player.prototype.jump`
+     * and nothing else) fires on every click/touchstart/keydown regardless of mode.
+     * For MONAS that used to land a discrete `vy = -7.2` kick, its own SFX, haptic
+     * and particle burst, on top of the hold-driven glide above - the "bounce" this
+     * was built to remove. MONAS is a hold rite, not a tap one, so the tap kick is a
+     * no-op here; every caller routes through this one method, so no other call site
+     * needs to know MONAS exists.
+     */
+    Player.prototype.jump = function monasPlayerJump(...args) {
+      if (this.mode === 'MONAS') return undefined;
+      return originalPlayerJump.apply(this, args);
     };
 
     Game.prototype.getCurrentGap = function monasGap(...args) {
@@ -720,6 +760,7 @@
           lift: LIFT,
           maxRise: MAX_RISE,
           maxFall: MAX_FALL,
+          hangFrames: HANG_FRAMES,
           coherenceCapacity: COHERENCE_CAPACITY,
           surgeFrames: SURGE_FRAMES,
           surgeSpeedMultiplier: SURGE_SPEED_MULTIPLIER,
@@ -768,7 +809,7 @@
 
   const api = Object.freeze({
     MONAS_VERSION,
-    GRAVITY, DAMPING, LIFT, MAX_RISE, MAX_FALL,
+    GRAVITY, DAMPING, LIFT, MAX_RISE, MAX_FALL, HANG_FRAMES,
     COHERENCE_CAPACITY, CENTRE_TOLERANCE, SMOOTH_REVERSALS, SMOOTHNESS_SHARE,
     SURGE_FRAMES, SURGE_SPEED_MULTIPLIER, SURGE_SCORE_MULTIPLIER,
     GALLERY_ADVANCE_GATES, COLOR_ADVANCE_GATES,

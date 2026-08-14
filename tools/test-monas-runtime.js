@@ -59,6 +59,43 @@ function approximately(actual, expected, epsilon = 1e-6) {
   assert.ok(first.vy > monas.MAX_RISE, 'releasing must begin to shed upward momentum');
 }
 
+{
+  // Omitting framesSinceRelease must behave exactly as it always did - full gravity
+  // on the very next frame - since every test above this one omits it and every
+  // existing caller (before this option existed) relied on that.
+  const omitted = monas.advanceGlide({ y: 400, vy: 0 }, { held: false });
+  const fullyReleased = monas.advanceGlide({ y: 400, vy: 0 }, { held: false, framesSinceRelease: monas.HANG_FRAMES });
+  approximately(omitted.vy, fullyReleased.vy);
+}
+
+{
+  // The moment of release (framesSinceRelease: 0) must fall slower than a release
+  // that has had a full HANG_FRAMES to ramp in - the "slight lag" the avatar hangs
+  // for before it properly starts to fall.
+  const justReleased = monas.advanceGlide({ y: 400, vy: 0 }, { held: false, framesSinceRelease: 0 });
+  const fullyReleased = monas.advanceGlide({ y: 400, vy: 0 }, { held: false, framesSinceRelease: monas.HANG_FRAMES });
+  assert.ok(justReleased.vy < fullyReleased.vy, `a fresh release must fall slower, got ${justReleased.vy} vs ${fullyReleased.vy}`);
+  approximately(justReleased.vy, 0, 1e-9);
+}
+
+{
+  // Ramping in across HANG_FRAMES, from rest, monotonically increases the fall
+  // rate each frame until it reaches the fully-released value.
+  let previous = -Infinity;
+  for (let frame = 0; frame <= monas.HANG_FRAMES; frame += 1) {
+    const step = monas.advanceGlide({ y: 400, vy: 0 }, { held: false, framesSinceRelease: frame });
+    assert.ok(step.vy >= previous - 1e-9, `fall rate must not decrease during the ramp, got ${step.vy} after ${previous}`);
+    previous = step.vy;
+  }
+}
+
+{
+  // Holding overrides any in-progress ramp immediately - there is no lag on the way
+  // up, only on the way down.
+  const held = monas.advanceGlide({ y: 400, vy: 0 }, { held: true, framesSinceRelease: 0 });
+  assert.ok(held.vy < 0, `holding must rise even with framesSinceRelease 0, got ${held.vy}`);
+}
+
 // --- coherence ----------------------------------------------------------------
 
 {

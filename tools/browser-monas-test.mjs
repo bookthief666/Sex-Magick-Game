@@ -119,6 +119,140 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
   await context.close();
 }
 
+// --- no bounce: the tap-to-flap kick is a no-op in MONAS, only the hold moves it ---
+//
+// Before this, index.html's playerJump() (bound to click/touchstart/keydown Space,
+// state-agnostic) and collision-runtime.js's dispatchPlayerJump both called
+// Player.prototype.jump() unconditionally, landing a discrete vy=-7.2 kick plus its
+// own SFX/haptic/particle burst on every tap - on top of the hold-driven glide added
+// in M27. That discrete kick is the "bounce" this fixes: MONAS is a hold rite now,
+// and jump() must do nothing for it, through every real call path.
+
+{
+  const { context, page } = await openGame();
+  const noBounce = await page.evaluate(() => {
+    document.getElementById('startMonasBtn').click();
+    window.__SEX_MAGICK_MONAS__.setHeldForTest(false);
+
+    game.player.y = 500;
+    game.player.vy = 0;
+    const beforeDirectJump = game.player.vy;
+    game.player.jump();
+    const afterDirectJump = game.player.vy;
+
+    game.player.vy = 0;
+    game.state = GameState.PLAYING;
+    game.playerJump();
+    const afterPlayerJump = game.player.vy;
+
+    game.player.vy = 0;
+    const dispatched = window.SexMagickCollision
+      ? window.SexMagickCollision.dispatchPlayerJump(game, 'playing')
+      : null;
+    const afterDispatch = game.player.vy;
+
+    return { beforeDirectJump, afterDirectJump, afterPlayerJump, afterDispatch, dispatched };
+  });
+
+  report.noBounce = noBounce;
+  try {
+    assert.equal(noBounce.afterDirectJump, noBounce.beforeDirectJump, 'Player.jump() must not change vy in MONAS');
+    assert.equal(noBounce.afterPlayerJump, 0, 'game.playerJump() (click/touch/keydown) must not kick vy in MONAS');
+    assert.equal(noBounce.afterDispatch, 0, 'collision-runtime\'s dispatchPlayerJump must not kick vy in MONAS either');
+  } catch (error) {
+    failures.push(`no bounce: ${error.message}`);
+  }
+  await context.close();
+}
+
+// --- the avatar rises only while held, falls only while released, with a lag -------
+
+{
+  const { context, page } = await openGame();
+  const pressRelease = await page.evaluate(() => {
+    document.getElementById('startMonasBtn').click();
+    const monas = window.__SEX_MAGICK_MONAS__;
+
+    game.player.y = 500;
+    game.player.vy = 0;
+    monas.setHeldForTest(true);
+    for (let frame = 0; frame < 20; frame += 1) game.player.update();
+    const risenY = game.player.y;
+    const vyWhileHeld = game.player.vy;
+
+    monas.setHeldForTest(false);
+    const vyOnRelease = [];
+    for (let frame = 0; frame < 10; frame += 1) {
+      game.player.update();
+      vyOnRelease.push(game.player.vy);
+    }
+    monas.setHeldForTest(false);
+
+    return { risenY, vyWhileHeld, vyOnRelease };
+  });
+
+  report.pressRelease = pressRelease;
+  try {
+    assert.ok(pressRelease.risenY < 500, 'holding must lift the avatar over real frames');
+    assert.ok(pressRelease.vyWhileHeld < 0, 'vy must be upward while held');
+    // The lag: fall velocity right after release must not jump straight to its
+    // fully-ramped value - it must climb toward it over the next several frames.
+    let increasing = true;
+    for (let i = 1; i < pressRelease.vyOnRelease.length; i += 1) {
+      if (pressRelease.vyOnRelease[i] < pressRelease.vyOnRelease[i - 1] - 1e-6) increasing = false;
+    }
+    assert.ok(increasing, `fall speed must ramp in rather than jump, got ${JSON.stringify(pressRelease.vyOnRelease)}`);
+    assert.ok(
+      pressRelease.vyOnRelease[0] < pressRelease.vyOnRelease[pressRelease.vyOnRelease.length - 1],
+      'the first frame after release must fall slower than a few frames later'
+    );
+  } catch (error) {
+    failures.push(`press/release: ${error.message}`);
+  }
+  await context.close();
+}
+
+// --- the continuous spin is gone; rot is frozen so only the velocity-based bank shows ---
+
+{
+  const { context, page } = await openGame();
+  const spin = await page.evaluate(() => {
+    document.getElementById('startMonasBtn').click();
+    window.__SEX_MAGICK_MONAS__.setHeldForTest(false);
+    game.player.rot = 1.2345;
+    game.player.update();
+    return { rotAfter: game.player.rot };
+  });
+
+  report.spin = spin;
+  try {
+    assert.equal(spin.rotAfter, 0, `rot must be frozen at 0 for MONAS, got ${spin.rotAfter}`);
+  } catch (error) {
+    failures.push(`spin frozen: ${error.message}`);
+  }
+  await context.close();
+}
+
+// --- HEX's own tap-to-flap kick is untouched by the MONAS jump wrap ----------------
+
+{
+  const { context, page } = await openGame();
+  const hexJump = await page.evaluate(() => {
+    document.getElementById('startHexBtn').click();
+    game.player.vy = 0;
+    game.player.jump();
+    return { vyAfterJump: game.player.vy };
+  });
+
+  report.hexJump = hexJump;
+  try {
+    assert.ok(hexJump.vyAfterJump < 0, `HEX's jump() must still kick vy upward, got ${hexJump.vyAfterJump}`);
+  } catch (error) {
+    failures.push(`hex jump untouched: ${error.message}`);
+  }
+  await context.close();
+}
+
 // --- Coherence is earned by the centre, through the real update loop ---------------
 
 {

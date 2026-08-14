@@ -844,7 +844,7 @@
         };
 
         const GlitchFX = {
-            active: false, duration: 0, intensity: 1, type: 'rgb',
+            active: false, duration: 0, intensity: 1, type: 'rgb', tint: null,
             rgbSplit(ctx, intensity) {
                 const offset = Math.floor(Math.random() * 3 * intensity);
                 const rOffset = Math.random() > 0.5 ? offset : -offset;
@@ -869,20 +869,85 @@
                     }
                 };
             },
+            // A harder break than rgbSplit's soft channel drift: the canvas is sliced
+            // into a few horizontal bands and each is redrawn shifted sideways by its
+            // own random amount, with an optional colour wash over the top. Reads as
+            // the frame itself tearing, not just its colour separating - for events
+            // that should feel like an edge (a graze reward, a wager lost).
+            shearTear(ctx, intensity, tint) {
+                const width = ctx.canvas.width;
+                const height = ctx.canvas.height;
+                if (width <= 0 || height <= 0) return null;
+                const bandCount = 3 + Math.floor(Math.random() * 3);
+                const bandHeight = Math.ceil(height / bandCount);
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = width; tempCanvas.height = height;
+                tempCanvas.getContext('2d').putImageData(imageData, 0, 0);
+                return {
+                    draw: function(ctx) {
+                        ctx.save();
+                        for (let band = 0; band < bandCount; band += 1) {
+                            const y = band * bandHeight;
+                            const shift = (Math.random() - 0.5) * 34 * intensity;
+                            ctx.drawImage(tempCanvas, 0, y, width, bandHeight, shift, y, width, bandHeight);
+                        }
+                        if (tint) {
+                            ctx.globalCompositeOperation = 'screen';
+                            ctx.globalAlpha = 0.16 * intensity;
+                            ctx.fillStyle = tint;
+                            ctx.fillRect(0, 0, width, height);
+                        }
+                        ctx.restore();
+                    }
+                };
+            },
+            // A bright band travels once down the canvas as intensity runs from full
+            // to nothing - a triumphant "reality resets" read for events that reward
+            // rather than threaten, the opposite temperament from shearTear.
+            sweepBeam(ctx, intensity, tint) {
+                const width = ctx.canvas.width;
+                const height = ctx.canvas.height;
+                if (width <= 0 || height <= 0) return null;
+                const y = height * (1 - intensity);
+                const colour = tint || '#00e5ff';
+                return {
+                    draw: function(ctx) {
+                        ctx.save();
+                        const gradient = ctx.createLinearGradient(0, y - 40, 0, y + 40);
+                        gradient.addColorStop(0, 'rgba(0,0,0,0)');
+                        gradient.addColorStop(0.5, colour);
+                        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.globalCompositeOperation = 'screen';
+                        ctx.globalAlpha = 0.5 * intensity;
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(0, y - 40, width, 80);
+                        ctx.restore();
+                    }
+                };
+            },
             apply(ctx, currentTime) {
                 if (!this.active || this.duration <= 0) return;
                 const progress = this.duration / 100;
                 this.intensity = Math.min(1, progress * 2);
-                if (Math.random() > 0.8) {
+                if (this.type === 'shear') {
+                    if (Math.random() > 0.5) {
+                        const effect = this.shearTear(ctx, this.intensity, this.tint);
+                        if (effect) effect.draw(ctx);
+                    }
+                } else if (this.type === 'sweep') {
+                    const effect = this.sweepBeam(ctx, this.intensity, this.tint);
+                    if (effect) effect.draw(ctx);
+                } else if (Math.random() > 0.8) {
                     const rgbEffect = this.rgbSplit(ctx, this.intensity);
                     if (rgbEffect) rgbEffect.draw(ctx, ctx.canvas.width, ctx.canvas.height);
                 }
                 this.duration -= 16;
-                if (this.duration <= 0) { this.active = false; this.intensity = 1; }
+                if (this.duration <= 0) { this.active = false; this.intensity = 1; this.tint = null; }
             },
-            trigger(duration = 100, type = 'all') {
+            trigger(duration = 100, type = 'all', tint = null) {
                 this.active = true;
-                this.duration = duration; this.type = type; this.intensity = 1;
+                this.duration = duration; this.type = type; this.intensity = 1; this.tint = tint;
             }
         };
 

@@ -304,10 +304,31 @@ async function main() {
         const afterEntry = __SEX_MAGICK_GATE_SLICE__.getSnapshot();
         const speedDuringVoid = game.gameSpeed;
 
+        function readTelegraph() {
+          const element = document.getElementById('gate-slice-telegraph');
+          const style = getComputedStyle(element);
+          return {
+            text: element.textContent,
+            hidden: element.hidden,
+            hasFlashClass: element.classList.contains('gate-slice-telegraph-flash'),
+            flashColor: style.getPropertyValue('--gate-slice-telegraph-flash').trim(),
+            position: style.position,
+            top: style.top,
+            bottom: style.bottom
+          };
+        }
+        const telegraphOnWager = readTelegraph();
+
+        function readGlitch() {
+          return { active: GlitchFX.active, type: GlitchFX.type, tint: GlitchFX.tint };
+        }
+
         game.__gateSliceVoidStartedAt = game.frames - 480;
         game.endVoidMode();
         const afterSurvival = __SEX_MAGICK_GATE_SLICE__.getSnapshot();
         const scoreAfterSurvival = game.score;
+        const telegraphOnSurvival = readTelegraph();
+        const glitchOnSurvival = readGlitch();
 
         __SEX_MAGICK_GATE_SLICE__.forceGnosis(10);
         __SEX_MAGICK_GATE_SLICE__.spawnGateNow();
@@ -317,7 +338,51 @@ async function main() {
         game.updateGameObjects();
         game.gameOver();
         const afterDeath = __SEX_MAGICK_GATE_SLICE__.getSnapshot();
+        const glitchOnDeath = readGlitch();
         const history = __SEX_MAGICK_GATE_SLICE__.getHistory();
+
+        // A graze pass - clearance under NEAR_MISS_PX but still safe - used to have
+        // no visual signature of its own beyond the score tick.
+        game.gateSliceState.gnosis = 0;
+        game.gateSliceState.gateReady = false;
+        game.screenFlash = null;
+        GlitchFX.active = false;
+        game.frames = 600;
+        game.player.y = 192;
+        game.obstacles = [{
+          x: game.player.x - 50, w: 45, top: 178, baseTop: 178, gap: 190,
+          marked: false, patternFamily: 'pressure',
+          update() {}, collides() { return false; }, draw() {}
+        }];
+        game.updateGameObjects();
+        const nearMissGlitch = {
+          screenFlashColor: game.screenFlash?.color ?? null,
+          screenFlashActive: Boolean(game.screenFlash?.active),
+          ...readGlitch()
+        };
+
+        // Reduced motion must suppress these new effects entirely, the same way
+        // installEffectPolicy suppresses triggerOrbGlitch/triggerLevelUpGlitch/
+        // triggerDeathGlitch - these raw GlitchFX.trigger calls are outside that
+        // wrap, so gate-slice-runtime.js's own triggerHexGlitch has to check.
+        __SEX_MAGICK_COLLISION__.setReducedMotion(true);
+        game.gateSliceState.gnosis = 0;
+        game.gateSliceState.gateReady = false;
+        game.screenFlash = null;
+        GlitchFX.active = false;
+        game.frames = 601;
+        game.player.y = 192;
+        game.obstacles = [{
+          x: game.player.x - 50, w: 45, top: 178, baseTop: 178, gap: 190,
+          marked: false, patternFamily: 'pressure',
+          update() {}, collides() { return false; }, draw() {}
+        }];
+        game.updateGameObjects();
+        const nearMissReducedMotion = {
+          screenFlashActive: Boolean(game.screenFlash?.active),
+          glitchActive: GlitchFX.active
+        };
+        __SEX_MAGICK_COLLISION__.setReducedMotion(false);
 
         return {
           menu,
@@ -329,9 +394,15 @@ async function main() {
           scoreAfterBank,
           afterEntry,
           speedDuringVoid,
+          telegraphOnWager,
           afterSurvival,
           scoreAfterSurvival,
+          telegraphOnSurvival,
+          glitchOnSurvival,
           afterDeath,
+          glitchOnDeath,
+          nearMissGlitch,
+          nearMissReducedMotion,
           history,
           finalState: game.state,
           inputBufferFrames: __SEX_MAGICK_COLLISION__.getInputBufferFrames(),
@@ -385,6 +456,55 @@ async function main() {
     assert.equal(result.afterSurvival.state.voidSurvivals, 1);
     assert.equal(result.afterSurvival.state.currentWager, 0);
     assert.equal(result.scoreAfterSurvival, 133);
+
+    // The telegraph used to sit centred at top:42%, opaque enough to obscure the
+    // artwork behind it. It is bottom-anchored now (no top offset, an explicit
+    // bottom), and each event kind sets a distinct flash colour rather than a
+    // single fixed cyan.
+    assert.equal(result.telegraphOnWager.position, 'fixed');
+    assert.notEqual(result.telegraphOnWager.top, '42%', 'the centred top:42% placement is gone');
+    assert.notEqual(result.telegraphOnWager.bottom, 'auto', 'must be anchored to the bottom instead');
+    assert.ok(
+      parseFloat(result.telegraphOnWager.bottom) > 0,
+      `bottom offset must resolve to a real distance, got ${result.telegraphOnWager.bottom}`
+    );
+    assert.match(result.telegraphOnWager.text, /WAGER ACCEPTED/);
+    assert.equal(result.telegraphOnWager.hasFlashClass, true, 'a fresh telegraph must carry the flash class');
+    assert.equal(result.telegraphOnWager.flashColor, '#8f7bff', 'wager accepted is a progress-kind flash');
+
+    assert.match(result.telegraphOnSurvival.text, /VOID SURVIVED/);
+    assert.equal(result.telegraphOnSurvival.hasFlashClass, true);
+    assert.equal(result.telegraphOnSurvival.flashColor, '#5dffb0', 'void survived is a success-kind flash');
+    assert.notEqual(
+      result.telegraphOnSurvival.flashColor,
+      result.telegraphOnWager.flashColor,
+      'different event kinds must flash different colours'
+    );
+
+    // HEX's own glitch vocabulary: before this, every event - orb, band ascent,
+    // death - rendered through the same single rgbSplit technique. Void survival
+    // and a wager lost now each carry a distinct technique of their own.
+    assert.equal(result.glitchOnSurvival.active, true, 'void survival must trigger a glitch');
+    assert.equal(result.glitchOnSurvival.type, 'sweep', 'void survival is a sweep, not the default rgbSplit');
+    assert.equal(result.glitchOnSurvival.tint, '#00e5ff', 'void survival flashes the Hexagram\'s own reserved cyan');
+
+    assert.equal(result.glitchOnDeath.active, true, 'a lost wager must trigger a glitch');
+    assert.equal(result.glitchOnDeath.type, 'shear', 'a lost wager tears rather than drifts');
+    assert.equal(result.glitchOnDeath.tint, '#ff2f6d', 'a lost wager flashes hazard pink');
+
+    // The graze pass is HEX's whole risk model and, until now, had no visual
+    // signature of its own beyond a score tick.
+    assert.equal(result.nearMissGlitch.screenFlashActive, true, 'a graze pass must raise a screen flash');
+    assert.equal(result.nearMissGlitch.screenFlashColor, '#ff2f6d', 'the graze flash is hazard pink');
+    assert.equal(result.nearMissGlitch.active, true, 'a graze pass must trigger a glitch');
+    assert.equal(result.nearMissGlitch.type, 'shear', 'a graze tears rather than drifts');
+    assert.equal(result.nearMissGlitch.tint, '#ff2f6d');
+
+    // Reduced motion suppresses these new effects entirely - the raw GlitchFX
+    // triggers sit outside installEffectPolicy's wrap, so gate-slice-runtime.js's
+    // own triggerHexGlitch has to make this check itself.
+    assert.equal(result.nearMissReducedMotion.screenFlashActive, false, 'reduced motion must suppress the graze flash');
+    assert.equal(result.nearMissReducedMotion.glitchActive, false, 'reduced motion must suppress the graze glitch');
 
     assert.equal(result.finalState, 'gameover');
     assert.equal(result.afterDeath.state.voidDeaths, 1);

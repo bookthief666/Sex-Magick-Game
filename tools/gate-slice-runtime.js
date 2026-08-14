@@ -490,20 +490,39 @@
       }
       #gate-slice-telegraph {
         position: fixed;
-        left: 50%; top: 42%; transform: translate(-50%, -50%);
+        left: 50%;
+        bottom: max(230px, calc(env(safe-area-inset-bottom) + 220px));
+        transform: translateX(-50%);
         z-index: 29;
         width: min(560px, calc(100vw - 30px));
-        padding: 12px 16px;
-        border: 1px solid rgba(0,229,255,.75);
-        background: rgba(0,0,0,.82);
+        padding: 10px 16px;
+        border: 1px solid rgba(0,229,255,.5);
+        background: rgba(0,0,0,.55);
         color: #eaffff;
         text-align: center;
         font: 12px/1.55 'Orbitron', monospace;
         letter-spacing: 3px;
         pointer-events: none;
         text-shadow: 0 0 12px #00e5ff;
+        --gate-slice-telegraph-flash: #00e5ff;
       }
       #gate-slice-telegraph[hidden] { display:none !important; }
+      #gate-slice-telegraph.gate-slice-telegraph-flash { animation: gate-slice-telegraph-flash .4s ease-out; }
+      @keyframes gate-slice-telegraph-flash {
+        0% {
+          color: var(--gate-slice-telegraph-flash);
+          border-color: var(--gate-slice-telegraph-flash);
+          text-shadow: 0 0 18px var(--gate-slice-telegraph-flash);
+          background: rgba(0,0,0,.72);
+        }
+        100% {
+          color: #eaffff;
+          border-color: rgba(0,229,255,.5);
+          text-shadow: 0 0 12px #00e5ff;
+          background: rgba(0,0,0,.55);
+        }
+      }
+      html.sex-magick-reduced-motion #gate-slice-telegraph.gate-slice-telegraph-flash { animation: none; }
       html.sex-magick-reduced-motion #gate-slice-meter-fill { transition: none; }
       #gate-slice-local-note {
         margin-top: 10px;
@@ -543,11 +562,29 @@
     return { hud, telegraph };
   }
 
-  function setTelegraph(text, durationMs = 1100) {
+  // Unreserved against M7: hazard pink/Hexagram cyan/Monas gold/ward purple are all
+  // spoken for elsewhere, so every kind below except 'danger' (which deliberately
+  // reuses hazard pink - a wager lost *is* a danger event) picks a colour none of
+  // those systems already own.
+  const TELEGRAPH_FLASH_COLORS = {
+    info: '#00e5ff',
+    progress: '#8f7bff',
+    bonus: '#ffb347',
+    success: '#5dffb0',
+    danger: '#ff2f6d'
+  };
+
+  function setTelegraph(text, durationMs = 1100, kind = 'info') {
     const element = document.getElementById('gate-slice-telegraph');
     if (!element) return;
     element.textContent = text;
     element.hidden = false;
+    element.style.setProperty('--gate-slice-telegraph-flash', TELEGRAPH_FLASH_COLORS[kind] || TELEGRAPH_FLASH_COLORS.info);
+    // Restart the flash animation even if a telegraph of the same kind is already
+    // mid-flash - remove the class, force a reflow, then re-add it.
+    element.classList.remove('gate-slice-telegraph-flash');
+    void element.offsetWidth;
+    element.classList.add('gate-slice-telegraph-flash');
     clearTimeout(element.__gateSliceTimer);
     element.__gateSliceTimer = setTimeout(() => { element.hidden = true; }, durationMs);
   }
@@ -625,7 +662,7 @@
     const offered = offerGateState(gameInstance.gateSliceState, { frame: gameInstance.frames, y });
     gameInstance.gateSliceState = offered.state;
     gameInstance.gateSliceOffer = offer;
-    setTelegraph('THE GATE OPENS  ·  ENTER TO WAGER  /  PASS TO BANK', 1500);
+    setTelegraph('THE GATE OPENS  ·  ENTER TO WAGER  /  PASS TO BANK', 1500, 'info');
     try {
       if (gameInstance.settings.sfx && typeof SFX?.playTone === 'function') {
         SFX.playTone(220, 'sine', 0.18, 0.06);
@@ -634,6 +671,21 @@
     } catch (_error) {}
     renderHud(gameInstance);
     return offer;
+  }
+
+  /**
+   * HEX's own glitch signatures, gated the same way `installEffectPolicy` gates
+   * `triggerOrbGlitch`/`triggerLevelUpGlitch`/`triggerDeathGlitch`/
+   * `triggerGlitchEffect` in collision-runtime.js - reduced motion means no effect
+   * at all, low flash means a shorter one - except these are raw `GlitchFX.trigger`
+   * calls the policy wrap never reaches (it only wraps those named methods), so the
+   * check has to happen here instead.
+   */
+  function triggerHexGlitch(duration, type, tint) {
+    const accessibility = root.__SEX_MAGICK_COLLISION__?.getAccessibility?.() || {};
+    if (accessibility.reducedMotion) return;
+    const effectiveDuration = accessibility.lowFlash ? Math.min(duration, 70) : duration;
+    try { GlitchFX.trigger(effectiveDuration, type, tint); } catch (_error) {}
   }
 
   function drawGateOffer(ctx, offer, gameInstance) {
@@ -725,7 +777,7 @@
       : band.speed;
     gameInstance.currentBaseGap = band.gap;
     if (announce) {
-      setTelegraph(`${band.name}  ·  ${band.riskActive ? 'THE EDGE AWAKENS' : 'LEARN THE CURRENT'}`, 950);
+      setTelegraph(`${band.name}  ·  ${band.riskActive ? 'THE EDGE AWAKENS' : 'LEARN THE CURRENT'}`, 950, 'progress');
       try { if (gameInstance.settings.sfx) SFX.levelUp(); } catch (_error) {}
     }
     renderHud(gameInstance);
@@ -799,7 +851,7 @@
 
     if (gameInstance.__bonusCorridorFrames > 0) {
       gameInstance.__bonusCorridorFrames -= 1;
-      if (gameInstance.__bonusCorridorFrames === 0) setTelegraph('THE PATH RESUMES', 700);
+      if (gameInstance.__bonusCorridorFrames === 0) setTelegraph('THE PATH RESUMES', 700, 'info');
       return gameInstance.__bonusCorridorFrames > 0;
     }
 
@@ -813,7 +865,7 @@
 
     gameInstance.__bonusCorridorLastGate = gates;
     gameInstance.__bonusCorridorFrames = BONUS_DURATION_FRAMES;
-    setTelegraph('GATHER THE SIGILS', 900);
+    setTelegraph('GATHER THE SIGILS', 900, 'bonus');
     return true;
   }
 
@@ -861,7 +913,7 @@
       gameInstance.score += banked.result.reward;
       const scoreUi = document.getElementById('scoreUi');
       if (scoreUi) scoreUi.textContent = String(gameInstance.score);
-      setTelegraph(`GNOSIS BANKED  +${banked.result.reward}`, 850);
+      setTelegraph(`GNOSIS BANKED  +${banked.result.reward}`, 850, 'success');
       try { if (gameInstance.settings.sfx) SFX.collect(); } catch (_error) {}
       renderHud(gameInstance);
     }
@@ -946,7 +998,20 @@
           }
         } catch (_error) {}
       }
-      if (applied.result.gateReady) setTelegraph('GNOSIS FULL  ·  THE GATE APPROACHES', 1050);
+      if (applied.result.nearMiss) {
+        // The graze pass is HEX's whole risk model, and until now it had no visual
+        // signature of its own beyond the score tick - a harder-edged tear than the
+        // ambient rgbSplit, in hazard pink, so the edge itself reads as felt.
+        const accessibility = root.__SEX_MAGICK_COLLISION__?.getAccessibility?.() || {};
+        if (!accessibility.reducedMotion && (!gameInstance.screenFlash || !gameInstance.screenFlash.active)) {
+          gameInstance.screenFlash = {
+            active: true, duration: 8, color: '#ff2f6d',
+            intensity: accessibility.lowFlash ? 0.08 : 0.14
+          };
+        }
+        triggerHexGlitch(140, 'shear', '#ff2f6d');
+      }
+      if (applied.result.gateReady) setTelegraph('GNOSIS FULL  ·  THE GATE APPROACHES', 1050, 'progress');
       const nextBandIndex = getBandIndex(gameInstance.gateSliceState.gatesCleared);
       if (nextBandIndex !== state.bandIndex) {
         gameInstance.gateSliceState.bandIndex = nextBandIndex;
@@ -1143,7 +1208,7 @@
         levelUi.textContent = 'THE VOID';
         levelUi.style.color = '#00ffff';
       }
-      setTelegraph(`WAGER ACCEPTED  × ${this.gateSliceState.currentWager}`, 900);
+      setTelegraph(`WAGER ACCEPTED  × ${this.gateSliceState.currentWager}`, 900, 'progress');
       try { if (this.settings.sfx) SFX.voidEnter(); } catch (_error) {}
       renderHud(this);
     };
@@ -1161,13 +1226,17 @@
       this.voidTimer = 0;
       this.gameSpeed = (BANDS[this.gateSliceState.bandIndex] || BANDS[0]).speed;
       document.getElementById('game-container')?.classList.remove('void-active');
-      setTelegraph(`VOID SURVIVED  +${completed.result.reward}`, 1200);
+      setTelegraph(`VOID SURVIVED  +${completed.result.reward}`, 1200, 'success');
+      // The wager paying off deserves its own reading, distinct from an ordinary
+      // band ascent - a bright sweep in the Hexagram's own reserved cyan.
+      triggerHexGlitch(170, 'sweep', '#00e5ff');
       applyBand(this, false);
       renderHud(this);
     };
 
     Game.prototype.gameOver = function gameOverGateSlice(...args) {
-      if (this.__gateSliceVoidActive && this.gateSliceState) {
+      const wagerLost = Boolean(this.__gateSliceVoidActive && this.gateSliceState);
+      if (wagerLost) {
         const elapsed = Math.max(0, this.frames - this.__gateSliceVoidStartedAt);
         const failed = failVoidState(this.gateSliceState, elapsed);
         this.gateSliceState = failed.state;
@@ -1176,10 +1245,16 @@
         this.voidTimer = 0;
         this.gameSpeed = (BANDS[this.gateSliceState.bandIndex] || BANDS[0]).speed;
         document.getElementById('game-container')?.classList.remove('void-active');
-        setTelegraph(`WAGER LOST  × ${failed.result.wager}`, 950);
+        setTelegraph(`WAGER LOST  × ${failed.result.wager}`, 950, 'danger');
       }
       const previousState = this.state;
       const result = originalGameOver.apply(this, args);
+      if (wagerLost) {
+        // The original's own gameOver() just fired its generic 'death' rgbSplit via
+        // triggerDeathGlitch - this fires after it specifically so the wager's own
+        // harsher tear wins the frame instead of being overwritten by the generic one.
+        triggerHexGlitch(190, 'shear', '#ff2f6d');
+      }
       if (previousState !== GameState.GAME_OVER && this.state === GameState.GAME_OVER) {
         finishRun(this, 'death');
       }

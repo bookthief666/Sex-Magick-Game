@@ -44,6 +44,7 @@ jobs:
           node --check tools/obstacle-variety-runtime.js
           node --check tools/missions-runtime.js
           node --check tools/powerup-runtime.js
+          node --check tools/monas-runtime.js
           node --check tools/occult-art-runtime.js
           node --check tools/occult-field-runtime.js
           node --check tools/player-reachability.js
@@ -72,6 +73,7 @@ jobs:
           node --check tools/test-obstacle-variety-runtime.js
           node --check tools/test-missions-runtime.js
           node --check tools/test-powerup-runtime.js
+          node --check tools/test-monas-runtime.js
           node --check tools/test-occult-art-runtime.js
           node --check tools/test-player-reachability.js
           node --check tools/test-compositional-reachability.js
@@ -88,6 +90,7 @@ jobs:
           node --check tools/browser-m18-missions-test.mjs
           node --check tools/browser-m19-powerups-test.mjs
           node --check tools/browser-m21-aesthetic-test.mjs
+          node --check tools/browser-monas-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -118,6 +121,7 @@ jobs:
           node tools/test-obstacle-variety-runtime.js
           node tools/test-missions-runtime.js
           node tools/test-powerup-runtime.js
+          node tools/test-monas-runtime.js
           node tools/test-occult-art-runtime.js
           node tools/test-m7-review-diagnostics.js
 
@@ -162,3 +166,6 @@ jobs:
 
       - name: Run M21 aesthetic Chrome integration
         run: node tools/browser-m21-aesthetic-test.mjs
+
+      - name: Run MONAS Chrome integration
+        run: node tools/browser-monas-test.mjs
