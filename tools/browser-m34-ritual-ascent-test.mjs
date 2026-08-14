@@ -59,7 +59,11 @@ try {
   assert.equal(boot.horizontalOverflow, false);
   assert.equal(boot.snapshot.active, false, 'ritual ascent is not visible on the menu');
 
-  await page.locator('#startHexBtn').click();
+  // This suite validates state integration, not pointer hit-testing. The menu has
+  // continuous visual motion, so Playwright's actionability "stable" check can
+  // wait forever even though the real button is visible and enabled. Use the same
+  // direct DOM click pattern as the established M33 product integration harness.
+  await page.evaluate(() => document.getElementById('startHexBtn').click());
   await page.waitForFunction(() => window.game?.gameMode === 'HEX' && Boolean(window.game?.gateSliceState));
   await page.waitForFunction(() => window.__SEX_MAGICK_RITUAL_ASCENT__?.getSnapshot?.()?.active === true);
 
