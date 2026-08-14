@@ -601,9 +601,21 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
     for (let frame = 0; frame < 1200 && passesObserved < 4; frame += 1) {
       game.collectibles = [];
       const next = game.obstacles.find(pillar => !pillar.marked);
-      if (next) game.player.y = next.top + (next.gap / 2);
-      game.player.vy = 0;
       game.frames += 1;
+      if (next) {
+        // The pulse only belongs to a true perfect pass (centred >= 0.999), so this
+        // visual probe must target the same scoring-frame centre as the Coherence
+        // probe above, including M17's per-pillar amplitude and phase.
+        const variety = window.SexMagickObstacleVariety;
+        const scoringOffset = typeof variety?.pillarVerticalOffset === 'function'
+          ? variety.pillarVerticalOffset(next, game.frames)
+          : Math.sin(game.frames * 0.05) * 5;
+        const scoringTop = Number.isFinite(next.baseTop)
+          ? next.baseTop + scoringOffset
+          : next.top;
+        game.player.y = scoringTop + (next.gap / 2);
+      }
+      game.player.vy = 0;
       game.screenFlash = null;
       GlitchFX.active = false;
       const gatesBefore = game.monasState.gatesPassed;
