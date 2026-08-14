@@ -3,15 +3,17 @@
 
   if (typeof document === 'undefined') return;
 
-  const VERSION = 1;
+  const VERSION = 2;
   const IDENTITY_SCRIPT_ID = 'sex-magick-sephirah-identity-runtime';
-  const POLL_MS = 100;
   const INSTALL_TIMEOUT_MS = 12_000;
+  const REDUCED_MOTION_SPEED_CAP = 0.08;
+  const REDUCED_MOTION_OPACITY_CAP = 0.18;
 
-  let pollTimer = null;
   let installTimer = null;
   let previousBand = null;
   let installed = false;
+  let settingsListener = null;
+  const originals = {};
 
   function excluded() {
     try {
@@ -66,6 +68,7 @@
 
   function dependenciesReady() {
     return Boolean(
+      typeof Game !== 'undefined' &&
       root.SexMagickSephirahIdentity &&
       root.__SEX_MAGICK_RITUAL_ASCENT__ &&
       root.SexMagickGateSlice?.BANDS &&
@@ -73,38 +76,159 @@
     );
   }
 
-  function tick() {
-    const gameInstance = currentGame();
-    if (!gameInstance) return;
-    const active = Boolean(gameInstance.gateSliceState && gameInstance.gameMode === 'HEX');
-    const band = active
-      ? root.SexMagickSephirahIdentity.bandNameFor(gameInstance)
-      : null;
-    let transition = 'steady';
-    if (band && previousBand === null) transition = 'initial';
+  function activeBandFor(gameInstance) {
+    if (!gameInstance?.gateSliceState || gameInstance.gameMode !== 'HEX') return null;
+    try {
+      if (
+        typeof GameState !== 'undefined' &&
+        (gameInstance.state === GameState.START || gameInstance.state === GameState.GAME_OVER || gameInstance.state === GameState.SETTINGS)
+      ) return null;
+    } catch (_error) {}
+    return root.SexMagickSephirahIdentity.bandNameFor(gameInstance);
+  }
+
+  function applyAccessibilityMotionCap(gameInstance) {
+    const access = root.__SEX_MAGICK_COLLISION__?.getAccessibility?.() || {};
+    if (!access.reducedMotion || gameInstance?.gameMode !== 'HEX' || !gameInstance?.gateSliceState) return false;
+    const particles = Array.isArray(gameInstance.backgroundParticles) ? gameInstance.backgroundParticles : [];
+    for (const particle of particles) {
+      particle.speed = Math.min(Number(particle.speed) || 0, REDUCED_MOTION_SPEED_CAP);
+      particle.opacity = Math.min(Number(particle.opacity) || 0, REDUCED_MOTION_OPACITY_CAP);
+    }
+    return true;
+  }
+
+  function deactivate(gameInstance) {
+    if (!gameInstance || !root.SexMagickSephirahIdentity) return null;
+    // Preserve the real particle array/settings while presenting an inactive rite
+    // to the identity runtime. This restores baseline overlays/particles and mutes
+    // the undertone without mutating the game's actual mode or Gate state.
+    const inactiveView = Object.create(gameInstance);
+    inactiveView.gameMode = 'MONAS';
+    inactiveView.gateSliceState = null;
+    const result = root.SexMagickSephirahIdentity.sync(inactiveView, { transition: 'steady' });
+    previousBand = null;
+    return result;
+  }
+
+  function syncNow(gameInstance = currentGame(), hint = 'steady') {
+    if (!gameInstance || !root.SexMagickSephirahIdentity) return null;
+    const band = activeBandFor(gameInstance);
+    if (!band) return deactivate(gameInstance);
+
+    let transition = hint;
+    if (band && previousBand === null && hint === 'steady') transition = 'initial';
     else if (band && previousBand && band !== previousBand) transition = 'band';
 
-    root.SexMagickSephirahIdentity.sync(gameInstance, { transition });
+    const result = root.SexMagickSephirahIdentity.sync(gameInstance, { transition });
     previousBand = band;
+    applyAccessibilityMotionCap(gameInstance);
+    return result;
+  }
+
+  function wrapLifecycle() {
+    if (Game.prototype.__livingSephirothLifecycleInstalled) return;
+
+    originals.startGame = Game.prototype.startGame;
+    originals.restartGame = Game.prototype.restartGame;
+    originals.checkLevel = Game.prototype.checkLevel;
+    originals.startVoidMode = Game.prototype.startVoidMode;
+    originals.endVoidMode = Game.prototype.endVoidMode;
+    originals.gameOver = Game.prototype.gameOver;
+    originals.returnToMenu = Game.prototype.returnToMenu;
+    originals.togglePause = Game.prototype.togglePause;
+
+    Game.prototype.startGame = function startGameWithLivingSephiroth(...args) {
+      const result = originals.startGame.apply(this, args);
+      syncNow(this, 'initial');
+      return result;
+    };
+
+    Game.prototype.restartGame = function restartGameWithLivingSephiroth(...args) {
+      const result = originals.restartGame.apply(this, args);
+      previousBand = null;
+      syncNow(this, 'initial');
+      return result;
+    };
+
+    Game.prototype.checkLevel = function checkLevelWithLivingSephiroth(...args) {
+      const before = activeBandFor(this);
+      const result = originals.checkLevel.apply(this, args);
+      const after = activeBandFor(this);
+      syncNow(this, before && after && before !== after ? 'band' : 'steady');
+      return result;
+    };
+
+    Game.prototype.startVoidMode = function startVoidWithLivingSephiroth(...args) {
+      const result = originals.startVoidMode.apply(this, args);
+      syncNow(this, 'steady');
+      return result;
+    };
+
+    Game.prototype.endVoidMode = function endVoidWithLivingSephiroth(...args) {
+      const result = originals.endVoidMode.apply(this, args);
+      syncNow(this, 'steady');
+      return result;
+    };
+
+    Game.prototype.gameOver = function gameOverWithLivingSephiroth(...args) {
+      const result = originals.gameOver.apply(this, args);
+      deactivate(this);
+      return result;
+    };
+
+    Game.prototype.returnToMenu = function returnToMenuWithLivingSephiroth(...args) {
+      const result = originals.returnToMenu.apply(this, args);
+      deactivate(this);
+      return result;
+    };
+
+    Game.prototype.togglePause = function togglePauseWithLivingSephiroth(...args) {
+      const result = originals.togglePause.apply(this, args);
+      try {
+        if (typeof GameState !== 'undefined' && this.state === GameState.PAUSED) deactivate(this);
+        else syncNow(this, 'steady');
+      } catch (_error) { syncNow(this, 'steady'); }
+      return result;
+    };
+
+    Game.prototype.__livingSephirothLifecycleInstalled = true;
+  }
+
+  function installSettingsListener() {
+    if (settingsListener) return;
+    settingsListener = event => {
+      const id = event.target?.id || '';
+      if (!['musicToggle', 'sfxToggle', 'reducedMotionToggle', 'lowFlashToggle'].includes(id)) return;
+      const gameInstance = currentGame();
+      if (!gameInstance) return;
+      // Re-enter from a clean baseline so changing STILLNESS immediately reapplies
+      // the current profile rather than waiting for the next Sephirah.
+      deactivate(gameInstance);
+      syncNow(gameInstance, 'steady');
+    };
+    document.addEventListener('change', settingsListener);
   }
 
   function install() {
     if (installed || excluded() || !dependenciesReady()) return null;
     installed = true;
-    tick();
-    pollTimer = setInterval(tick, POLL_MS);
+    wrapLifecycle();
+    installSettingsListener();
+    syncNow(currentGame());
 
     root.__SEX_MAGICK_M35_BOOTSTRAP__ = Object.freeze({
       mode: 'm35-living-sephiroth-bootstrap',
       version: VERSION,
-      pollMs: POLL_MS,
+      lifecycle: 'event-driven',
       getSnapshot() {
         return root.SexMagickSephirahIdentity?.getSnapshot?.(currentGame()) || null;
       },
-      refresh: tick,
+      refresh() { return syncNow(currentGame()); },
+      deactivate() { return deactivate(currentGame()); },
       stop() {
-        if (pollTimer) clearInterval(pollTimer);
-        pollTimer = null;
+        if (settingsListener) document.removeEventListener('change', settingsListener);
+        settingsListener = null;
       }
     });
     return root.__SEX_MAGICK_M35_BOOTSTRAP__;
@@ -136,8 +260,9 @@
 
   root.SexMagickLivingSephirothBootstrap = Object.freeze({
     VERSION,
-    POLL_MS,
     currentGame,
+    activeBandFor,
+    applyAccessibilityMotionCap,
     ensureIdentityRuntime,
     install,
     scheduleInstall
