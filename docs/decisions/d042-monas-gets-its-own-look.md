@@ -80,10 +80,11 @@ absolute figure with unclear provenance. A single sample either side turned out
 not to be a fair comparison either: back-to-back runs on this container swung by
 several milliseconds on their own, and one run failed the single-sample version
 of this check at 23ms against HEX's 17ms — not a regression, just noise landing
-on the wrong side of a tight margin. The test takes five independent trials per
-mode and compares medians, which is stable across repeated runs; the margin
-between medians is 6ms, comfortably inside the noise band and nowhere near what
-the real ~30ms `voidMode` bug would have shown.
+on the wrong side of a tight margin. The test now takes five independent trials
+per mode and compares medians. Across three full runs the observed gap between
+medians was **0.48ms, 0.05ms and 1.10ms** (MONAS 17.27/17.00/17.93 against HEX
+16.79/16.95/16.83), against an allowed margin of 6ms — stable, and nowhere near
+what the real ~30ms `voidMode` bug would have shown.
 
 ## Evidence
 
