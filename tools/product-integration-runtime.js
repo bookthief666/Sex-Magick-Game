@@ -13,6 +13,10 @@
  * bootstrap sees the effective query state in its original, proven wrapper order.
  * It also applies the M12 evidence-backed Fold rendering policy: large high-DPR
  * postures use 2x backing while the narrow cover posture retains native DPR.
+ *
+ * M34 keeps that parser truth unchanged and adds one player-facing enhancement
+ * after DOM readiness: the lightweight ritual-ascent layer. It is intentionally
+ * absent from visual QA, telemetry QA and explicit Gate-off diagnostic sessions.
  */
 (function attachSexMagickProductIntegration(root, factory) {
   'use strict';
@@ -33,6 +37,7 @@
   const LARGE_VIEWPORT_PIXELS = 700_000;
   const HIGH_DPR_THRESHOLD = 2.25;
   const FOLD_OPEN_DPR = 2;
+  const RITUAL_ASCENT_SCRIPT_ID = 'sex-magick-ritual-ascent-script';
 
   let adaptiveRenderManaged = false;
   let adaptiveRenderInstalled = false;
@@ -234,6 +239,35 @@
     catch (_error) { return false; }
   }
 
+  function lowLevelDiagnosticActive() {
+    try { return new URLSearchParams(root.location?.search || '').has('telemetryQa'); }
+    catch (_error) { return false; }
+  }
+
+  function fullHexProductActive() {
+    try { return new URLSearchParams(root.location?.search || '').get('gateSlice') === '1'; }
+    catch (_error) { return false; }
+  }
+
+  function ensureRitualAscentRuntimeLoaded() {
+    if (
+      typeof document === 'undefined' ||
+      visualQaActive() ||
+      lowLevelDiagnosticActive() ||
+      !fullHexProductActive()
+    ) return null;
+
+    const existing = document.getElementById(RITUAL_ASCENT_SCRIPT_ID);
+    if (existing) return existing;
+
+    const script = document.createElement('script');
+    script.id = RITUAL_ASCENT_SCRIPT_ID;
+    script.src = 'tools/ritual-ascent-runtime.js';
+    script.async = false;
+    document.head.appendChild(script);
+    return script;
+  }
+
   function installMenuIntegration() {
     if (typeof document === 'undefined' || visualQaActive()) return null;
     if (document.getElementById('sex-magick-product-manifest')) return root.__SEX_MAGICK_PRODUCT_UI__ || null;
@@ -282,12 +316,18 @@
     return root.__SEX_MAGICK_PRODUCT_UI__;
   }
 
+  function installDomProductLayer() {
+    const ui = installMenuIntegration();
+    ensureRitualAscentRuntimeLoaded();
+    return ui;
+  }
+
   function scheduleDomIntegration() {
     if (typeof document === 'undefined') return;
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', installMenuIntegration, { once: true });
+      document.addEventListener('DOMContentLoaded', installDomProductLayer, { once: true });
     } else {
-      installMenuIntegration();
+      installDomProductLayer();
     }
   }
 
@@ -296,6 +336,7 @@
     LARGE_VIEWPORT_PIXELS,
     HIGH_DPR_THRESHOLD,
     FOLD_OPEN_DPR,
+    RITUAL_ASCENT_SCRIPT_ID,
     truthy,
     isLargeHighDprViewport,
     autoRenderDprFor,
@@ -304,7 +345,10 @@
     getAdaptiveRenderSnapshot,
     applyAdaptiveRenderDefault,
     installAdaptiveRenderPolicy,
+    fullHexProductActive,
+    ensureRitualAscentRuntimeLoaded,
     installMenuIntegration,
+    installDomProductLayer,
     scheduleDomIntegration
   });
 });
