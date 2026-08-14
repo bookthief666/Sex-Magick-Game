@@ -266,9 +266,18 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
     function runCentred(frames) {
       for (let frame = 0; frame < frames; frame += 1) {
         const next = game.obstacles.find(pillar => !pillar.marked);
-        if (next) game.player.y = next.top + (next.gap / 2);
-        game.player.vy = 0;
         game.frames += 1;
+        if (next) {
+          // Pillar.update() applies its vertical breathing at this frame before the
+          // pass is marked/scored. Aim at that scoring-frame centre, not the stale
+          // previous-frame `top`, so "dead-centre" remains a geometric invariant
+          // instead of depending on which sine phase a given gameSpeed crosses at.
+          const scoringTop = Number.isFinite(next.baseTop)
+            ? next.baseTop + (Math.sin(game.frames * 0.05) * 5)
+            : next.top;
+          game.player.y = scoringTop + (next.gap / 2);
+        }
+        game.player.vy = 0;
         game.updateGameObjects();
       }
     }
