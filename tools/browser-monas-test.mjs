@@ -502,6 +502,72 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
   await context.close();
 }
 
+// --- the photo change carries the original's whole level-up spectacle -----------
+//
+// The original bundled shake, a freeze frame, an RGB-split glitch and a particle
+// burst into one moment, because score threshold and level index advanced
+// together. M28 split MONAS's photo and colour onto independent beats, and in
+// doing so this bundle was never given to either - the picture used to (and
+// still, via HEX's band ascent) change with an earthquake and a glitch; here it
+// changed in total silence. This drives real gates and asserts the burst fires
+// on the exact frame the gallery photo itself advances.
+
+{
+  const { context, page } = await openGame();
+  const spectacle = await page.evaluate(() => {
+    document.getElementById('startMonasBtn').click();
+    window.__SEX_MAGICK_MONAS__.setHeldForTest(false);
+
+    function entryKey() {
+      const entry = window.__SEX_MAGICK_MONAS__.getBackgroundEntry();
+      return entry?.name ?? entry?.img?.src ?? entry?.accent ?? null;
+    }
+
+    let previousEntry = entryKey();
+    let sawChange = false;
+    let shakeOnChange = null;
+    let hitStopOnChange = null;
+    let particlesBefore = 0;
+    let particlesOnChange = null;
+    let glitchActiveOnChange = null;
+
+    for (let frame = 0; frame < 6000 && !sawChange; frame += 1) {
+      const next = game.obstacles.find(pillar => !pillar.marked);
+      if (next) game.player.y = next.top + (next.gap / 2);
+      game.player.vy = 0;
+      game.frames += 1;
+      particlesBefore = game.particles.length;
+      game.updateGameObjects();
+      const currentEntry = entryKey();
+      if (currentEntry !== previousEntry) {
+        sawChange = true;
+        shakeOnChange = game.shake;
+        hitStopOnChange = game.hitStop;
+        particlesOnChange = game.particles.length;
+        glitchActiveOnChange = GlitchFX.active;
+      }
+      previousEntry = currentEntry;
+    }
+
+    return { sawChange, shakeOnChange, hitStopOnChange, particlesBefore, particlesOnChange, glitchActiveOnChange };
+  });
+
+  report.photoChangeSpectacle = spectacle;
+  try {
+    assert.ok(spectacle.sawChange, 'a real run must clear enough gates to see the photo change at least once');
+    assert.ok(spectacle.shakeOnChange > 0, `the photo change must shake the screen, got ${spectacle.shakeOnChange}`);
+    assert.ok(spectacle.hitStopOnChange > 0, `the photo change must freeze-frame briefly, got ${spectacle.hitStopOnChange}`);
+    assert.ok(
+      spectacle.particlesOnChange > spectacle.particlesBefore,
+      `the photo change must burst particles, got ${spectacle.particlesBefore} -> ${spectacle.particlesOnChange}`
+    );
+    assert.equal(spectacle.glitchActiveOnChange, true, 'the photo change must trigger a glitch');
+  } catch (error) {
+    failures.push(`photo change spectacle: ${error.message}`);
+  }
+  await context.close();
+}
+
 // --- the warp field is a fractal spark, not a filled square ---------------------
 
 {

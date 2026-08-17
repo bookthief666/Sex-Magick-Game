@@ -91,6 +91,23 @@
   const GALLERY_ADVANCE_GATES = 4;
   const COLOR_ADVANCE_GATES = 6;
 
+  /**
+   * Difficulty, which the base game ramps through the same `checkLevel()` /
+   * `applyLevel()` pair MONAS's own gate clears still call - but
+   * `gate-slice-runtime.js` overrides both to guard on `gateSliceState` and no-op
+   * for anything that is not HEX. Whenever `?gateSlice=1` is loaded, that silently
+   * froze `gameSpeed` at whatever `startGame()` set it to for the entire run, and
+   * left `getCurrentGap()` reading `currentLevelIdx` for its narrowing - the value
+   * M28 repurposed as a small modulo-wrapping colour index, so the gap floor a
+   * real run could reach was capped after the third gate ever cleared. Both are
+   * computed here instead, off `gatesPassed` directly - unbounded, and specific to
+   * MONAS's own run rather than borrowed from a value something else now means.
+   * The step size intentionally matches the pace `GALLERY_ADVANCE_GATES` already
+   * uses, so difficulty escalates on the same rhythm as the backdrop rather than
+   * introducing a third, uncoordinated cadence.
+   */
+  const DIFFICULTY_ADVANCE_GATES = 5;
+
   // --- ambient effects -----------------------------------------------------------
   // A rare atmospheric stutter during ordinary flight, distinct from the surge and
   // from HEX's RGB-split. Interval is randomised per occurrence so it never reads
@@ -148,6 +165,37 @@
     const count = Math.max(1, Math.floor(finite(levelCount, 1)));
     const step = Math.floor(Math.max(0, finite(gatesPassed, 0)) / Math.max(1, advanceEvery));
     return step % count;
+  }
+
+  /**
+   * The speed the original's `applyLevel()` would set - `INITIAL_GAME_SPEED +
+   * level * SPEED_INCREASE_PER_LEVEL`, clamped to `MAX_GAME_SPEED` - with `level`
+   * replaced by a `gatesPassed`-driven step of MONAS's own, since `currentLevelIdx`
+   * belongs to the colour rotation now. Defaults reproduce `CONFIG`'s own values so
+   * a caller (a test) that omits `options` still gets the shipped tuning.
+   */
+  function monasSpeedForGatesPassed(gatesPassed, options = {}) {
+    const initial = finite(options.initial, 2.9);
+    const perStep = finite(options.perStep, 0.035);
+    const max = finite(options.max, 8.5);
+    const steps = Math.floor(Math.max(0, finite(gatesPassed, 0)) / DIFFICULTY_ADVANCE_GATES);
+    return Math.min(max, initial + (steps * perStep));
+  }
+
+  /**
+   * The gap the original's `getCurrentGap()` would narrow to - the same
+   * `floor(level / 5) * PILLAR_GAP_DECREASE_PER_5_LEVELS` shape, `level` replaced
+   * the same way as above. The breathing wobble (`sin(frames * 0.05) * 10`) is
+   * applied by the caller, same as the original, since it depends on `frames`
+   * rather than progress.
+   */
+  function monasGapForGatesPassed(gatesPassed, options = {}) {
+    const baseGap = finite(options.baseGap, 200);
+    const decreasePerFiveSteps = finite(options.decreasePerFiveSteps, 10);
+    const minGap = finite(options.minGap, 110);
+    const steps = Math.floor(Math.max(0, finite(gatesPassed, 0)) / DIFFICULTY_ADVANCE_GATES);
+    const fiveStepGroups = Math.floor(steps / 5);
+    return Math.max(minGap, baseGap - (fiveStepGroups * decreasePerFiveSteps));
   }
 
   function shuffled(list, random = Math.random) {
@@ -586,11 +634,19 @@
     };
 
     Game.prototype.getCurrentGap = function monasGap(...args) {
-      const original = originalGetCurrentGap.apply(this, args);
-      if (!isMonas(this) || !this.monasState?.surgeActive) return original;
+      if (!isMonas(this) || !this.monasState) return originalGetCurrentGap.apply(this, args);
+      // Computed directly rather than through the original - see the block comment
+      // above DIFFICULTY_ADVANCE_GATES for why `currentLevelIdx` is off limits here.
+      const narrowed = monasGapForGatesPassed(this.monasState.gatesPassed, {
+        baseGap: typeof CONFIG !== 'undefined' ? CONFIG.PILLAR_GAP : undefined,
+        decreasePerFiveSteps: typeof CONFIG !== 'undefined' ? CONFIG.PILLAR_GAP_DECREASE_PER_5_LEVELS : undefined,
+        minGap: typeof CONFIG !== 'undefined' ? CONFIG.MIN_PILLAR_GAP : undefined
+      });
+      const breathing = narrowed + (Math.sin(this.frames * 0.05) * 10);
+      if (!this.monasState.surgeActive) return breathing;
       // The surge opens the corridor rather than tightening it: this is the reward,
       // not the wager. HEX's Void is the one that closes in.
-      return original * 1.18;
+      return breathing * 1.18;
     };
 
     Game.prototype.updateGameObjects = function monasUpdate(...args) {
@@ -607,6 +663,19 @@
       }
       this.__monasPreviousVy = currentVy;
 
+      // Difficulty escalation: speed increases on a 5-gate rhythm independent from
+      // colour cycling (currentLevelIdx), following `monasSpeedForGatesPassed`. The
+      // base game's `applyLevel()` would set `gameSpeed = INITIAL_GAME_SPEED +
+      // level * SPEED_INCREASE_PER_LEVEL`, clamped to MAX - here `level` is replaced
+      // by a step of the MONAS run's own, since `currentLevelIdx` now belongs to
+      // colour rotation. The surge then multiplies this escalated speed if active.
+      const escalatedSpeed = monasSpeedForGatesPassed(this.monasState.gatesPassed, {
+        initial: typeof CONFIG !== 'undefined' ? CONFIG.INITIAL_GAME_SPEED : undefined,
+        perStep: typeof CONFIG !== 'undefined' ? CONFIG.SPEED_INCREASE_PER_LEVEL : undefined,
+        max: typeof CONFIG !== 'undefined' ? CONFIG.MAX_GAME_SPEED : undefined
+      });
+      this.gameSpeed = escalatedSpeed;
+
       // An earlier version of the surge set `this.voidMode = true` to reach the warp
       // starfield's existing fast-streak branch in drawScene(), which reads that flag
       // for both the star speed and the tunnel colour. That was two bugs at once:
@@ -619,7 +688,7 @@
       // has nothing to do with HEX. `WarpStar.prototype.update` is wrapped below
       // instead, so the streak speeds up without touching `voidMode` at all.
       const surgeSpeed = this.monasState.surgeActive ? SURGE_SPEED_MULTIPLIER : 1;
-      const baseSpeed = this.gameSpeed;
+      const baseSpeed = escalatedSpeed;
       if (surgeSpeed !== 1) this.gameSpeed = baseSpeed * surgeSpeed;
 
       const result = originalUpdateGameObjects.apply(this, args);
@@ -630,6 +699,7 @@
         if (!record.marked && record.pillar.marked) {
           const gap = finite(record.pillar.gap, 200);
           const centre = finite(record.pillar.top, 0) + (gap / 2);
+          const galleryStepBefore = Math.floor(Math.max(0, finite(this.monasState.gatesPassed, 0)) / GALLERY_ADVANCE_GATES);
           const applied = applyCoherence(this.monasState, {
             gap,
             offset: playerY - centre,
@@ -643,6 +713,29 @@
           // which a MONAS run never has.
           if (Array.isArray(this.gameLevels) && this.gameLevels.length > 0) {
             this.currentLevelIdx = levelIdxForGatesPassed(this.monasState.gatesPassed, this.gameLevels.length);
+          }
+
+          // The original's whole level-up spectacle - shake, a freeze frame, an
+          // RGB-split glitch, a particle burst - fired every time the picture
+          // changed, because score threshold and level index moved together. Here
+          // the photo and the colour deliberately advance on different beats (see
+          // the block comment above GALLERY_ADVANCE_GATES), so the picture itself,
+          // not the colour or the gate count, is what the burst is tied to -
+          // `triggerLevelUpGlitch` already runs through installEffectPolicy's
+          // reduced-motion/low-flash gate, so nothing here needs to re-check it.
+          const galleryStepAfter = Math.floor(Math.max(0, finite(this.monasState.gatesPassed, 0)) / GALLERY_ADVANCE_GATES);
+          if (galleryStepAfter !== galleryStepBefore) {
+            this.shake = 12;
+            this.hitStop = 3;
+            this.triggerLevelUpGlitch();
+            for (let i = 0; i < 30; i += 1) {
+              this.particles.push(new Particle(
+                this.canvas.width / 2, this.canvas.height / 2,
+                '#ffd700', 12,
+                Math.random() > 0.5 ? 'hexagram' : 'triangle'
+              ));
+            }
+            try { Haptics.levelUp(); } catch (_error) {}
           }
 
           if (this.monasState.surgeActive && SURGE_SCORE_MULTIPLIER > 1) {
