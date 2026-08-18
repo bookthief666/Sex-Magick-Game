@@ -562,11 +562,50 @@
     const originalStartGame = Game.prototype.startGame;
     const originalUpdateGameObjects = Game.prototype.updateGameObjects;
     const originalGetCurrentGap = Game.prototype.getCurrentGap;
+    const originalAdjustForScreenSize = Game.prototype.adjustForScreenSize;
     const originalPlayerUpdate = Player.prototype.update;
     const originalPlayerJump = Player.prototype.jump;
     const originalTunnel = Game.prototype.drawHyperspaceTunnel;
     const originalWarpStarDraw = typeof WarpStar !== 'undefined' ? WarpStar.prototype.draw : null;
     const originalWarpStarUpdate = typeof WarpStar !== 'undefined' ? WarpStar.prototype.update : null;
+
+    /**
+     * Capture whatever geometry base the original decides, without copying its rule.
+     *
+     * `adjustForScreenSize()` in index.html adapts the game to the screen it is on:
+     * a portrait phone gets a wider corridor and a slower scroll
+     * (`baseGap` 200 -> 260, `gameSpeed` 2.9 -> 2.61). M26's escalation computed
+     * from `CONFIG` constants instead, and assigned `gameSpeed` every frame, so it
+     * overwrote that accommodation immediately after every resize - including a Fold
+     * posture change. MONAS was harder than its own tuning intends on exactly the
+     * device it is played on.
+     *
+     * The fix asks the original what it decides rather than re-implementing the
+     * portrait test here, because a second copy of that rule would drift the first
+     * time index.html's breakpoints moved. Probing from a pristine
+     * `INITIAL_GAME_SPEED` matters: the original only assigns `gameSpeed` on its
+     * portrait branch, so probing from an already-escalated value would ratchet the
+     * captured base upward on every landscape resize.
+     *
+     * `currentBaseGap` is set by the same call, so the gap base needs no capture of
+     * its own - `getCurrentGap` below reads it exactly as the original does.
+     */
+    Game.prototype.adjustForScreenSize = function monasAdjustForScreenSize(...args) {
+      if (!isMonas(this)) return originalAdjustForScreenSize.apply(this, args);
+
+      const live = this.gameSpeed;
+      this.gameSpeed = typeof CONFIG !== 'undefined' ? CONFIG.INITIAL_GAME_SPEED : live;
+      const result = originalAdjustForScreenSize.apply(this, args);
+      this.__monasGeometryBaseSpeed = this.gameSpeed;
+      this.gameSpeed = live;
+      return result;
+    };
+
+    /** The geometry base for this run, falling back to the shipped tuning. */
+    function geometryBaseSpeed(gameInstance) {
+      const fallback = typeof CONFIG !== 'undefined' ? CONFIG.INITIAL_GAME_SPEED : 2.9;
+      return finite(gameInstance?.__monasGeometryBaseSpeed, fallback);
+    }
 
     Game.prototype.startGame = function startMonasRun(...args) {
       const result = originalStartGame.apply(this, args);
@@ -574,6 +613,11 @@
         this.monasState = createMonasState();
         this.voidMode = false;
         this.currentLevelIdx = 0;
+        // `gameMode` is only set when the rite button is clicked, which is after the
+        // initial resizeCanvas(), so the wrap above has never run for this mode yet.
+        // Seed it here so a run that never resizes still starts from its screen's
+        // own base rather than the desktop default.
+        try { this.adjustForScreenSize(); } catch (_error) {}
         this.__monasNextGlyphAt = null;
         this.__monasGlyphActiveUntil = -1;
         // A fresh shuffle per run, mirroring the Gate slice's own gallery, so two
@@ -638,7 +682,12 @@
       // Computed directly rather than through the original - see the block comment
       // above DIFFICULTY_ADVANCE_GATES for why `currentLevelIdx` is off limits here.
       const narrowed = monasGapForGatesPassed(this.monasState.gatesPassed, {
-        baseGap: typeof CONFIG !== 'undefined' ? CONFIG.PILLAR_GAP : undefined,
+        // `currentBaseGap` is what adjustForScreenSize() decided for this screen -
+        // 260 on a portrait phone against CONFIG.PILLAR_GAP's 200 - and it is
+        // exactly what the original getCurrentGap reads. Narrowing from the CONFIG
+        // constant instead handed a portrait player a corridor 23% tighter than the
+        // base game intends for their geometry.
+        baseGap: finite(this.currentBaseGap, typeof CONFIG !== 'undefined' ? CONFIG.PILLAR_GAP : 200),
         decreasePerFiveSteps: typeof CONFIG !== 'undefined' ? CONFIG.PILLAR_GAP_DECREASE_PER_5_LEVELS : undefined,
         minGap: typeof CONFIG !== 'undefined' ? CONFIG.MIN_PILLAR_GAP : undefined
       });
@@ -670,7 +719,10 @@
       // by a step of the MONAS run's own, since `currentLevelIdx` now belongs to
       // colour rotation. The surge then multiplies this escalated speed if active.
       const escalatedSpeed = monasSpeedForGatesPassed(this.monasState.gatesPassed, {
-        initial: typeof CONFIG !== 'undefined' ? CONFIG.INITIAL_GAME_SPEED : undefined,
+        // Escalate *from* the screen's own base, not from the desktop constant. On a
+        // portrait phone that base is 2.61, and assigning the 2.9 constant here every
+        // frame is what silently undid the portrait slow-down after every resize.
+        initial: geometryBaseSpeed(this),
         perStep: typeof CONFIG !== 'undefined' ? CONFIG.SPEED_INCREASE_PER_LEVEL : undefined,
         max: typeof CONFIG !== 'undefined' ? CONFIG.MAX_GAME_SPEED : undefined
       });
@@ -905,7 +957,7 @@
     GRAVITY, DAMPING, LIFT, MAX_RISE, MAX_FALL, HANG_FRAMES,
     COHERENCE_CAPACITY, CENTRE_TOLERANCE, SMOOTH_REVERSALS, SMOOTHNESS_SHARE,
     SURGE_FRAMES, SURGE_SPEED_MULTIPLIER, SURGE_SCORE_MULTIPLIER,
-    GALLERY_ADVANCE_GATES, COLOR_ADVANCE_GATES,
+    GALLERY_ADVANCE_GATES, COLOR_ADVANCE_GATES, DIFFICULTY_ADVANCE_GATES,
     AMBIENT_GLYPH_MIN_FRAMES, AMBIENT_GLYPH_JITTER_FRAMES, AMBIENT_GLYPH_DURATION_FRAMES,
     clamp,
     advanceGlide,
@@ -915,6 +967,10 @@
     tickSurge,
     galleryEntryFor,
     levelIdxForGatesPassed,
+    // Written to be assertable without a browser, but never exported until now -
+    // which is why M26 could ship escalating from the wrong base unnoticed.
+    monasSpeedForGatesPassed,
+    monasGapForGatesPassed,
     shuffled,
     buildFractalSpark,
     install,

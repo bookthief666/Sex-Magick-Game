@@ -222,3 +222,91 @@ function approximately(actual, expected, epsilon = 1e-6) {
 }
 
 console.log('monas-runtime: all assertions passed');
+
+// --- difficulty escalates from the screen's own base ----------------------------
+//
+// M26 gave MONAS its own speed and gap progression, and computed both from CONFIG
+// constants - bypassing adjustForScreenSize(), which widens the corridor and slows
+// the scroll on a portrait phone. These functions were written pure so they could be
+// asserted without a browser, and then were never exported or asserted, which is
+// exactly how the regression shipped. They are covered now.
+
+{
+  const PORTRAIT_SPEED = 2.61;   // max(2.9 * 0.9, 2.0), what adjustForScreenSize sets
+  const LANDSCAPE_SPEED = 2.9;   // CONFIG.INITIAL_GAME_SPEED, left untouched
+  const STEP = 0.035;
+
+  // At zero gates the escalation must return the base it was handed, unchanged.
+  assert.equal(
+    monas.monasSpeedForGatesPassed(0, { initial: PORTRAIT_SPEED, perStep: STEP, max: 8.5 }),
+    PORTRAIT_SPEED,
+    'a fresh portrait run must start at the portrait base, not the desktop constant'
+  );
+
+  // One difficulty step in, it must have moved by exactly one increment from that base.
+  const oneStep = monas.monasSpeedForGatesPassed(
+    monas.DIFFICULTY_ADVANCE_GATES, { initial: PORTRAIT_SPEED, perStep: STEP, max: 8.5 }
+  );
+  assert.ok(
+    Math.abs(oneStep - (PORTRAIT_SPEED + STEP)) < 1e-9,
+    `one step must escalate from the portrait base, got ${oneStep}`
+  );
+
+  // The whole point: a portrait run stays slower than a landscape one at equal
+  // progress. Before the fix both returned the landscape value.
+  for (const gates of [0, 5, 25, 100]) {
+    const portrait = monas.monasSpeedForGatesPassed(gates, { initial: PORTRAIT_SPEED, perStep: STEP, max: 8.5 });
+    const landscape = monas.monasSpeedForGatesPassed(gates, { initial: LANDSCAPE_SPEED, perStep: STEP, max: 8.5 });
+    assert.ok(
+      portrait < landscape,
+      `at ${gates} gates a portrait run must stay slower than landscape, got ${portrait} vs ${landscape}`
+    );
+  }
+
+  // Escalation is monotonic and clamps, from either base.
+  let previous = -Infinity;
+  for (let gates = 0; gates <= 2000; gates += monas.DIFFICULTY_ADVANCE_GATES) {
+    const speed = monas.monasSpeedForGatesPassed(gates, { initial: PORTRAIT_SPEED, perStep: STEP, max: 8.5 });
+    assert.ok(speed >= previous, `speed must never fall, ${speed} followed ${previous}`);
+    assert.ok(speed <= 8.5, `speed must clamp to MAX_GAME_SPEED, got ${speed}`);
+    previous = speed;
+  }
+  assert.equal(
+    monas.monasSpeedForGatesPassed(100000, { initial: PORTRAIT_SPEED, perStep: STEP, max: 8.5 }),
+    8.5,
+    'a long run reaches the ceiling and stops there'
+  );
+}
+
+{
+  const PORTRAIT_GAP = 260;  // max(250, 200 * 1.3), what adjustForScreenSize sets
+  const CONFIG_GAP = 200;    // CONFIG.PILLAR_GAP
+
+  assert.equal(
+    monas.monasGapForGatesPassed(0, { baseGap: PORTRAIT_GAP, decreasePerFiveSteps: 10, minGap: 110 }),
+    PORTRAIT_GAP,
+    'a fresh portrait run must start at the portrait corridor width'
+  );
+
+  // A portrait player must never be handed a tighter corridor than a landscape one
+  // at the same progress - the 23% narrowing this regression actually caused.
+  for (const gates of [0, 25, 125, 400]) {
+    const portrait = monas.monasGapForGatesPassed(gates, { baseGap: PORTRAIT_GAP, decreasePerFiveSteps: 10, minGap: 110 });
+    const fromConfig = monas.monasGapForGatesPassed(gates, { baseGap: CONFIG_GAP, decreasePerFiveSteps: 10, minGap: 110 });
+    assert.ok(
+      portrait >= fromConfig,
+      `at ${gates} gates portrait must not be tighter than the CONFIG base, got ${portrait} vs ${fromConfig}`
+    );
+  }
+
+  // Narrowing is monotonic and floors.
+  let previous = Infinity;
+  for (let gates = 0; gates <= 5000; gates += monas.DIFFICULTY_ADVANCE_GATES) {
+    const gap = monas.monasGapForGatesPassed(gates, { baseGap: PORTRAIT_GAP, decreasePerFiveSteps: 10, minGap: 110 });
+    assert.ok(gap <= previous, `the corridor must never widen, ${gap} followed ${previous}`);
+    assert.ok(gap >= 110, `the corridor must floor at MIN_PILLAR_GAP, got ${gap}`);
+    previous = gap;
+  }
+}
+
+console.log('monas-runtime: difficulty escalation assertions passed');

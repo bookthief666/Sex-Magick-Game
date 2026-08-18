@@ -263,10 +263,40 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
 
     // Drive the game's own update loop and steer the avatar onto the centre line of
     // whichever pillar is nearest, so the passes are real passes through real gates.
-    function runCentred(frames) {
-      for (let frame = 0; frame < frames; frame += 1) {
+    //
+    // Runs to a number of *passes* rather than a number of frames. A fixed frame
+    // budget silently measures fewer gates whenever the scroll slows, which is
+    // exactly what happened when M31 restored the portrait speed the game intends:
+    // 900 frames went from 4 passes to 3, and `perfectPasses` - which needs a pass
+    // to land at centred >= 0.999 - fell to zero on the smaller sample. The pass
+    // count is what this section is actually about, so it is what the loop targets.
+    //
+    // The sample also has to be big enough to absorb M17's moving walls. The player
+    // is placed on the gap centre at the top of a frame and the pass is scored after
+    // the wall has moved, so a single pass can miss dead centre by a fraction on
+    // wall phase alone. Twelve passes make catching at least one clean phase
+    // reliable instead of lucky.
+    // M17 gives pillars per-frame vertical movement, and the pass is scored after
+    // that movement while the avatar was placed before it. Aiming at where the wall
+    // *is* therefore lands a fraction off centre on wall phase alone - which is why
+    // `perfectPasses` (centred >= 0.999) swung between 0 and 8 across identical runs
+    // and made every assertion built on it a coin flip. Aiming at where the wall
+    // *will be* cancels the drift. This is not loosening the measurement: it is
+    // steering the way a player leads a moving target, so a dead-centre line is
+    // actually flown rather than approximately flown.
+    const previousTop = new WeakMap();
+    function centreLineFor(pillar) {
+      const seen = previousTop.get(pillar);
+      const predicted = seen === undefined ? pillar.top : pillar.top + (pillar.top - seen);
+      previousTop.set(pillar, pillar.top);
+      return predicted + (pillar.gap / 2);
+    }
+
+    function runUntilPasses(targetPasses, frameCap) {
+      for (let frame = 0; frame < frameCap; frame += 1) {
+        if (game.monasState.gatesPassed >= targetPasses) break;
         const next = game.obstacles.find(pillar => !pillar.marked);
-        if (next) game.player.y = next.top + (next.gap / 2);
+        if (next) game.player.y = centreLineFor(next);
         game.player.vy = 0;
         game.frames += 1;
         game.updateGameObjects();
@@ -274,7 +304,7 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
     }
 
     const before = { ...game.monasState };
-    runCentred(900);
+    runUntilPasses(12, 8000);
     return { before, after: { ...game.monasState } };
   });
 
@@ -285,9 +315,16 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
     bestCentred: coherence.after.bestCentred
   };
   try {
-    assert.ok(coherence.after.gatesPassed > 0, 'centred flight passes real gates');
-    assert.ok(coherence.after.perfectPasses > 0, 'and dead-centre passes are recognised');
-    assert.ok(coherence.after.bestCentred > 0.99, 'the centre line scores as centred');
+    assert.ok(coherence.after.gatesPassed >= 12, `centred flight passes real gates, got ${coherence.after.gatesPassed}`);
+    // Leading the wall makes this deterministic, so it is asserted as near-total
+    // rather than as "more than zero". Flying the true centre line should score
+    // essentially every pass as perfect; anything less means the centre is no longer
+    // where Coherence thinks it is.
+    assert.ok(
+      coherence.after.perfectPasses >= 11,
+      `flying the true centre line must score nearly every pass perfect, got ${coherence.after.perfectPasses}/12`
+    );
+    assert.ok(coherence.after.bestCentred > 0.99, `the centre line scores as centred, got ${coherence.after.bestCentred}`);
   } catch (error) {
     failures.push(`coherence: ${error.message}`);
   }
@@ -648,32 +685,120 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
     // trigger (triggerOrbGlitch, a pre-existing effect unrelated to Coherence) and
     // orbs spawn dead-centre in the gap - exactly where this test steers - so it is
     // indistinguishable from the pulse under test unless orbs are kept out of it.
-    let flashOnPassFrame = false;
+    // The contract under test is an implication, and it is asserted as one: a pass
+    // the runtime itself scored as perfect must raise the gold pulse on that frame.
+    //
+    // The earlier version asserted "some pass in four raised a flash", which made it
+    // a coin flip rather than a test. The pulse fires only at centred >= 0.999, and
+    // M17's moving walls mean a centred pass routinely lands at 0.998 on wall phase
+    // alone - so four passes could easily contain no perfect one, and the section
+    // failed roughly half the time at every commit it was run against. Watching
+    // `perfectPasses` increment removes the luck from the implication entirely: the
+    // flash is only demanded on frames the runtime declares perfect.
+    let perfectPasses = 0;
+    let flashesOnPerfectPasses = 0;
+    let missedFlashes = 0;
     let glitchSeenAcrossPasses = 0;
     let passesObserved = 0;
-    for (let frame = 0; frame < 1200 && passesObserved < 4; frame += 1) {
+    let yieldedToLouderFlash = 0;
+    const yieldDetail = [];
+
+    // M17 gives pillars per-frame vertical movement, and the pass is scored after
+    // that movement while the avatar was placed before it. Aiming at where the wall
+    // *is* therefore lands a fraction off centre on wall phase alone - which is why
+    // `perfectPasses` (centred >= 0.999) swung between 0 and 8 across identical runs
+    // and made every assertion built on it a coin flip. Aiming at where the wall
+    // *will be* cancels the drift. This is not loosening the measurement: it is
+    // steering the way a player leads a moving target, so a dead-centre line is
+    // actually flown rather than approximately flown.
+    const previousTop = new WeakMap();
+    function centreLineFor(pillar) {
+      const seen = previousTop.get(pillar);
+      const predicted = seen === undefined ? pillar.top : pillar.top + (pillar.top - seen);
+      previousTop.set(pillar, pillar.top);
+      return predicted + (pillar.gap / 2);
+    }
+
+    for (let frame = 0; frame < 8000 && passesObserved < 12; frame += 1) {
       game.collectibles = [];
       const next = game.obstacles.find(pillar => !pillar.marked);
-      if (next) game.player.y = next.top + (next.gap / 2);
+      if (next) game.player.y = centreLineFor(next);
       game.player.vy = 0;
       game.frames += 1;
       game.screenFlash = null;
       GlitchFX.active = false;
       const gatesBefore = game.monasState.gatesPassed;
+      const perfectBefore = game.monasState.perfectPasses;
       game.updateGameObjects();
+
       if (game.monasState.gatesPassed !== gatesBefore) {
         passesObserved += 1;
-        if (game.screenFlash?.active && game.screenFlash.color === '#ffd700') flashOnPassFrame = true;
+        const wasPerfect = game.monasState.perfectPasses > perfectBefore;
+        const gold = Boolean(game.screenFlash?.active) && game.screenFlash.color === '#ffd700';
+        if (wasPerfect) {
+          perfectPasses += 1;
+          if (gold) {
+            flashesOnPerfectPasses += 1;
+          } else if (game.screenFlash?.active) {
+            // A louder flash already owns this frame. The pulse yields to it by
+            // design - see the assertion below - so this is not a miss.
+            yieldedToLouderFlash += 1;
+            yieldDetail.push({
+              gate: game.monasState.gatesPassed,
+              flash: { ...game.screenFlash },
+              shake: game.shake,
+              hitStop: game.hitStop
+            });
+          } else {
+            missedFlashes += 1;
+          }
+        }
         if (GlitchFX.active) glitchSeenAcrossPasses += 1;
       }
     }
-    return { flashOnPassFrame, glitchSeenAcrossPasses, passesObserved, gatesPassed: game.monasState.gatesPassed };
+    return {
+      passesObserved,
+      perfectPasses,
+      flashesOnPerfectPasses,
+      missedFlashes,
+      glitchSeenAcrossPasses,
+      yieldedToLouderFlash,
+      yieldDetail,
+      bestCentred: game.monasState.bestCentred,
+      gatesPassed: game.monasState.gatesPassed
+    };
   });
 
   report.coherencePulse = pulse;
   try {
     assert.ok(pulse.passesObserved > 0, 'centred flight must pass gates for this to mean anything');
-    assert.equal(pulse.flashOnPassFrame, true, 'a perfect pass must raise a gold screen-flash pulse on that exact frame');
+    // The implication, which holds regardless of how the walls happened to move:
+    // a perfect pass either raises the gold pulse, or yields to a flash that was
+    // already active on that frame. Silence is the only failure.
+    //
+    // The yield case is real and was found by this assertion rather than by review.
+    // The pulse sets itself only `if (!this.screenFlash || !this.screenFlash.active)`,
+    // and M26's photo-transition spectacle raises `triggerLevelUpGlitch()`'s own
+    // flash every GALLERY_ADVANCE_GATES gates - so a perfect pass landing exactly on
+    // a gallery boundary loses its gold pulse to the photo change. That is a
+    // deliberate precedence (a second flash stacked on the loudest moment of the run
+    // would be noise), not a dropped effect, so it is asserted as permitted rather
+    // than quietly tolerated.
+    assert.equal(
+      pulse.missedFlashes, 0,
+      `a perfect pass must raise the gold pulse or yield to an active flash; ${pulse.missedFlashes} did neither`
+    );
+    // And the non-vacuity guard: without this the assertion above passes trivially
+    // on a run that never landed a perfect pass at all. Twelve observed passes make
+    // reaching centred >= 0.999 at least once reliable rather than lucky.
+    assert.ok(
+      pulse.perfectPasses >= 11,
+      `centred flight must land nearly every pass perfect, got ${pulse.perfectPasses}/${pulse.passesObserved} (best centred was ${pulse.bestCentred})`
+    );
+    assert.ok(
+      pulse.flashesOnPerfectPasses > 0,
+      'and at least one of those perfect passes must actually show its gold pulse'
+    );
     // The glitch trigger is a 50% roll per perfect pass; over several passes it is
     // expected to fire at least once and is reported rather than strictly required.
   } catch (error) {
@@ -876,6 +1001,132 @@ function median(values) {
   } catch (error) {
     failures.push(`draw cost: ${error.message}`);
   }
+}
+
+// --- difficulty escalates from the screen, not from the desktop constant ---------
+//
+// index.html's adjustForScreenSize() widens the corridor and slows the scroll on a
+// portrait screen - the accommodation the owner's Fold 6 gets in both postures. M26
+// computed MONAS's own speed and gap from CONFIG constants instead, and assigned
+// gameSpeed every frame, so it overwrote that accommodation immediately after every
+// resize. This viewport is portrait (884x1104), so the portrait branch is live.
+
+{
+  const { context, page } = await openGame();
+  const geometry = await page.evaluate(async () => {
+    document.getElementById('startMonasBtn').click();
+    window.__SEX_MAGICK_MONAS__.setHeldForTest(false);
+    await new Promise(resolve => setTimeout(resolve, 120));
+
+    const portraitExpected = Math.max(CONFIG.INITIAL_GAME_SPEED * 0.9, 2.0);
+    const portrait = {
+      isPortrait: game.canvas.height > game.canvas.width,
+      gatesPassed: game.monasState.gatesPassed,
+      speedBefore: game.gameSpeed,
+      currentBaseGap: game.currentBaseGap,
+      capturedBase: game.__monasGeometryBaseSpeed ?? null,
+      expected: portraitExpected,
+      configInitial: CONFIG.INITIAL_GAME_SPEED,
+      configGap: CONFIG.PILLAR_GAP
+    };
+
+    // One frame of the real loop is what assigns gameSpeed, so measure after it.
+    game.updateGameObjects();
+    portrait.speedAfterFrame = game.gameSpeed;
+
+    // getCurrentGap breathes +/-10 around its narrowed value, so sample the centre
+    // across a full sine period rather than trusting one frame.
+    let gapMin = Infinity, gapMax = -Infinity;
+    for (let i = 0; i < 160; i += 1) {
+      game.frames += 1;
+      const gap = game.getCurrentGap();
+      gapMin = Math.min(gapMin, gap);
+      gapMax = Math.max(gapMax, gap);
+    }
+    portrait.gapCentre = (gapMin + gapMax) / 2;
+
+    return portrait;
+  });
+
+  report.geometryBase = geometry;
+
+  try {
+    assert.equal(geometry.isPortrait, true, 'this viewport must exercise the portrait branch');
+    assert.equal(geometry.gatesPassed, 0, 'a fresh run has cleared no gates, so no escalation has applied yet');
+
+    assert.ok(
+      Math.abs(geometry.speedAfterFrame - geometry.expected) < 1e-6,
+      `a fresh portrait run must run at the portrait base ${geometry.expected}, got ${geometry.speedAfterFrame}`
+    );
+    assert.ok(
+      geometry.speedAfterFrame < geometry.configInitial,
+      `the portrait slow-down must survive the frame loop: ${geometry.speedAfterFrame} should be under ${geometry.configInitial}`
+    );
+
+    assert.ok(
+      Math.abs(geometry.gapCentre - geometry.currentBaseGap) < 1,
+      `the corridor must centre on the screen's own base ${geometry.currentBaseGap}, got ${geometry.gapCentre}`
+    );
+    assert.ok(
+      geometry.gapCentre > geometry.configGap,
+      `a portrait corridor must be wider than CONFIG.PILLAR_GAP: ${geometry.gapCentre} vs ${geometry.configGap}`
+    );
+  } catch (error) {
+    failures.push(`geometry base: ${error.message}`);
+  }
+  await context.close();
+}
+
+// --- a posture change re-reads the geometry, mid-run -----------------------------
+//
+// The Fold's whole point. The per-frame overwrite meant a run that started folded
+// kept its base after unfolding; the probe re-runs on every resize instead.
+
+{
+  const { context, page } = await openGame();
+  const posture = await page.evaluate(async () => {
+    document.getElementById('startMonasBtn').click();
+    window.__SEX_MAGICK_MONAS__.setHeldForTest(false);
+    await new Promise(resolve => setTimeout(resolve, 120));
+    game.updateGameObjects();
+    const folded = { speed: game.gameSpeed, baseGap: game.currentBaseGap };
+    return { folded };
+  });
+
+  // Unfold: a genuinely landscape geometry, which index.html treats differently.
+  await page.setViewportSize({ width: 1104, height: 884 });
+  await page.waitForTimeout(400);
+
+  const unfolded = await page.evaluate(() => {
+    game.updateGameObjects();
+    return {
+      isPortrait: game.canvas.height > game.canvas.width,
+      speed: game.gameSpeed,
+      baseGap: game.currentBaseGap,
+      configInitial: CONFIG.INITIAL_GAME_SPEED
+    };
+  });
+
+  report.postureChange = { ...posture, unfolded };
+
+  try {
+    assert.equal(unfolded.isPortrait, false, 'the unfold must actually produce a landscape geometry');
+    assert.ok(
+      unfolded.speed > posture.folded.speed,
+      `unfolding must lift the speed off the portrait base: ${posture.folded.speed} -> ${unfolded.speed}`
+    );
+    assert.ok(
+      Math.abs(unfolded.speed - unfolded.configInitial) < 1e-6,
+      `landscape leaves the base at CONFIG.INITIAL_GAME_SPEED, got ${unfolded.speed}`
+    );
+    assert.ok(
+      unfolded.baseGap !== posture.folded.baseGap,
+      'the corridor base must follow the posture change too'
+    );
+  } catch (error) {
+    failures.push(`posture change: ${error.message}`);
+  }
+  await context.close();
 }
 
 console.log(JSON.stringify(report, null, 2));
