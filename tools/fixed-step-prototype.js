@@ -570,6 +570,19 @@
     document.head.appendChild(monasScript);
   }
 
+  // The validation core the board judges runs with, and which the global board's
+  // Worker runs the same copy of (D-044). Inserted first, and every one of these
+  // scripts sets async = false, which keeps insertion order as execution order -
+  // so the board never runs before its rules exist.
+  if (!globalThis.SexMagickRiteValidation && !document.querySelector('script[data-sex-magick-rite-validation]')) {
+    const validationScript = document.createElement('script');
+    validationScript.src = new URL('./rite-validation.js', currentSource).href;
+    validationScript.async = false;
+    validationScript.dataset.sexMagickRiteValidation = 'true';
+    validationScript.onerror = () => console.error('[SEX MAGICK] Rite validation failed to load', validationScript.src);
+    document.head.appendChild(validationScript);
+  }
+
   const boardScript = document.createElement('script');
   boardScript.src = new URL('./leaderboard-runtime.js', currentSource).href;
   boardScript.async = false;

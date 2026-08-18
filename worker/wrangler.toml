@@ -1,0 +1,14 @@
+name = "sex-magick-rite-board"
+main = "index.js"
+compatibility_date = "2026-08-01"
+
+# Cloudflare bundles with esbuild, which resolves the CommonJS `require` in
+# board.js and the shared `tools/rite-validation.js` it pulls in. The validation
+# rules are therefore the same file the browser loads - see D-044 for why that
+# matters more than the small awkwardness of mixing module styles.
+
+# Created with: wrangler kv namespace create BOARD
+# Paste the returned id below before the first deploy.
+[[kv_namespaces]]
+binding = "BOARD"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
