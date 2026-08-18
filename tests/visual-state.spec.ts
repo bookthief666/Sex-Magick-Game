@@ -34,6 +34,13 @@ async function seedPage(page: Page) {
       value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
       return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
     };
+    // installAccessibilityControls() in collision-runtime.js shows a one-time
+    // sensitivity notice ("VISUAL INTENSITY... ACKNOWLEDGE") on any fresh browser
+    // profile - correct for a real first-time player, but every QA capture is a
+    // fresh profile, so without this it would be glued to the bottom of every
+    // baseline screenshot forever. Pre-seeding the same key it checks makes this
+    // context look like a returning player who already dismissed it.
+    localStorage.setItem('sex_magick_sensitivity_notice_v1', '1');
   });
 }
 

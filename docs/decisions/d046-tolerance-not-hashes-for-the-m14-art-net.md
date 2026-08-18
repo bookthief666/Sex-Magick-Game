@@ -143,3 +143,45 @@ guess.
   is invalid YAML. The final version uses `printf` per line instead of a heredoc,
   which has no terminator-indentation constraint to conflict with YAML's
   block-scalar rule in the first place.
+
+## Addendum — the first real review caught two defects a hash never could
+
+The first `update_snapshots` run (workflow 32192780911) opened PR #16 with all 28
+baseline PNGs. The owner looked at them and reported they didn't look right. Pulling
+the PNGs directly from the PR branch and viewing them confirmed two real,
+independent, pre-existing defects — not stale baselines, not a review mistake:
+
+1. **Every one of the 28 screenshots had a permanent onboarding banner glued to the
+   bottom of the frame.** `tools/collision-runtime.js`'s `installAccessibilityControls()`
+   shows a one-time "VISUAL INTENSITY... ACKNOWLEDGE" sensitivity notice on any
+   fresh browser profile, gated on a localStorage key. Every other QA-visible
+   overlay in this codebase (leaderboard, missions HUD, powerup HUD) checks
+   `visualQa=1` and suppresses itself; this one had no such check, and a fresh
+   Playwright context is always a fresh profile — so the notice rendered over every
+   state, every time, in all four geometries. Fixed by pre-seeding the same
+   localStorage key in `visual-state.spec.ts`'s `seedPage()`, so a QA context looks
+   like a returning player who already dismissed it. No production code changed;
+   the notice still shows to every real first-time player exactly as before.
+
+2. **`death.png` showed a real CSS bug: the wrong ghost text glitching over the
+   game-over screen.** `.title-text::before`/`::after` — the chromatic-aberration
+   glitch layer shared by all four `.title-text` headings across the game — had
+   `content: "Sex Magick"` hardcoded rather than sourced from each heading's actual
+   text. Only the start screen matched by coincidence; the game-over, pause, and
+   settings screens all glitched "Sex Magick" over their real heading. M14 only
+   captures the game-over screen among these, and it showed exactly that. Fixed in
+   `index.html` with `content: attr(data-glitch-text)` and a matching attribute on
+   each heading — same animation, same styling, now echoing the real text. This bug
+   predates M14, M32, and this decision entirely; it was simply never visible to a
+   human until a screenshot review was possible at all.
+
+Both defects were invisible under the old sha256 mechanism by construction — a hash
+mismatch carries no picture, so neither could have produced a legible signal even if
+the byte-identical comparison had somehow stayed armed. This is the concrete case for
+"Why this isn't a coverage loss" above: the switch to pixel comparison plus a
+PR-based picture review didn't just tolerate rasterisation noise, it paid for itself
+immediately by surfacing two things nobody could previously see. PR #16 was closed
+unmerged rather than fixed up in place — its baselines were captured with both
+defects present, and merging them would have cemented the banner and the mis-glitched
+ghost text as the permanent "correct" appearance for the net to defend. A fresh
+`update_snapshots` run off the fixed commit opened a replacement PR.
