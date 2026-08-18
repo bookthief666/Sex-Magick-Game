@@ -7,7 +7,16 @@ export default defineConfig({
   testMatch: [/cross-screen\.spec\.ts/, /visual-state\.spec\.ts/, /retry-transition\.spec\.ts/],
   fullyParallel: true,
   timeout: 60_000,
-  expect: { timeout: 10_000 },
+  expect: {
+    timeout: 10_000,
+    // M14's art-regression net (tests/visual-state.spec.ts) used to require its
+    // whole-container screenshots to be byte-identical, which failed at roughly a
+    // coin-flip rate on the fold geometries from CI-to-CI sub-pixel rasterisation
+    // noise unrelated to any real change - see docs/decisions/d046-*.md. This
+    // tolerance is provisional pending one real calibration run against actual CI
+    // diff percentages; the number itself is not yet evidence-based.
+    toHaveScreenshot: { maxDiffPixelRatio: 0.006 }
+  },
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 4 : undefined,
   reporter: process.env.CI

@@ -1,9 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 
-const BASELINE_PATH = path.join(process.cwd(), 'tests', 'visual-baselines', 'm14-signatures.json');
 const visualReferenceProjects = new Set([
   'chromium-small-phone',
   'chromium-fold-cover',
@@ -23,11 +19,6 @@ const expectedLayers: Record<string, string> = {
   'gate-bank': 'gameplay',
   void: 'gameplay'
 };
-
-function baselineData(): Record<string, Record<string, string>> | null {
-  if (!fs.existsSync(BASELINE_PATH)) return null;
-  return JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
-}
 
 async function seedPage(page: Page) {
   if (seededPages.has(page)) return;
@@ -230,19 +221,6 @@ async function warmVisualStates(page: Page, states: readonly string[]) {
   }
 }
 
-async function visualHash(page: Page, project: string, state: string) {
-  const outputDir = path.join(process.cwd(), 'test-results', 'm14-visual', project);
-  fs.mkdirSync(outputDir, { recursive: true });
-  const outputPath = path.join(outputDir, `${state}.png`);
-  const buffer = await page.locator('#game-container').screenshot({
-    path: outputPath,
-    animations: 'disabled',
-    caret: 'hide',
-    scale: 'css'
-  });
-  return crypto.createHash('sha256').update(buffer).digest('hex');
-}
-
 test('standard visual states remain reachable and internally consistent', async ({ page }) => {
   const { pageErrors, consoleErrors, lootLockerRequests } = await openVisualController(page, false);
   for (const state of standardStates) {
@@ -300,28 +278,50 @@ test('Gate offer, bank, and Void states remain reachable', async ({ page }, test
   expect(lootLockerRequests).toEqual([]);
 });
 
+// Whole-container art regression, compared with a per-pixel tolerance rather than
+// byte-for-byte. Three real rounds of fixes against a sha256-of-the-screenshot
+// version of this test each found something genuine (phase-dependent ambient
+// animation, a telegraph hide-timer racing the capture, a blank-canvas capture
+// racing settlement) - but a fourth failure mode was never a defect in the page:
+// chromium-fold-cover and chromium-fold-inner disagreed with themselves at roughly
+// a coin-flip rate between otherwise-identical CI runs of the same commit, ruled
+// out as random spawning, animation phase, and elapsed wall-clock time by direct
+// measurement (see docs/decisions/d046-*.md). That is sub-pixel rasterisation
+// jitter, which a byte-identical hash cannot tell apart from a real change to the
+// field, pillars, avatar, or level art - both fail identically. `toHaveScreenshot`
+// is the same net with a per-pixel tolerance (configured once, in
+// playwright.config.ts) that absorbs the jitter while still failing on a real
+// regression, which is the whole point of this test.
+//
+// Baselines live under `visual-state.spec.ts-snapshots/` and are regenerated only
+// via CI's `update_snapshots` workflow_dispatch input, which opens a PR rather than
+// committing directly - the explicit human review D-024 requires, now done by eye
+// against the actual pictures instead of by eye against a hash diff. They are not
+// regenerated locally: this sandbox runs a different Chromium build than the
+// Playwright version pinned for CI, so local screenshots cannot be expected to
+// match the CI-generated baseline regardless of tolerance.
 test('deterministic visual signatures match the M14 reference baseline', async ({ page }, testInfo) => {
   test.skip(!visualReferenceProjects.has(testInfo.project.name), 'Visual signatures use four representative geometries.');
-  const baseline = baselineData();
-  const signatures: Record<string, string> = {};
 
   await openVisualController(page, false);
   await warmVisualStates(page, standardStates);
   for (const state of standardStates) {
     await showState(page, state);
-    signatures[state] = await visualHash(page, testInfo.project.name, state);
+    await expect(page.locator('#game-container')).toHaveScreenshot(`${state}.png`, {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css'
+    });
   }
 
   await openVisualController(page, true);
   await warmVisualStates(page, gateStates);
   for (const state of gateStates) {
     await showState(page, state);
-    signatures[state] = await visualHash(page, testInfo.project.name, state);
-  }
-
-  console.log(`M14_VISUAL_SIGNATURE ${JSON.stringify({ project: testInfo.project.name, signatures })}`);
-
-  if (baseline) {
-    expect(signatures).toEqual(baseline[testInfo.project.name]);
+    await expect(page.locator('#game-container')).toHaveScreenshot(`${state}.png`, {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css'
+    });
   }
 });

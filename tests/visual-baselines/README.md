@@ -1,23 +1,24 @@
-# M14 visual signatures
+# M14 visual regression
 
-`m14-signatures.json` holds a sha256 per (project, state) screenshot of
-`#game-container`, for four reference geometries and seven states — 28 in total.
+## Status: the mechanism below is superseded — see D-046
 
-## Status: withdrawn, and why
+**This file described a sha256-per-screenshot baseline
+(`m14-signatures.json`) that required a byte-identical match.** M32
+(`docs/decisions/d046-*.md`) replaced it with Playwright's native
+`toHaveScreenshot({ maxDiffPixelRatio })`, which compares the same four
+geometries and seven states against committed PNG baselines with a per-pixel
+tolerance instead of a hash. The three defects documented below, and the
+fourth that motivated the switch, are the reason — read on, they are still
+true and still the reason the current mechanism works the way it does. Skip
+to **"How to re-establish it"** at the bottom for the current process; the
+sha256/JSON-baseline steps that used to be there no longer apply.
 
-**The file is absent and the comparison is disarmed.** `visual-state.spec.ts`
-guards with `if (baseline)`, so the suite is green; it emits signatures and
-asserts structure, but does not yet compare pixels.
-
-Three real harness defects were found and fixed by arming it (below). A fourth
-is not fixed, and shipping a baseline that fails about half the time would be
-worse than shipping none — so the obligation D-031 opened stays open, honestly,
-rather than being closed with a net that cries wolf.
-
-The signatures were removed in M21, when the aesthetic pass legitimately changed
-every rendered state, and stayed unestablished through M22–M24. Restoring them is
-the pixel-regression coverage that D-024 requires and D-031 tracked as a release
-obligation.
+Everything from here through "The fourth defect" is kept as the historical
+record of what three real rounds of fixing this actually found. None of it
+was wasted: the phase-locking, the telegraph-timer fix, and the
+blank-canvas-capture fix are all still exactly how the suite gets a real,
+painted, settled frame to compare — `toHaveScreenshot` only replaced the
+*comparison*, not the capture.
 
 ## The second defect: the signatures were phase-dependent
 
@@ -176,33 +177,47 @@ phase (locked, and verified stable across three consecutive draws), and elapsed
 wall-clock time (verified stable with 2500 ms injected before capture, under the
 spec's own flow).
 
-**The recommendation is to stop fixing and change the comparison.** Three rounds
-have each found something real, but the underlying demand — that a whole-container
-screenshot be *byte-identical* across runs and machines — is a brittle contract
-for a canvas game with a live HUD. Playwright's `toHaveScreenshot({ maxDiffPixels })`
-stores PNG baselines and compares with a tolerance, which is the standard tool for
-exactly this and would absorb sub-pixel rasterisation noise while still catching
-the art regressions this net is meant to catch. That is a design change and the
-owner's call, so it is written down here rather than done unasked.
+**The recommendation was to stop fixing and change the comparison** — written
+here at the time rather than done unasked, since it was a design change and
+the owner's call. They made that call in M32: move to
+`toHaveScreenshot({ maxDiffPixelRatio })`. See `docs/decisions/d046-*.md` for
+the decision itself and the calibration status of the current tolerance
+value.
 
-## How to re-establish it
+## How to re-establish it (current process, per D-046)
 
-1. Run **M14 Visual-state QA** in CI on a green commit
-   (`workflow_dispatch` is enabled on `cross-screen-qa.yml`).
-2. Take the `M14_VISUAL_SIGNATURE` lines from the four reference projects.
-3. Write them as `{ project: { state: sha256 } }`, projects and states sorted.
-4. Review the screenshots before committing. D-024 requires baseline changes to be
-   explicit, and this is that review step.
+Baselines are PNG files under `tests/visual-state.spec.ts-snapshots/`,
+generated and reviewed only through CI — never generated locally, for the
+same Chromium-version reason noted below.
 
-Note on step 4 from this session: the `m15-test-results` artifact **could not be
-downloaded** — the egress policy denies the Azure blob host that serves Actions
-artifacts (403 on CONNECT to `productionresultssa0.blob.core.windows.net`), and
-routing around a policy denial is not an option. The review was done on locally
-rendered equivalents instead, with the hashes taken only from CI. Anyone with
-artifact access should prefer the artifact.
+1. Trigger `cross-screen-qa.yml` via `workflow_dispatch` with
+   `update_snapshots: true`.
+2. That run opens a PR containing the regenerated PNGs — it does not commit
+   them directly. **Review every PNG in that PR's diff before merging.**
+   D-024 requires baseline changes to be explicit, and this is that review
+   step, now done by eye against the actual pictures rather than by eye
+   against a hash diff.
+3. Merge the PR once satisfied.
+4. Re-run the workflow **twice** on the merged commit with
+   `update_snapshots` left off (the normal comparison path). It should be
+   green both times — that is the actual proof the comparison is stable, not
+   merely believed to be. Read the real diff percentages Playwright reports
+   for any state that comes close to `maxDiffPixelRatio`, and tighten or
+   loosen the value in `playwright.config.ts` accordingly, with the
+   justification recorded in D-046.
+
+This process was designed specifically to avoid depending on Actions
+artifact download: in at least one prior environment, the `m15-test-results`
+artifact could not be downloaded at all (403 on
+`productionresultssa0.blob.core.windows.net`, an egress policy denial, not
+something to route around). A PR's own diff view renders PNGs inline and is
+delivered over the repository's normal git/API path, not the artifacts
+backend, so it is unaffected by that block.
 
 Note for the development sandbox: it runs Chromium 1194 against a Playwright
-pinned to 1217 and **cannot reproduce these hashes locally**. A local run of
-`visual-state.spec.ts` will fail the comparison for that reason alone. Verify
-locally by rendering and looking at `test-results/m14-visual/**`, and take the
-hashes only from CI.
+pinned to 1217 and **cannot reproduce CI's screenshots locally**, regardless
+of tolerance — a different browser build, not merely rendering noise. A
+local run of `visual-state.spec.ts` is expected to fail the screenshot
+comparison for that reason alone; the structural test above it
+(`standard visual states remain reachable...`) does not touch screenshots
+and is the one to trust locally.
