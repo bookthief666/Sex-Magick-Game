@@ -54,19 +54,35 @@ const CLOCK_GRACE_MS = 10_000;
 // silently ranked on an empty board.
 const SUPPORTED_RITES = Object.freeze(['HEX']);
 
+// The game is served from a different origin to the Worker, so the browser needs
+// these to read a response at all - and needs the preflight below to be willing to
+// send a JSON POST in the first place.
+const CORS_HEADERS = Object.freeze({
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'content-type',
+  'access-control-allow-methods': 'GET,POST,OPTIONS',
+  'access-control-max-age': '86400'
+});
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-store',
-      // The game is served from a different origin to the Worker, so the browser
-      // needs this to read the response at all.
-      'access-control-allow-origin': '*',
-      'access-control-allow-headers': 'content-type',
-      'access-control-allow-methods': 'GET,POST,OPTIONS'
+      ...CORS_HEADERS
     }
   });
+}
+
+/**
+ * The CORS preflight. It must be bodyless: 204 is a null-body status, and
+ * constructing a Response with a body and that status throws - which is how this
+ * was found, when the browser suite sent the preflight a JSON POST requires and the
+ * handler threw instead of answering.
+ */
+function preflight() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
 function randomToken() {
@@ -259,7 +275,7 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
 
-  if (request.method === 'OPTIONS') return json({}, 204);
+  if (request.method === 'OPTIONS') return preflight();
 
   if (request.method === 'POST' && path === '/run/start') return handleRunStart(request, env);
   if (request.method === 'POST' && path === '/run/submit') return handleRunSubmit(request, env);

@@ -140,6 +140,21 @@ async function section(name, fn) {
     assert.equal(response.status, 404);
   });
 
+  await section('the CORS preflight answers without a body', async () => {
+    // A JSON POST from another origin is preceded by an OPTIONS preflight, so this
+    // runs before every real submission. 204 is a null-body status and Response
+    // throws if given one, which is exactly how the first version of this failed -
+    // invisibly to the unit suite, and only when a browser actually sent it.
+    const env = createEnv();
+    const response = await worker.handleRequest(
+      new Request(`${BASE}/run/submit`, { method: 'OPTIONS' }), env
+    );
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get('access-control-allow-origin'), '*');
+    assert.match(response.headers.get('access-control-allow-methods') || '', /POST/);
+    assert.equal(await response.text(), '', 'a 204 must carry no body');
+  });
+
   await section('a rite with no recorder is refused rather than ranked empty', async () => {
     const env = createEnv();
     const start = await worker.handleRequest(post('/run/start', { rite: 'MONAS' }), env);
