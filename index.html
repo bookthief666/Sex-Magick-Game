@@ -395,10 +395,10 @@
                     <div id="leaderboardList">LOADING SCORES...</div>
                 </div>
                 
-                <button onclick="testLeaderboardConnection()" class="mystic-btn" style="margin-top: 10px; background: #444; min-width: 150px; padding: 10px; font-size: 0.8rem;">
-                    TEST LEADERBOARD
-                </button>
-                
+                <!-- The TEST LEADERBOARD button probed the LootLocker session and
+                     board that D-044 removed. The Gate slice already hid it; with the
+                     service gone its handler no longer exists, so the button goes too. -->
+
                 <p id="trackName" style="margin-top: 10px; font-size: 0.6rem; color: #444; letter-spacing: 1px;">SOURCE: GITHUB CDN</p>
             </div>
         </div>
@@ -575,246 +575,32 @@
             });
         });
 
-        // --- UPDATED LOOTLOCKER CONFIG WITH DEBUGGING ---
-        const LOOTLOCKER_DOMAIN = "https://7l3mo9bh.api.lootlocker.io";
-        const GAME_API_KEY = "dev_44a2b8e7798a416eba598ee295a91d55";
-        const LEADERBOARD_KEY = "global_ritual";
-        const GAME_ID = "101363";
-        
+        /**
+         * The board is local, and submission belongs to the Worker.
+         *
+         * This used to be a LootLocker client: a guest session opened with a `dev_`
+         * game key committed to a public repository, and an arbitrary integer POSTed
+         * to a shared `global_ritual` board with no server-side validation. D-004
+         * ruled that untrusted, M16 stubbed it, and D-040 replaced the menu board
+         * with the local Rite board that ranks the player's own verified runs.
+         *
+         * D-044 finishes the job: `tools/global-board-runtime.js` submits to a
+         * Cloudflare Worker that re-judges every run with the same rules the page
+         * uses, against a token it issued. So the service, its key and its
+         * incompatible 1.0 score scale are all gone from here.
+         *
+         * The object survives as a no-op because `init()` and `submit()` are called
+         * from the game loop below; both now do nothing, and the board renders from
+         * `leaderboard-runtime.js` instead.
+         */
         const Leaderboard = {
             token: null,
             playerId: null,
-            async init() {
-                console.log("🔍 Leaderboard init started...");
-                console.log("API Domain:", LOOTLOCKER_DOMAIN);
-                console.log("Game ID:", GAME_ID);
-                console.log("Leaderboard Key:", LEADERBOARD_KEY);
-                console.log("API Key (first 10 chars):", GAME_API_KEY.substring(0, 10) + "...");
-                
-                const stored = localStorage.getItem("ritual_id");
-                let payload = { 
-                    game_version: "1.0", 
-                    development_mode: true
-                };
-                
-                if(stored) {
-                    payload.player_identifier = stored;
-                    console.log("Using stored player ID:", stored.substring(0, 10) + "...");
-                } else {
-                    payload.player_identifier = "player_" + Math.random().toString(36).substr(2, 9);
-                    console.log("Generated new player ID:", payload.player_identifier);
-                }
-                
-                try {
-                    console.log("📡 Sending session request to:", `${LOOTLOCKER_DOMAIN}/game/v2/session/guest`);
-                    const r = await fetch(`${LOOTLOCKER_DOMAIN}/game/v2/session/guest`, {
-                        method: "POST",
-                        mode: 'cors',
-                        headers: { 
-                            "Content-Type": "application/json", 
-                            "x-game-key": GAME_API_KEY
-                        },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    console.log("Session response status:", r.status);
-                    
-                    if (!r.ok) {
-                        const errorText = await r.text();
-                        console.error("❌ Session request failed:", errorText);
-                        throw new Error(`HTTP ${r.status}: ${errorText}`);
-                    }
-                    
-                    const d = await r.json();
-                    console.log("Session response data:", d);
-                    
-                    if(d.session_token) {
-                        this.token = d.session_token;
-                        this.playerId = d.player_identifier;
-                        localStorage.setItem("ritual_id", d.player_identifier);
-                        console.log("✅ Session token obtained successfully:", d.session_token.substring(0, 20) + "...");
-                        this.fetchTop();
-                    } else {
-                        console.warn("❌ LootLocker Auth Failed - No session token:", d);
-                        document.getElementById('leaderboardList').innerHTML = "OFFLINE - NO TOKEN";
-                    }
-                } catch(e) {
-                    console.warn("❌ LootLocker Connection Error:", e);
-                    document.getElementById('leaderboardList').innerHTML = "OFFLINE - CONNECTION ERROR";
-                }
-            },
-            async fetchTop() {
-                console.log("🔍 Fetching leaderboard...");
-                console.log("Token exists:", !!this.token);
-                console.log("Token (first 20 chars):", this.token ? this.token.substring(0, 20) + "..." : "No token");
-                
-                if(!this.token) {
-                    console.error("❌ No session token available");
-                    document.getElementById('leaderboardList').innerHTML = "OFFLINE - NO TOKEN";
-                    return;
-                }
-                
-                try {
-                    // Try different endpoint formats
-                    const endpoint = `${LOOTLOCKER_DOMAIN}/game/leaderboards/${LEADERBOARD_KEY}/list?count=5&game_id=${GAME_ID}`;
-                    console.log("Fetching from:", endpoint);
-                    
-                    const r = await fetch(endpoint, {
-                        mode: 'cors',
-                        headers: { 
-                            "Content-Type": "application/json",
-                            "x-session-token": this.token,
-                            "LL-Version": "2021-03-01"
-                        }
-                    });
-                    
-                    console.log("Leaderboard response status:", r.status);
-                    
-                    if (!r.ok) {
-                        const errorText = await r.text();
-                        console.error("❌ Leaderboard fetch failed:", errorText);
-                        throw new Error(`HTTP ${r.status}: ${errorText}`);
-                    }
-                    
-                    const d = await r.json();
-                    console.log("Leaderboard response data:", d);
-                    
-                    const list = document.getElementById('leaderboardList');
-                    
-                    // Try different response formats
-                    let items = [];
-                    if(d.entries && d.entries.length > 0) {
-                        items = d.entries;
-                    } else if(d.items && d.items.length > 0) {
-                        items = d.items;
-                    } else if(d.leaderboard && d.leaderboard.length > 0) {
-                        items = d.leaderboard;
-                    }
-                    
-                    if(items.length > 0) {
-                        list.innerHTML = items.map((i, idx) => `
-                            <div class="leaderboard-row ${idx===0?'rank-1':''}">
-                                <span>#${i.rank || idx+1} ${i.player?.name || i.member_id?.substring(0,6) || "PLAYER"}</span>
-                                <span>${i.score || 0}</span>
-                            </div>
-                        `).join('');
-                        console.log(`✅ Leaderboard fetched successfully: ${items.length} items`);
-                    } else {
-                        list.innerHTML = "NO SCORES YET";
-                        console.log("⚠️ Leaderboard empty");
-                    }
-                } catch(e) {
-                    console.error("❌ Fetch leaderboard error:", e);
-                    document.getElementById('leaderboardList').innerHTML = "OFFLINE - CHECK CONSOLE";
-                }
-            },
-            async submit(score) {
-                console.log("🔍 Submitting score:", score);
-                console.log("Token exists:", !!this.token);
-                
-                if(!this.token) {
-                    console.warn("❌ Cannot submit score: No session token");
-                    return;
-                }
-                
-                const status = document.getElementById('uploadStatus');
-                status.innerText = "UPLOADING...";
-                
-                try {
-                    const endpoint = `${LOOTLOCKER_DOMAIN}/game/leaderboards/${LEADERBOARD_KEY}/submit?game_id=${GAME_ID}`;
-                    console.log("Submitting to:", endpoint);
-                    
-                    const response = await fetch(endpoint, {
-                        method: "POST",
-                        mode: 'cors',
-                        headers: { 
-                            "Content-Type": "application/json", 
-                            "x-session-token": this.token,
-                            "LL-Version": "2021-03-01"
-                        },
-                        body: JSON.stringify({ 
-                            score: parseInt(score, 10),
-                            member_id: this.playerId
-                        })
-                    });
-                    
-                    console.log("Submit response status:", response.status);
-                    
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error("❌ Submit failed:", errorText);
-                        throw new Error(`HTTP ${response.status}: ${errorText}`);
-                    }
-                    
-                    const result = await response.json();
-                    console.log("✅ Score submitted successfully:", result);
-                    
-                    status.innerText = "UPLOAD COMPLETE";
-                    this.fetchTop();
-                } catch(e) {
-                    console.warn("❌ Submit score error:", e);
-                    status.innerText = "UPLOAD FAILED - CHECK CONSOLE";
-                }
-            }
+            async init() { return { localOnly: true }; },
+            async fetchTop() { return { localOnly: true }; },
+            async submit() { return { localOnly: true }; }
         };
 
-        // Test function for debugging
-        async function testLeaderboardConnection() {
-            console.clear();
-            console.log("🧪 Testing LootLocker Connection...");
-            
-            try {
-                // Test 1: Check if session works
-                console.log("1. Testing session creation...");
-                const response = await fetch('https://7l3mo9bh.api.lootlocker.io/game/v2/session/guest', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-game-key': GAME_API_KEY
-                    },
-                    body: JSON.stringify({
-                        game_version: '1.0',
-                        development_mode: true,
-                        player_identifier: 'test_' + Date.now()
-                    })
-                });
-                
-                const data = await response.json();
-                console.log("Session Test Response:", data);
-                
-                if(data.session_token) {
-                    console.log("✅ Session created successfully!");
-                    
-                    // Test 2: Try to fetch leaderboard
-                    console.log("\n2. Testing leaderboard fetch...");
-                    const lbResponse = await fetch(`https://7l3mo9bh.api.lootlocker.io/game/leaderboards/${LEADERBOARD_KEY}/list?count=5&game_id=${GAME_ID}`, {
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'x-session-token': data.session_token,
-                            'LL-Version': '2021-03-01'
-                        }
-                    });
-                    
-                    const lbData = await lbResponse.json();
-                    console.log("Leaderboard Test Response:", lbData);
-                    
-                    if(lbData.entries || lbData.items) {
-                        console.log("✅ Leaderboard fetch successful!");
-                        alert("✅ Leaderboard connection test PASSED!\nCheck console for details.");
-                    } else {
-                        console.warn("⚠️ Leaderboard data format unexpected");
-                        alert("⚠️ Leaderboard connection partial - check console.");
-                    }
-                } else {
-                    console.error("❌ Failed to create session");
-                    alert("❌ Failed to create session - check console.");
-                }
-                
-            } catch(error) {
-                console.error("❌ Test Failed:", error);
-                alert("❌ Leaderboard test FAILED!\nCheck console for error details.");
-            }
-        }
 
         const GameState = {
             START: 'start',

@@ -83,7 +83,6 @@
   let currentRun = null;
   let history = [];
   let gateSerial = 0;
-  let originalLeaderboardSubmit = null;
 
   function finiteNumber(value, fallback = 0) {
     return Number.isFinite(value) ? value : fallback;
@@ -1038,18 +1037,13 @@
     safeStorageWrite(history);
   }
 
-  function installLocalOnlyLeaderboard() {
-    try {
-      if (typeof Leaderboard === 'undefined' || !Leaderboard || Leaderboard.__gateSliceLocalOnly) return;
-      originalLeaderboardSubmit = Leaderboard.submit;
-      Leaderboard.submit = async function gateSliceLocalOnlySubmit() {
-        const status = document.getElementById('uploadStatus');
-        if (status) status.textContent = 'GATE SLICE — LOCAL ONLY';
-        return { localOnly: true };
-      };
-      Leaderboard.__gateSliceLocalOnly = true;
-    } catch (_error) {}
-  }
+  // `installLocalOnlyLeaderboard()` stood here. It overwrote `Leaderboard.submit`
+  // to stop the LootLocker client shipping an arbitrary integer to a shared board
+  // (D-004, M16). D-044 removed that client from index.html outright, so there is
+  // nothing left to neuter - the object is inert at its source now, which is a
+  // stronger guarantee than an override that only applied when this slice loaded.
+  // The preflight in fixed-step-prototype.js still declares the invariant and still
+  // owns the status line; the global board updates it when it is the one in play.
 
   function configureMenu() {
     const monas = document.getElementById('startMonasBtn');
@@ -1086,7 +1080,6 @@
     history = safeStorageRead();
     ensureHud();
     configureMenu();
-    installLocalOnlyLeaderboard();
 
     const originalPrepareLevels = Game.prototype.prepareLevels;
     const originalStartGame = Game.prototype.startGame;

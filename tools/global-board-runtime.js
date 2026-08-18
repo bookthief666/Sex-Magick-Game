@@ -249,6 +249,16 @@
     installed = true;
 
     installHooks();
+
+    // The Gate slice preflight sets this line to "GATE SLICE — LOCAL ONLY" before
+    // anything else runs, which is true right up until this module installs. It is
+    // corrected here rather than there because this is the only code that knows the
+    // global board is actually in play.
+    try {
+      const status = document.getElementById('uploadStatus');
+      if (status && !visualQaActive()) status.textContent = 'GLOBAL BOARD — SERVER-VALIDATED';
+    } catch (_error) {}
+
     refresh().catch(() => {});
 
     root.__SEX_MAGICK_GLOBAL_BOARD__ = Object.freeze({
