@@ -144,6 +144,32 @@ guess.
   which has no terminator-indentation constraint to conflict with YAML's
   block-scalar rule in the first place.
 
+## Addendum 2 — the calibration run happened, and 0.006 is ~29x too generous
+
+Calibration finally ran on 2026-08-19 (run `32256329862`). The obstacle was that
+Playwright reports a comparison's difference only on failure, so the two green runs
+on the merged trunk said nothing about headroom. `playwright.config.ts` now reads
+`M14_MAX_DIFF_PIXEL_RATIO` from the environment, exposed as a `workflow_dispatch`
+input; setting it to `0` makes the suite report every non-identical comparison.
+
+Result: **27 of 28 comparisons were byte-identical at tolerance zero.** The single
+exception was `gate-offer` on `chromium-fold-inner` at **202 pixels** - about
+**0.02%** of that container's 975,936 CSS pixels - and it was byte-identical on
+retry. The committed `0.006` is 0.6%, roughly 5,856 pixels, so the worst observed
+real difference is about **29x smaller than the tolerance permits**.
+
+A trap worth recording: Playwright printed `ratio 0.01` for that 202-pixel
+difference, and printed the *same* `ratio 0.01` locally for a 20,035-pixel
+difference. The displayed ratio is rounded to two decimals and is meaningless below
+roughly 1.5%; **calibrate from the pixel count, not the printed ratio**, or be wrong
+by two orders of magnitude in the loose direction.
+
+The number has **not** been changed yet. One sample is not a distribution, and
+tightening trades missed regressions for flakes - the failure mode that got M14
+disarmed in the first place. A second sample is running; the recommendation, if it
+agrees, is `0.001` (~5x headroom over the observed event, 6x stricter than today).
+Full data and method: `docs/qa/m35-m14-tolerance-calibration.md`.
+
 ## Addendum — the first real review caught two defects a hash never could
 
 The first `update_snapshots` run (workflow 32192780911) opened PR #16 with all 28
