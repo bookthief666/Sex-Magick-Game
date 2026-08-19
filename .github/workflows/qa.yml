@@ -25,11 +25,22 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
+          cache: npm
+
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Syntax-check runtime and tests
         run: |
           node --check tools/fixed-step-clock.js
           node --check tools/fixed-step-prototype.js
+          node --check tools/product-integration-runtime.js
+          node --check tools/ritual-ascent-runtime.js
+          node --check tools/sephirah-identity-runtime.js
+          node --check tools/sephirah-identity-bootstrap.js
           node --check tools/collision-runtime.js
           node --check tools/input-feedback-policy.js
           node --check tools/gate-slice-runtime.js
@@ -45,6 +56,8 @@ jobs:
           node --check tools/missions-runtime.js
           node --check tools/powerup-runtime.js
           node --check tools/monas-runtime.js
+          node --check tools/monas-reachability.js
+          node --check tools/leaderboard-runtime.js
           node --check tools/occult-art-runtime.js
           node --check tools/occult-field-runtime.js
           node --check tools/player-reachability.js
@@ -54,6 +67,9 @@ jobs:
           node --check tools/m7-review-diagnostics.js
           node --check tools/run-m7-review-audit.js
           node --check tools/test-fixed-step-clock.js
+          node --check tools/test-product-integration-runtime.js
+          node --check tools/test-ritual-ascent-runtime.js
+          node --check tools/test-sephirah-identity-runtime.js
           node --check tools/test-collision-runtime.js
           node --check tools/test-input-feedback-policy.js
           node --check tools/test-r1-playtest-harness.js
@@ -74,6 +90,8 @@ jobs:
           node --check tools/test-missions-runtime.js
           node --check tools/test-powerup-runtime.js
           node --check tools/test-monas-runtime.js
+          node --check tools/test-monas-reachability.js
+          node --check tools/test-leaderboard-runtime.js
           node --check tools/test-occult-art-runtime.js
           node --check tools/test-player-reachability.js
           node --check tools/test-compositional-reachability.js
@@ -91,6 +109,12 @@ jobs:
           node --check tools/browser-m19-powerups-test.mjs
           node --check tools/browser-m21-aesthetic-test.mjs
           node --check tools/browser-monas-test.mjs
+          node --check tools/run-browser-monas-diagnostic.mjs
+          node --check tools/browser-leaderboard-test.mjs
+          node --check tools/browser-m30-standard-entry-test.mjs
+          node --check tools/browser-m33-product-integration-test.mjs
+          node --check tools/browser-m34-ritual-ascent-test.mjs
+          node --check tools/browser-m35-living-sephiroth-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -102,6 +126,9 @@ jobs:
       - name: Run fast deterministic contracts
         run: |
           node tools/test-fixed-step-clock.js
+          node tools/test-product-integration-runtime.js
+          node tools/test-ritual-ascent-runtime.js
+          node tools/test-sephirah-identity-runtime.js
           node tools/test-collision-runtime.js
           node tools/test-input-feedback-policy.js
           node tools/test-r1-playtest-harness.js
@@ -122,6 +149,8 @@ jobs:
           node tools/test-missions-runtime.js
           node tools/test-powerup-runtime.js
           node tools/test-monas-runtime.js
+          node tools/test-monas-reachability.js
+          node tools/test-leaderboard-runtime.js
           node tools/test-occult-art-runtime.js
           node tools/test-m7-review-diagnostics.js
 
@@ -168,4 +197,28 @@ jobs:
         run: node tools/browser-m21-aesthetic-test.mjs
 
       - name: Run MONAS Chrome integration
-        run: node tools/browser-monas-test.mjs
+        run: node tools/run-browser-monas-diagnostic.mjs
+
+      - name: Upload MONAS browser diagnostic
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: monas-browser-report-${{ github.run_attempt }}
+          path: artifacts/monas-browser-report.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Run Rite Board Chrome integration
+        run: node tools/browser-leaderboard-test.mjs
+
+      - name: Run M30 standard-entry Chrome integration
+        run: node tools/browser-m30-standard-entry-test.mjs
+
+      - name: Run M33 normal-product Chrome integration
+        run: node tools/browser-m33-product-integration-test.mjs
+
+      - name: Run M34 ritual-ascent Chrome integration
+        run: node tools/browser-m34-ritual-ascent-test.mjs
+
+      - name: Run M35 Living Sephiroth Chrome integration
+        run: node tools/browser-m35-living-sephiroth-test.mjs

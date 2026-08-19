@@ -1,0 +1,46 @@
+name: M31 MONAS boundary audit
+
+on:
+  pull_request:
+    branches:
+      - develop/sex-magick-2.0
+    paths:
+      - 'tools/monas-runtime.js'
+      - 'tools/monas-reachability.js'
+      - 'tools/monas-compositional-reachability.js'
+      - 'tools/monas-progression-frontier.js'
+      - 'tools/run-m31-monas-boundary-audit.js'
+      - '.github/workflows/m31-monas-boundary-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monas-boundary-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+
+      - name: Syntax-check boundary audit
+        run: node --check tools/run-m31-monas-boundary-audit.js
+
+      - name: Run upper MONAS boundary audit
+        run: node tools/run-m31-monas-boundary-audit.js
+
+      - name: Upload boundary evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: m31-monas-boundary-audit-${{ github.run_attempt }}
+          path: artifacts/m31-monas-boundary-audit.json
+          if-no-files-found: warn
+          retention-days: 14
