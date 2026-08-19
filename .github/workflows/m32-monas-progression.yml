@@ -1,0 +1,51 @@
+name: M32 MONAS progression
+
+on:
+  pull_request:
+    branches:
+      - agent/m31-monas-reachability
+    paths:
+      - 'tools/monas-progression-runtime.js'
+      - 'tools/test-monas-progression-runtime.js'
+      - 'tools/browser-m32-monas-progression-test.mjs'
+      - 'tools/fixed-step-clock.js'
+      - 'docs/decisions/d053-monas-progression-ownership.md'
+      - '.github/workflows/m32-monas-progression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monas-progression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Syntax-check M32 runtime and regressions
+        run: |
+          node --check tools/fixed-step-clock.js
+          node --check tools/monas-progression-runtime.js
+          node --check tools/test-monas-progression-runtime.js
+          node --check tools/browser-m32-monas-progression-test.mjs
+
+      - name: Prove live curve remains inside M31 frontier
+        run: node tools/test-monas-progression-runtime.js
+
+      - name: Prove ordinary/Gate URL and retry parity
+        run: node tools/browser-m32-monas-progression-test.mjs
