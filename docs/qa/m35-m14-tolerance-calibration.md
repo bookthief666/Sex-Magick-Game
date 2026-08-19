@@ -1,8 +1,8 @@
 # M35 — M14 tolerance calibration: the first real measurement
 
 **Date:** 2026-08-19
-**Status:** First sample recorded. `maxDiffPixelRatio` left at `0.006` pending a
-second sample; a change is recommended but not made.
+**Status:** Both samples collected and agree. `maxDiffPixelRatio` changed from
+`0.006` to `0.001` in `playwright.config.ts`.
 
 ## Why this exists
 
@@ -99,6 +99,33 @@ fold-inner). That is roughly **5× headroom** over the largest observed event wh
 being **6× stricter** than today. If sample 2 shows a materially larger event, scale
 the recommendation to keep ~5× headroom over the observed worst case rather than
 keeping the number.
+
+## Sample 2 — run `32257434160`, commit `1b60cf9`, tolerance 0
+
+```
+23 skipped
+77 passed (2.2m)
+```
+
+**All 28 baseline comparisons were byte-identical.** No flake this time — the
+single 202-pixel event from sample 1 did not recur. Two samples now agree on the
+same conclusion from two different angles: the worst case observed across both
+samples is still sample 1's 202 px (0.02% of `chromium-fold-inner`), and it isn't
+even reliably reproducible run-to-run.
+
+## Decision
+
+`maxDiffPixelRatio` is set to **`0.001`** in `playwright.config.ts`
+(`M14_DEFAULT_MAX_DIFF_PIXEL_RATIO`), replacing the unmeasured `0.006` guess from
+D-046. At ~976 px on the largest exposed geometry (`chromium-fold-inner`), this
+keeps roughly **5× headroom** over the only non-identical event either sample
+produced, while being **6× stricter** than the original number — meaningfully
+smaller art regressions are now catchable that the old tolerance would have passed
+straight through.
+
+Next step per the M32 plan: run the plain (non-calibration) job green twice in a
+row on the commit that ships this change, as live confirmation the new tolerance
+doesn't flake in ordinary use.
 
 ## How to take another sample
 

@@ -2,13 +2,14 @@ import { defineConfig, devices } from '@playwright/test';
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8099';
 
-// D-046 shipped `0.006` as an admittedly unmeasured guess and asked for one real
-// calibration run. That run is awkward to get, because Playwright prints a
-// comparison's actual pixel ratio only when the comparison *fails* - a green run
-// says nothing about how much headroom is left. Setting this to `0` makes every
-// state fail and report its true ratio, turning the suite into a measuring
-// instrument for one deliberate run. Default behaviour is unchanged.
-const M14_DEFAULT_MAX_DIFF_PIXEL_RATIO = 0.006;
+// D-046 shipped `0.006` as an admittedly unmeasured guess. Two calibration runs
+// at M14_MAX_DIFF_PIXEL_RATIO=0 (see docs/qa/m35-m14-tolerance-calibration.md)
+// measured the real jitter instead of assuming it: sample 1 found one
+// non-identical comparison out of 28 (202px / 975,936 on chromium-fold-inner,
+// ~0.02%), sample 2 found zero. `0.001` keeps ~5x headroom over the observed
+// worst case while being 6x stricter than the original guess. Override for a
+// fresh calibration run with M14_MAX_DIFF_PIXEL_RATIO=0.
+const M14_DEFAULT_MAX_DIFF_PIXEL_RATIO = 0.001;
 const configuredMaxDiffPixelRatio = Number.parseFloat(process.env.M14_MAX_DIFF_PIXEL_RATIO ?? '');
 const maxDiffPixelRatio = Number.isFinite(configuredMaxDiffPixelRatio) && configuredMaxDiffPixelRatio >= 0
   ? configuredMaxDiffPixelRatio
