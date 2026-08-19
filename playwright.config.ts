@@ -2,6 +2,18 @@ import { defineConfig, devices } from '@playwright/test';
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8099';
 
+// D-046 shipped `0.006` as an admittedly unmeasured guess and asked for one real
+// calibration run. That run is awkward to get, because Playwright prints a
+// comparison's actual pixel ratio only when the comparison *fails* - a green run
+// says nothing about how much headroom is left. Setting this to `0` makes every
+// state fail and report its true ratio, turning the suite into a measuring
+// instrument for one deliberate run. Default behaviour is unchanged.
+const M14_DEFAULT_MAX_DIFF_PIXEL_RATIO = 0.006;
+const configuredMaxDiffPixelRatio = Number.parseFloat(process.env.M14_MAX_DIFF_PIXEL_RATIO ?? '');
+const maxDiffPixelRatio = Number.isFinite(configuredMaxDiffPixelRatio) && configuredMaxDiffPixelRatio >= 0
+  ? configuredMaxDiffPixelRatio
+  : M14_DEFAULT_MAX_DIFF_PIXEL_RATIO;
+
 export default defineConfig({
   testDir: './tests',
   testMatch: [/cross-screen\.spec\.ts/, /visual-state\.spec\.ts/, /retry-transition\.spec\.ts/],
@@ -12,10 +24,9 @@ export default defineConfig({
     // M14's art-regression net (tests/visual-state.spec.ts) used to require its
     // whole-container screenshots to be byte-identical, which failed at roughly a
     // coin-flip rate on the fold geometries from CI-to-CI sub-pixel rasterisation
-    // noise unrelated to any real change - see docs/decisions/d046-*.md. This
-    // tolerance is provisional pending one real calibration run against actual CI
-    // diff percentages; the number itself is not yet evidence-based.
-    toHaveScreenshot: { maxDiffPixelRatio: 0.006 }
+    // noise unrelated to any real change - see docs/decisions/d046-*.md.
+    // Override for a calibration run with M14_MAX_DIFF_PIXEL_RATIO=0.
+    toHaveScreenshot: { maxDiffPixelRatio }
   },
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 4 : undefined,

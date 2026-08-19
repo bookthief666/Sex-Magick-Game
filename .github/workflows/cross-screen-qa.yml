@@ -42,6 +42,16 @@ on:
         required: false
         type: boolean
         default: false
+      max_diff_pixel_ratio:
+        description: >-
+          Override M14's screenshot tolerance for this run only. Set to 0 to make
+          every comparison fail and report its true pixel ratio - Playwright only
+          prints that number on failure, so this is how the tolerance gets
+          calibrated against real data instead of guessed (D-046). Leave blank to
+          use the committed default.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -72,6 +82,10 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Run cross-screen and visual-state matrix
+        env:
+          # Blank leaves playwright.config.ts's committed default in force; the
+          # config ignores anything that is not a finite non-negative number.
+          M14_MAX_DIFF_PIXEL_RATIO: ${{ github.event.inputs.max_diff_pixel_ratio }}
         run: npm run test:cross-screen
 
       - name: Upload Playwright report
