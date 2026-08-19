@@ -471,6 +471,15 @@
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
   const query = new URLSearchParams(window.location.search);
   if (query.get('gateSlice') === '1') return;
+  // patternBrowserQa is the base obstacle-grammar fixture. It sets `gameMode` by
+  // hand and steps `updateGameObjects()` a frame at a time to assert the *base*
+  // grammar spawns exactly one deterministic pillar per interval. Loading the
+  // enhanced Rite here makes its MONAS arm measure hold/release glide and MONAS's
+  // own gap ownership instead, which is a different game and fails that assertion.
+  // The product behaviour above is correct and stays; the fixture just has to keep
+  // seeing the primitive it was written to test, the same way it is now held out of
+  // M33's Gate promotion.
+  if (query.has('patternBrowserQa')) return;
 
   if (
     globalThis.SexMagickMonas ||

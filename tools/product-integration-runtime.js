@@ -69,10 +69,14 @@
     const height = Math.max(1, Number(input.height) || 1);
     const dpr = Math.max(1, Number(input.devicePixelRatio) || 1);
     const visualQa = params.get('visualQa') === '1';
-    // telemetryQa is a low-level lifecycle fixture: it deliberately drives the
-    // base Void/scoring/retry primitives by hand. M33 must not silently wrap that
-    // diagnostic in the full HEX product merely because the normal URL changed.
-    const baseDiagnostic = params.has('telemetryQa');
+    // Low-level fixtures that drive base primitives by hand. telemetryQa steps the
+    // base Void/scoring/retry lifecycle; patternBrowserQa steps `updateGameObjects()`
+    // one frame at a time and asserts the base grammar spawned exactly one pillar.
+    // M33 must not silently wrap either in the full HEX product merely because the
+    // normal URL changed - the Gate slice owns obstacle spawning, so promoting the
+    // grammar fixture makes it observe Gate pillars and fail with "Expected one
+    // deterministic obstacle", which is exactly how this was found.
+    const baseDiagnostic = params.has('telemetryQa') || params.has('patternBrowserQa');
     const explicitGate = params.has('gateSlice');
     const explicitRenderDpr = params.has('renderDpr');
     const legacyOptOut = truthy(params.get('legacyHex')) || params.get('productMode') === 'legacy';

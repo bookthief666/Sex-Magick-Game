@@ -42,6 +42,16 @@ function params(result) {
 }
 
 {
+  // The base obstacle-grammar fixture drives updateGameObjects() by hand and asserts
+  // the base grammar spawns exactly one deterministic pillar. Promoting it into the
+  // Gate stack makes it observe Gate pillars instead and fail; this held it out.
+  const result = product.resolveDefaults({ search: '?patternBrowserQa=1', width: 390, height: 844, devicePixelRatio: 1 });
+  assert.equal(params(result).has('gateSlice'), false, 'base obstacle-grammar QA must retain base spawning semantics');
+  assert.equal(result.baseDiagnostic, true);
+  assert.deepEqual(result.changes, {});
+}
+
+{
   const result = product.resolveDefaults({ search: '?legacyHex=1', width: 884, height: 1104, devicePixelRatio: 2.625 });
   assert.equal(params(result).has('gateSlice'), false, 'legacyHex opt-out must keep Gate disabled');
   assert.equal(params(result).get('renderDpr'), '2', 'legacy gameplay can still receive the Fold-safe render default');
