@@ -69,14 +69,24 @@
     const height = Math.max(1, Number(input.height) || 1);
     const dpr = Math.max(1, Number(input.devicePixelRatio) || 1);
     const visualQa = params.get('visualQa') === '1';
-    // Low-level fixtures that drive base primitives by hand. telemetryQa steps the
-    // base Void/scoring/retry lifecycle; patternBrowserQa steps `updateGameObjects()`
-    // one frame at a time and asserts the base grammar spawned exactly one pillar.
-    // M33 must not silently wrap either in the full HEX product merely because the
-    // normal URL changed - the Gate slice owns obstacle spawning, so promoting the
-    // grammar fixture makes it observe Gate pillars and fail with "Expected one
-    // deterministic obstacle", which is exactly how this was found.
-    const baseDiagnostic = params.has('telemetryQa') || params.has('patternBrowserQa');
+    // Low-level fixtures that drive base primitives by hand and must keep observing
+    // the base game, not the assembled product:
+    //   telemetryQa            - steps the base Void/scoring/retry lifecycle
+    //   patternBrowserQa       - steps updateGameObjects() a frame at a time and
+    //                            asserts the base grammar spawns exactly one pillar
+    //   reachabilityBrowserQa  - drives the real Player against player-reachability.js
+    //                            and requires the solver's model to match it exactly
+    //   compositionBrowserQa   - the same solver across pattern boundaries
+    //
+    // M33 must not wrap any of them in the full HEX product merely because the normal
+    // URL changed. Promoting the grammar fixture made it observe Gate pillars
+    // ("Expected one deterministic obstacle"); promoting the reachability fixtures
+    // loaded the enhanced MONAS rite, whose hold/release glide legitimately does not
+    // match the solver's tap-jump model, so parity failed at 400.1728 != 393.1204.
+    // Both were real regressions from the #18 merge, both found by CI, neither a
+    // product defect - see D-057.
+    const baseDiagnostic = params.has('telemetryQa') || params.has('patternBrowserQa')
+      || params.has('reachabilityBrowserQa') || params.has('compositionBrowserQa');
     const explicitGate = params.has('gateSlice');
     const explicitRenderDpr = params.has('renderDpr');
     const legacyOptOut = truthy(params.get('legacyHex')) || params.get('productMode') === 'legacy';

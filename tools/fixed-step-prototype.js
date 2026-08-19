@@ -479,7 +479,16 @@
   // The product behaviour above is correct and stays; the fixture just has to keep
   // seeing the primitive it was written to test, the same way it is now held out of
   // M33's Gate promotion.
-  if (query.has('patternBrowserQa')) return;
+  //
+  // reachabilityBrowserQa and compositionBrowserQa need the same hold-out for a
+  // different reason: they drive the real Player against player-reachability.js and
+  // require exact agreement. That solver models MONAS as the pre-M27 tap-jump avatar
+  // (gravity 0.18, jumpImpulse -7.2), so loading the glide rite here fails parity at
+  // 400.1728 != 393.1204 on a difference that is deliberate, not a defect. MONAS's
+  // real evidence model is tools/monas-reachability.js (D-048). Holding these two out
+  // of *both* the Gate promotion and this bootstrap is what restores their base view;
+  // exempting only one leaves the other path still loading the enhanced rite.
+  if (query.has('patternBrowserQa') || query.has('reachabilityBrowserQa') || query.has('compositionBrowserQa')) return;
 
   if (
     globalThis.SexMagickMonas ||

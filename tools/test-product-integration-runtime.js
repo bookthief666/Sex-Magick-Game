@@ -51,6 +51,22 @@ function params(result) {
   assert.deepEqual(result.changes, {});
 }
 
+// The reachability fixtures compare the real Player against player-reachability.js
+// and require exact agreement. Promoting them into the product loads the enhanced
+// MONAS rite, whose glide law legitimately diverges from that solver's tap-jump
+// model, so parity fails on a difference that is by design rather than a defect.
+for (const flag of ['reachabilityBrowserQa', 'compositionBrowserQa']) {
+  const foldOpen = product.resolveDefaults({ search: `?${flag}=1`, width: 884, height: 1104, devicePixelRatio: 2.625 });
+  assert.equal(params(foldOpen).has('gateSlice'), false, `${flag} must retain base physics for solver parity`);
+  assert.equal(foldOpen.baseDiagnostic, true, `${flag} must be treated as a low-level diagnostic`);
+  assert.equal(foldOpen.changes.gateSlice, undefined, `${flag} must never be promoted into the Gate stack`);
+  // The adaptive renderDpr is deliberately still injected here: it resizes the
+  // canvas backing store, not innerHeight, so it cannot move the player boundaries
+  // the solver models. Only the Gate promotion changes what these fixtures observe.
+  const smallPhone = product.resolveDefaults({ search: `?${flag}=1`, width: 390, height: 844, devicePixelRatio: 1 });
+  assert.deepEqual(smallPhone.changes, {}, `${flag} must receive no product defaults where no DPR policy applies`);
+}
+
 {
   const result = product.resolveDefaults({ search: '?legacyHex=1', width: 884, height: 1104, devicePixelRatio: 2.625 });
   assert.equal(params(result).has('gateSlice'), false, 'legacyHex opt-out must keep Gate disabled');
