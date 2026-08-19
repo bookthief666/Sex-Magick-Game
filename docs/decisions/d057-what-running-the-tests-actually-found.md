@@ -129,6 +129,21 @@ sounded tidier.
   each ship with automated evidence only. Nothing here has been played on a
   physical Fold 6 or by a human. A green CI run and a played game remain
   different claims, and this milestone only strengthens the first.
+- **It does not fix the MONAS progression conflict it uncovered.** Running the M32
+  and M33 workflows found a third regression, and unlike the other two it is a real
+  gameplay defect rather than a fixture problem: D-053's six-band MONAS speed ladder
+  is overwritten at runtime by D-045's geometry-derived speed, so on a Fold in
+  portrait MONAS runs 2.61 at gate 0 rising only to 3.17 at gate 80 where the curve
+  specifies 2.9 → 4.9 — **35% slow at the top band, while the corridor still narrows
+  on schedule from 260 to 210.** The gap half of every band applies correctly; only
+  speed is lost. It is conservative rather than unsafe (slower at an equal-or-wider
+  gap stays inside M31's verified envelope) but the escalation the design calls for
+  is not happening. Two workflows are red for this single cause and were
+  **deliberately left red** — the assertion is correct and relaxing it to get green
+  would be the "do not weaken valid tests to make a change pass" failure the
+  project's own contract names. Full measurements, both geometries, and three
+  options with a recommendation: `docs/qa/m35-monas-progression-conflict.md`.
+  Choosing among them changes live difficulty, so it is the owner's call.
 - **It does not revisit the live reachability policy's MONAS overrides.**
   `reachability-policy.js` still adjusts and seals MONAS patterns using
   `player-reachability.js`'s tap-jump model (`RUNTIME ADJUSTMENT
