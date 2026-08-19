@@ -239,7 +239,18 @@
           grammarVersion: gameWindow?.__SEX_MAGICK_PATTERNS__?.version ?? null,
           varietyVersion: gameWindow?.__SEX_MAGICK_OBSTACLE_VARIETY__?.version ?? null,
           missionsVersion: gameWindow?.__SEX_MAGICK_MISSIONS__?.version ?? null,
-          powerupsVersion: gameWindow?.__SEX_MAGICK_POWERUPS__?.version ?? null
+          powerupsVersion: gameWindow?.__SEX_MAGICK_POWERUPS__?.version ?? null,
+          // M32-M35. Without these the guard above has a hole exactly the shape of
+          // the work nobody has played yet: the Gate fingerprint and the four
+          // versions above are identical with or without them, so a session that
+          // silently ran a checkout predating the ritual ascent HUD or Living
+          // Sephiroth would produce a report that looks completely valid. That is
+          // the 2026-08-12 failure this block exists to prevent, reopened by the
+          // four newest modules. `null` here means the module did not load.
+          monasProgressionVersion: gameWindow?.__SEX_MAGICK_MONAS_PROGRESSION__?.version ?? null,
+          productIntegrationVersion: gameWindow?.__SEX_MAGICK_PRODUCT_DEFAULTS__?.version ?? null,
+          ritualAscentVersion: gameWindow?.__SEX_MAGICK_RITUAL_ASCENT__?.version ?? null,
+          sephirahIdentityVersion: gameWindow?.__SEX_MAGICK_SEPHIRAH_IDENTITY__?.version ?? null
         };
         // M18 and M19 state. Captured optionally rather than gated on, so a
         // runtime that fails to load costs a section of the report instead of
