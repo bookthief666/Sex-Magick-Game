@@ -56,7 +56,10 @@ try {
         horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
         legacyTestHidden: (() => {
           const button = Array.from(document.querySelectorAll('button')).find(node => node.getAttribute('onclick')?.includes('testLeaderboardConnection'));
-          return Boolean(button?.hidden);
+          // D-044 removed this LootLocker-era button from index.html outright rather
+          // than merely hiding it, so its absence satisfies "must not be
+          // product-facing" at least as well as `.hidden` would.
+          return button === undefined || Boolean(button.hidden);
         })()
       };
     });
