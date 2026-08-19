@@ -16,7 +16,12 @@ permissions:
 jobs:
   fast-gameplay-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Raised from 15 after the first real run on this branch: the Playwright
+    # Chromium install alone took 14m02s on a cold runner, leaving under a minute
+    # for the suite. The job was cancelled by this timeout while the tests were
+    # still going, which would have read as an infrastructure hang rather than as
+    # the genuine obstacle-grammar regression it had just found.
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
