@@ -9,6 +9,8 @@
     "test:cross-screen:update": "playwright test --config=playwright.config.ts --update-snapshots",
     "test:browserstack-config": "node tools/test-browserstack-sdk-config.mjs",
     "test:supply-chain": "node tools/test-qa-supply-chain.mjs",
+    "test:gallery": "node tools/test-gallery-source.mjs",
+    "fetch:gallery": "node tools/fetch-gallery.mjs",
     "test:browserstack": "node tools/browserstack-real-device-smoke.mjs",
     "test:browserstack-mobile": "browserstack-node-sdk playwright test --config=playwright.browserstack.config.ts",
     "migrate:gallery-to-r2": "node tools/migrate-images-to-r2.mjs"

@@ -10,11 +10,18 @@
  * fragility: no egress fees, no Drive rate limiting, images stay private
  * unless the bucket is explicitly made public.
  *
- * The image list is never hand-copied here - it is parsed straight out of
- * index.html's `originalLevels`, `newImageIDs` and `esotericNames` arrays,
- * the same three arrays MASTER_POOL is built from at runtime, so this script
- * can never drift from what the game actually loads. Re-run it any time new
- * images are added to those arrays; already-uploaded keys are skipped.
+ * The image list is never hand-copied here - `gallery-source.mjs` parses it
+ * straight out of index.html's `originalLevels`, `newImageIDs` and
+ * `esotericNames` arrays, the same three arrays MASTER_POOL is built from at
+ * runtime, so this script can never drift from what the game actually loads.
+ * Re-run it any time new images are added to those arrays; already-uploaded
+ * keys are skipped.
+ *
+ * SUPERSEDED by `fetch-gallery.mjs` (M36): the owner chose in-repo hosting
+ * over R2, so no third-party account sits in the critical path and the itch
+ * build is self-contained. This script was never run - there has never been an
+ * R2 bucket - and is kept only as the worked-out alternative should the repo
+ * ever outgrow carrying its own images.
  *
  * Usage:
  *   R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
@@ -27,6 +34,8 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+
+import { buildGalleryManifestSource } from './gallery-source.mjs';
 
 const REPO_ROOT = new URL('..', import.meta.url);
 const INDEX_HTML_PATH = new URL('index.html', REPO_ROOT);
@@ -45,44 +54,6 @@ function requireEnv(name) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
-}
-
-/**
- * Pull a top-level `const NAME = [ ... ];` array literal out of index.html by
- * name and evaluate it in isolation. Deliberately narrow (only ever sees the
- * bracketed literal itself, not the surrounding script) rather than a general
- * HTML/JS parser, since the three arrays this reads are simple string/object
- * literals with no external references.
- */
-function extractArrayLiteral(source, constName) {
-  const pattern = new RegExp(`const\\s+${constName}\\s*=\\s*(\\[[\\s\\S]*?\\]);`, 'm');
-  const match = source.match(pattern);
-  if (!match) {
-    throw new Error(`Could not find "const ${constName} = [...]" in index.html`);
-  }
-  // eslint-disable-next-line no-new-func
-  return new Function(`return ${match[1]};`)();
-}
-
-/**
- * Reconstructs the same {name, id} list MASTER_POOL is built from at runtime
- * in index.html (originalLevels first, then newImageIDs deduplicated and
- * paired with esotericNames on a wrapping index) - see index.html around the
- * `MASTER_POOL` declaration for the logic this mirrors.
- */
-function buildGalleryManifestSource(html) {
-  const originalLevels = extractArrayLiteral(html, 'originalLevels');
-  const newImageIDs = extractArrayLiteral(html, 'newImageIDs').filter(
-    (value, index, self) => self.indexOf(value) === index
-  );
-  const esotericNames = extractArrayLiteral(html, 'esotericNames');
-
-  const entries = originalLevels.map((level) => ({ name: level.name, id: level.id }));
-  newImageIDs.forEach((id, index) => {
-    const nameIndex = index % esotericNames.length;
-    entries.push({ name: esotericNames[nameIndex], id });
-  });
-  return entries;
 }
 
 function driveUrlFor(id) {
