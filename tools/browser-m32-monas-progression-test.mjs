@@ -129,17 +129,21 @@ try {
       };
     });
 
+    // D-045 gives this fixture's portrait viewport (884x1104) a 0.9x geometry
+    // accommodation on top of D-053's ladder (see monas-progression-runtime.js's
+    // geometrySpeedFactor) - every band speed below is the shipped value x0.9,
+    // not the raw ladder literal. Gap is untouched by that composition.
     const expected = [
-      { gatesPassed: 8, band: 1, speed: 3.3, nominalGap: 250 },
-      { gatesPassed: 20, band: 2, speed: 3.7, nominalGap: 240 },
-      { gatesPassed: 36, band: 3, speed: 4.1, nominalGap: 230 },
-      { gatesPassed: 56, band: 4, speed: 4.5, nominalGap: 220 },
-      { gatesPassed: 80, band: 5, speed: 4.9, nominalGap: 210 }
+      { gatesPassed: 8, band: 1, speed: 2.97, nominalGap: 250 },
+      { gatesPassed: 20, band: 2, speed: 3.33, nominalGap: 240 },
+      { gatesPassed: 36, band: 3, speed: 3.69, nominalGap: 230 },
+      { gatesPassed: 56, band: 4, speed: 4.05, nominalGap: 220 },
+      { gatesPassed: 80, band: 5, speed: 4.41, nominalGap: 210 }
     ];
 
     assert.equal(result.initial.gatesPassed, 0, `${label}: fresh run must begin at gate 0`);
     assert.equal(result.initial.band, 0, `${label}: fresh run must begin at band 0`);
-    assert.equal(rounded(result.initial.speed), 2.9, `${label}: fresh speed`);
+    assert.equal(rounded(result.initial.speed), 2.61, `${label}: fresh speed`);
     assert.equal(rounded(result.initial.nominalGap), 260, `${label}: fresh nominal gap`);
     assert.equal(result.initial.gateResidue, false, `${label}: fresh MONAS must not carry HEX Gate state`);
     assert.equal(result.initial.voidMode, false, `${label}: fresh MONAS must not enter base/HEX Void`);
@@ -159,13 +163,13 @@ try {
     assert.equal(result.levelAfterScoreCheck, result.levelBeforeScoreCheck, `${label}: legacy level index must not advance from score`);
     assert.equal(result.afterScoreCheck.voidMode, false, `${label}: score/checkLevel must never trigger base Void`);
 
-    assert.equal(rounded(result.surge.speed), 4.9, `${label}: Warp Surge must not mutate canonical base speed`);
+    assert.equal(rounded(result.surge.speed), 4.41, `${label}: Warp Surge must not mutate canonical base speed`);
     assert.equal(rounded(result.surge.nominalGap), 210, `${label}: Warp Surge nominal gap`);
     assert.equal(rounded(result.surge.liveGap), 247.8, `${label}: Warp Surge must widen 210 by 1.18`);
 
     assert.equal(result.afterRetry.gatesPassed, 0, `${label}: retry resets semantic gate progression`);
     assert.equal(result.afterRetry.band, 0, `${label}: retry resets band`);
-    assert.equal(rounded(result.afterRetry.speed), 2.9, `${label}: retry resets speed`);
+    assert.equal(rounded(result.afterRetry.speed), 2.61, `${label}: retry resets speed`);
     assert.equal(rounded(result.afterRetry.nominalGap), 260, `${label}: retry resets gap`);
     assert.equal(result.afterRetry.gateResidue, false, `${label}: retry must clear Gate residue`);
     assert.equal(result.afterRetry.voidMode, false, `${label}: retry must clear Void residue`);

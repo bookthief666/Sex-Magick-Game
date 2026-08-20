@@ -1,8 +1,10 @@
 # M35 — MONAS progression speed is overwritten at runtime
 
 **Date:** 2026-08-19
-**Status:** Open defect. Measured, not fixed. Two CI workflows are red because of it
-and should stay red until it is resolved.
+**Status:** Resolved 2026-08-20 — the owner chose option 1 (compose them). See
+`docs/decisions/d058-compose-the-monas-speed-conflict.md`. The measurements below
+remain accurate as a record of the pre-fix behavior; `browser-m32-monas-progression-test.mjs`
+now asserts the composed values and both previously-red workflows should be green.
 
 ## Summary
 

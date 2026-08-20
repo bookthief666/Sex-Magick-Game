@@ -114,6 +114,30 @@
     };
   }
 
+  /**
+   * D-045 found the base game's own adjustForScreenSize() gives a portrait phone a
+   * slower, wider corridor (0.9x speed) that M26's per-frame CONFIG-driven
+   * escalation was silently overwriting every frame. This ladder was authored on an
+   * independent branch unaware of that fix, and its absolute per-band speeds
+   * overwrote the portrait accommodation right back the moment the two lines
+   * merged - band 0 shipped as a flat 2.9 regardless of geometry, when the base
+   * game's own rule for that screen is 2.61.
+   *
+   * monas-runtime.js's adjustForScreenSize wrapper already captures what the base
+   * game decided, unmutated, as `__monasGeometryBaseSpeed` (see its own comment).
+   * Composing here - scaling every band by the ratio between that captured value
+   * and the shipped desktop base - keeps this ladder's escalation shape while
+   * restoring the accommodation it was clobbering. On desktop the ratio is 1 and
+   * every value below remains exactly what shipped; the portrait crown band (gate
+   * 80) becomes ~4.41 instead of 4.9.
+   */
+  function geometrySpeedFactor(gameInstance) {
+    const geometryBase = finite(gameInstance?.__monasGeometryBaseSpeed, NaN);
+    const desktopBase = typeof CONFIG !== 'undefined' ? finite(CONFIG.INITIAL_GAME_SPEED, BANDS[0].speed) : BANDS[0].speed;
+    if (!Number.isFinite(geometryBase) || !(desktopBase > 0)) return 1;
+    return geometryBase / desktopBase;
+  }
+
   function applyProgression(gameInstance, options = {}) {
     if (!isMonas(gameInstance) || !gameInstance?.monasState) return null;
     const state = gameInstance.monasState;
@@ -121,11 +145,12 @@
     const nextIndex = getBandIndex(state.gatesPassed);
     const band = BANDS[nextIndex];
     const changed = nextIndex !== previousIndex;
+    const speed = band.speed * geometrySpeedFactor(gameInstance);
 
     state.progressionVersion = PROGRESSION_VERSION;
     state.progressionBandIndex = nextIndex;
     state.progressionGateThreshold = band.gateThreshold;
-    state.progressionSpeed = band.speed;
+    state.progressionSpeed = speed;
     state.progressionGap = band.gap;
     if (!Number.isFinite(state.progressionChanges)) state.progressionChanges = 0;
     if (changed && options.countChange !== false) state.progressionChanges += 1;
@@ -133,7 +158,7 @@
     // This is the canonical *base* speed. monas-runtime.js temporarily multiplies
     // it during Warp Surge and restores it after the update, so progression changes
     // remain stable across reward entry/exit.
-    gameInstance.gameSpeed = band.speed;
+    gameInstance.gameSpeed = speed;
     return { changed, index: nextIndex, band };
   }
 
