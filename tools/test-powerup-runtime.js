@@ -347,3 +347,96 @@ assert.ok(powerups.UNAVOIDABLE_LOOKAHEAD_FRAMES > 0 && powerups.UNAVOIDABLE_LOOK
   'the lookahead must be bounded, or the projection outruns the breathing gap');
 
 console.log(`powerups v${powerups.POWERUP_VERSION}: all deterministic contracts passed`);
+
+// --- D-060: AEGIS covers the floor, not just the walls -------------------
+//
+// Two things call gameOver(): a pillar collision and falling past
+// `y > innerHeight - r * 1.5`. Until D-060 tryAbsorb only ever looked for
+// overlapping pillars, so a floor death killed the player outright while the
+// ward rings were still drawn around them. These pin the geometry that fix
+// depends on; the absorb path itself is exercised in the browser suite.
+{
+  // The module resolves its root to globalThis, so that - not a synthesized
+  // `window` - is where a viewport height has to be staged.
+  const originalInnerHeight = globalThis.innerHeight;
+  const restore = () => {
+    if (originalInnerHeight === undefined) delete globalThis.innerHeight;
+    else globalThis.innerHeight = originalInnerHeight;
+  };
+  globalThis.innerHeight = 1000;
+
+  // An unknown viewport must never be read as a fall: the floor line would go
+  // negative and AEGIS would spend a charge on any death at all.
+  delete globalThis.innerHeight;
+  assert.equal(
+    powerups.isFloorDeath({ player: { y: 5, r: 20 } }),
+    false,
+    'no viewport height means no floor-death claim'
+  );
+  globalThis.innerHeight = 0;
+  assert.equal(
+    powerups.isFloorDeath({ player: { y: 5, r: 20 } }),
+    false,
+    'a zero viewport height means no floor-death claim'
+  );
+  globalThis.innerHeight = 1000;
+
+  const radius = 20;
+  // The death line index.html uses: 1000 - 20 * 1.5 = 970.
+  const deathLine = 1000 - radius * powerups.FLOOR_DEATH_RADIUS_FACTOR;
+  assert.equal(deathLine, 970);
+
+  assert.equal(
+    powerups.isFloorDeath({ player: { y: deathLine + 1, r: radius } }),
+    true,
+    'past the death line is a floor death'
+  );
+  assert.equal(
+    powerups.isFloorDeath({ player: { y: deathLine, r: radius } }),
+    false,
+    'exactly on the line is not yet a death - index.html uses a strict >'
+  );
+  assert.equal(
+    powerups.isFloorDeath({ player: { y: 10, r: radius } }),
+    false,
+    'high above the floor is not a floor death'
+  );
+  assert.equal(powerups.isFloorDeath({}), false, 'no player is not a floor death');
+  assert.equal(powerups.isFloorDeath(null), false, 'no game is not a floor death');
+
+  // The save must leave the player somewhere the very next death check passes,
+  // whatever order the check and the position integration happen in.
+  const player = { y: deathLine + 40, r: radius, vy: 12, jumpCooldown: 9 };
+  powerups.liftFromFloor({ player });
+  assert.ok(player.vy < 0, 'a floor save must send the player upward');
+  assert.equal(
+    player.vy,
+    -7.5 * powerups.FLOOR_SAVE_LIFT_MULTIPLIER,
+    'lift is the base jump impulse scaled by the documented multiplier'
+  );
+  assert.ok(
+    !powerups.isFloorDeath({ player }),
+    'after the save the player must no longer be past the death line'
+  );
+  assert.equal(
+    player.y,
+    deathLine - radius * powerups.FLOOR_SAVE_CLEARANCE_RADII,
+    'the save puts the documented clearance between avatar and death line'
+  );
+  assert.equal(player.jumpCooldown, 0, 'a saved player may act immediately');
+
+  // A viewport shorter than the clearance must not fling the player through the
+  // ceiling, which index.html clamps at r * 1.5.
+  globalThis.innerHeight = 40;
+  const cramped = { y: 39, r: radius, vy: 12 };
+  powerups.liftFromFloor({ player: cramped });
+  assert.ok(
+    cramped.y >= radius * powerups.FLOOR_DEATH_RADIUS_FACTOR,
+    'the save must never place the player above the ceiling clamp'
+  );
+
+  powerups.liftFromFloor({});
+  powerups.liftFromFloor(null);
+
+  restore();
+}

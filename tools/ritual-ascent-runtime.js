@@ -174,9 +174,17 @@
       #sex-magick-ascent-meaning { color: rgba(255,255,255,.76); }
       #sex-magick-ascent-next { color: var(--primary, #00e5ff); }
 
+      /* Anchored to the bottom toast band, not floated over the play field.
+         D-043 already moved this game's transient messages out of the middle
+         once; this banner was authored on a branch that had never seen that
+         decision and reintroduced the problem at top:112px, which on a 707x675
+         Fold viewport is a 430px-wide slab sitting directly across the corridor
+         the player is flying through. 206px clears the missions toast (170px),
+         which clears the powerup toast (120px), which clears the two HUDs.
+         See D-060. */
       #sex-magick-ascent-banner {
         position: fixed;
-        top: max(112px, calc(env(safe-area-inset-top) + 94px));
+        bottom: max(206px, calc(env(safe-area-inset-bottom) + 196px));
         left: 50%;
         z-index: 31;
         min-width: min(430px, calc(100vw - 44px));
@@ -214,13 +222,13 @@
         opacity: .78;
       }
       @keyframes sm-ascent-arrive {
-        0% { opacity: 0; transform: translate(-50%, 10px) scale(.985); }
+        0% { opacity: 0; transform: translate(-50%, -10px) scale(.985); }
         16% { opacity: 1; transform: translate(-50%, 0) scale(1); }
         74% { opacity: 1; }
         100% { opacity: 0; }
       }
       @keyframes sm-ascent-arrive-restart {
-        0% { opacity: 0; transform: translate(-50%, 10px) scale(.985); }
+        0% { opacity: 0; transform: translate(-50%, -10px) scale(.985); }
         16% { opacity: 1; transform: translate(-50%, 0) scale(1); }
         74% { opacity: 1; }
         100% { opacity: 0; }
