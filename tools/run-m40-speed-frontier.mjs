@@ -105,6 +105,19 @@ if (!control.clean) {
   process.exit(2);
 }
 
+// The other half of the control, and the more easily forgotten one. A clean
+// baseline shows the instrument can say yes; this shows it can say no. Without
+// it, a grid where every coordinate comes back VERIFIED is indistinguishable
+// from a search that is not actually varying anything it measures - and a
+// ceiling raised on that is worse than no ceiling change at all.
+const absurd = auditAt(20, 110);
+console.log(`control  speed 20.0 gap 110  ->  ` +
+  `${absurd.clean ? 'CLEAN' : 'REJECTED ' + JSON.stringify(absurd.counts)} (expected: rejected)`);
+if (absurd.clean) {
+  console.error('The solver verified an impossible coordinate; it is not measuring speed. Aborting.');
+  process.exit(3);
+}
+
 const results = [];
 const gaps = [110, 118, 126, 134];
 for (let speed = CURRENT_CEILING + args.step; speed <= args.maxSpeed + 1e-9; speed += args.step) {
