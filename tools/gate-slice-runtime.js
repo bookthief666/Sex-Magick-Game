@@ -501,9 +501,14 @@
         transform: translateX(-50%);
         z-index: 33;
         width: min(560px, calc(100vw - 30px));
-        padding: 10px 16px;
-        border: 1px solid rgba(0,229,255,.5);
-        background: rgba(0,0,0,.55);
+        /* D-066: was a 1px box with a solid slab behind it. The owner called the
+           box "unnecessary" and it is - a hard rectangle over the play field
+           reads as a modal, not a whisper. An edge-faded scrim keeps the text
+           legible over any artwork while having no perceivable edges. */
+        padding: 7px 16px;
+        border: none;
+        background: linear-gradient(90deg,
+          transparent, rgba(0,0,0,.72) 18%, rgba(0,0,0,.72) 82%, transparent);
         color: #eaffff;
         text-align: center;
         font: 12px/1.55 'Orbitron', monospace;
@@ -517,15 +522,11 @@
       @keyframes gate-slice-telegraph-flash {
         0% {
           color: var(--gate-slice-telegraph-flash);
-          border-color: var(--gate-slice-telegraph-flash);
-          text-shadow: 0 0 18px var(--gate-slice-telegraph-flash);
-          background: rgba(0,0,0,.72);
+          text-shadow: 0 0 20px var(--gate-slice-telegraph-flash);
         }
         100% {
           color: #eaffff;
-          border-color: rgba(0,229,255,.5);
           text-shadow: 0 0 12px #00e5ff;
-          background: rgba(0,0,0,.55);
         }
       }
       html.sex-magick-reduced-motion #gate-slice-telegraph.gate-slice-telegraph-flash { animation: none; }

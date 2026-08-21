@@ -208,7 +208,7 @@
         padding: 7px 16px;
         border-top: 1px solid var(--sm-ascent-accent, #00e5ff);
         border-bottom: 1px solid var(--sm-ascent-accent, #00e5ff);
-        background: linear-gradient(90deg, transparent, rgba(0,0,0,.78) 16%, rgba(0,0,0,.78) 84%, transparent);
+        background: linear-gradient(90deg, transparent, rgba(0,0,0,.72) 18%, rgba(0,0,0,.72) 82%, transparent);
         text-align: center;
         pointer-events: none;
         color: #f7ffff;

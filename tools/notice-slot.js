@@ -81,8 +81,23 @@
     registered.clear();
   }
 
+  /**
+   * D-066: a build marker the page can be asked for directly.
+   *
+   * Five consecutive reports of "still broken" were investigated against the
+   * repository's code while the owner's browser was running an older build -
+   * the last three screenshots were all M39, two fixes behind. Reasoning about
+   * a screenshot without knowing which build produced it wasted a lot of the
+   * owner's time. `window.SexMagickNoticeSlot.buildMarker()` answers it in one
+   * line from the device itself, with no git or server involved.
+   */
+  function buildMarker() {
+    return 'D-066 notice slot: shared band, one at a time, no hard box';
+  }
+
   return Object.freeze({
     VERSION,
+    buildMarker,
     register,
     claim,
     getRegistered,

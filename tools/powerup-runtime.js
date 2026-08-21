@@ -365,9 +365,11 @@
         bottom: max(128px, calc(env(safe-area-inset-bottom) + 122px));
         transform: translateX(-50%);
         z-index: 29;
+        /* D-066: same edge-faded scrim as the telegraph - no hard rectangle. */
         padding: 7px 14px;
-        border: 1px solid rgba(0, 229, 255, .7);
-        background: rgba(0, 0, 0, .85);
+        border: none;
+        background: linear-gradient(90deg,
+          transparent, rgba(0,0,0,.72) 18%, rgba(0,0,0,.72) 82%, transparent);
         color: #eaffff;
         text-align: center;
         pointer-events: none;
