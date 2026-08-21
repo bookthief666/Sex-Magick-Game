@@ -95,9 +95,19 @@ function testReachabilityMatrix() {
     scenarios: auditScenarios,
     beamWidth: 1000
   });
-  assert.equal(audit.totalCases, 252);
-  assert.deepEqual(audit.summary, { verified: 252, marginal: 0, invalid: 0 });
-  assert.equal(Object.keys(audit.patternVerdicts).length, 16);
+  // Derived rather than hardcoded: M40.3 grew the library from 16 patterns to
+  // 28, and a literal case count asserts the library's size rather than its
+  // reachability. What must hold is that *every* case verifies and none is
+  // marginal or invalid - that is the property new patterns have to earn.
+  const libraryPatternCount =
+    grammar.PATTERN_LIBRARY.HEX.length + grammar.PATTERN_LIBRARY.MONAS.length;
+  assert.equal(Object.keys(audit.patternVerdicts).length, libraryPatternCount);
+  assert.ok(audit.totalCases >= 252, `audit coverage shrank to ${audit.totalCases} cases`);
+  assert.deepEqual(
+    audit.summary,
+    { verified: audit.totalCases, marginal: 0, invalid: 0 },
+    'every pattern in the library must be provably clearable at the hard scenarios'
+  );
   assert.ok(Object.values(audit.patternVerdicts).every(value => value === 'verified'));
   assert.ok(audit.cases.every(entry => entry.witnessValid));
   assert.ok(audit.cases.every(entry => entry.verifiedMargin === 8));
@@ -147,8 +157,14 @@ function testReachabilityMatrix() {
     scenarios: bandScenarios,
     beamWidth: 1000
   });
-  assert.equal(bandAudit.totalCases, 1008);
-  assert.deepEqual(bandAudit.summary, { verified: 1008, marginal: 0, invalid: 0 });
+  // Derived for the same reason as the library audit above: the case count
+  // tracks the library's size, the contract is that every case verifies.
+  assert.ok(bandAudit.totalCases >= 1008, `band audit coverage shrank to ${bandAudit.totalCases}`);
+  assert.deepEqual(
+    bandAudit.summary,
+    { verified: bandAudit.totalCases, marginal: 0, invalid: 0 },
+    'every pattern must clear every post-GEBURAH band'
+  );
   assert.ok(bandAudit.cases.every(entry => entry.witnessValid));
   assert.ok(bandAudit.cases.every(entry => entry.verifiedMargin === 8));
   assert.ok(bandAudit.cases.every(entry => entry.minimumClearance >= 8 - 1e-9));
@@ -228,7 +244,19 @@ function testFallbackPolicy() {
   assert.equal(event.reachabilityPolicyVersion, policy.POLICY_VERSION);
   assert.equal(event.reachabilityVerdict, 'verified');
   assert.equal(event.reachabilityFallback, true);
-  assert.equal(event.rejectedPatternId, 'hex.gentle-step');
+  // M40.3: which pattern the seeded scheduler reaches for first depends on the
+  // library's size, so naming it here asserted the catalogue rather than the
+  // fallback behaviour. What must hold is that whatever was rejected was a real
+  // catalogue pattern, and that the fallback stood in for it.
+  assert.ok(
+    catalogIds.includes(event.rejectedPatternId),
+    `rejected id ${event.rejectedPatternId} is not a catalogue pattern`
+  );
+  assert.notEqual(
+    event.rejectedPatternId,
+    policy.FALLBACK_PATTERN_IDS.HEX,
+    'the fallback cannot be the thing that was rejected'
+  );
 }
 
 testPhysicsProfiles();

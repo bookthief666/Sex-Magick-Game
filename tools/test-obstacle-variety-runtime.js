@@ -173,7 +173,11 @@ for (const rite of ['HEX', 'MONAS']) {
       }
     }
   }
-  assert.equal(checked, gate.BANDS.length * 16);
+  // Derived: M40.3 grew the library, and a literal here asserted its size.
+  assert.equal(
+    checked,
+    gate.BANDS.length * (grammar.PATTERN_LIBRARY.HEX.length + grammar.PATTERN_LIBRARY.MONAS.length)
+  );
 }
 
 // --- seeded motion phase -------------------------------------------------
