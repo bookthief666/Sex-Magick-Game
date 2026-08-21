@@ -15,56 +15,68 @@ function stateAtBand(bandIndex) {
 // --- the ladder ----------------------------------------------------------
 assert.deepEqual(powerups.validateLadder(), []);
 
-// A shrinking cap or a non-positive cap must be rejected rather than shipped.
-assert.ok(powerups.validateLadder([
-  { id: 'x', label: 'X', detail: 'x', glyph: 'x', unlockBand: 0, capAt: b => (b >= 3 ? 1 : 2) }
-]).some(error => error.includes('shrinks')));
-assert.ok(powerups.validateLadder([
-  { id: 'x', label: 'X', detail: 'x', glyph: 'x', unlockBand: 0, capAt: () => 0 }
-]).some(error => error.includes('positive integer')));
+// D-062: AEGIS is the entire ladder. DISSOLUTION is retired - the owner asked
+// for one power-up that does one legible thing, after repeatedly reading a
+// shield that was working as a shield that was broken.
+assert.equal(powerups.POWERUPS.length, 1, 'AEGIS is the only power-up');
+assert.equal(powerups.POWERUPS[0].id, 'aegis');
 
-// Unlock bands must exist in the band table the Gate slice actually ships.
-for (const powerup of POWERUPS) {
-  assert.ok(
-    powerup.unlockBand < gate.BANDS.length,
-    `${powerup.id} unlocks at band ${powerup.unlockBand}, beyond the ${gate.BANDS.length} bands that exist`
+// Available immediately, capped at three, at every band.
+assert.equal(powerups.POWERUPS[0].unlockBand, 0, 'AEGIS is available from the first band');
+for (let band = 0; band <= 7; band += 1) {
+  assert.equal(
+    powerups.POWERUPS[0].capAt(band),
+    powerups.MAX_AEGIS_CHARGES,
+    `cap is a flat ${powerups.MAX_AEGIS_CHARGES} at band ${band}`
   );
 }
+assert.equal(powerups.MAX_AEGIS_CHARGES, 3, 'three shields at most');
 
-// DISSOLUTION must stay gated behind the Gate, the Void and the risk bands, so a
-// first-time player is not handed a wall-skip before meeting the curve.
-{
-  const dissolution = powerups.getPowerup('dissolution');
-  assert.ok(dissolution.unlockBand >= 3, 'DISSOLUTION must not unlock before GEBURAH');
-  assert.equal(gate.BANDS[dissolution.unlockBand].name, 'GEBURAH');
-  assert.equal(gate.BANDS[powerups.getPowerup('aegis').unlockBand].name, 'YESOD');
-}
+// A shrinking or non-positive cap must still be rejected rather than shipped.
+assert.ok(powerups.validateLadder([
+  { id: 'x', label: 'X', detail: 'x', glyph: 'x', unlockBand: 0, capAt: b => (b >= 3 ? 1 : 2) }
+]).length > 0, 'a shrinking cap must be rejected');
 
-// Nothing is available in MALKUTH.
-{
-  const fresh = powerups.createState();
-  for (const powerup of POWERUPS) {
-    assert.equal(powerups.isUnlocked(fresh, powerup.id), false, `${powerup.id} leaked into MALKUTH`);
-    assert.equal(powerups.capacityFor(fresh, powerup.id), 0);
-    assert.equal(powerups.chargesOf(fresh, powerup.id), 0);
-  }
-  // A locked power-up can never hold a charge, however hard you push.
-  assert.equal(powerups.awardCharge(fresh), null, 'nothing unlocked means nothing awarded');
-  fresh.charges.aegis = 99;
-  assert.equal(powerups.chargesOf(fresh, 'aegis'), 0, 'a locked power-up reports zero regardless of stored value');
-}
-
-// --- unlock is monotonic -------------------------------------------------
+// --- earning and spending -------------------------------------------------
 {
   const state = powerups.createState();
-  assert.deepEqual(powerups.recordBand(state, 1), ['aegis'], 'YESOD unseals AEGIS');
-  assert.deepEqual(powerups.recordBand(state, 3), ['dissolution'], 'GEBURAH unseals DISSOLUTION');
+  assert.equal(powerups.isUnlocked(state, 'aegis'), true, 'unlocked from the very start');
+  assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'but holding nothing yet');
+
+  // D-062 halves the milestone to 10 gates: at 25 the owner never reached a
+  // charge in the runs they were actually playing.
+  assert.equal(powerups.GATES_PER_CHARGE, 10);
+  powerups.applyGateMilestones(state, 9);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'nothing at 9 gates');
+  powerups.applyGateMilestones(state, 10);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 1, 'the first shield lands at 10 gates');
+  powerups.applyGateMilestones(state, 30);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 3, 'three by 30 gates');
+  powerups.applyGateMilestones(state, 100);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 3, 'and never more than three');
+
+  // Crashing spends one and leaves room to earn it back.
+  assert.equal(powerups.spendCharge(state, 'aegis'), true);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 2, 'a crash costs exactly one shield');
+  assert.equal(powerups.awardCharge(state), 'aegis', 'and it can be earned back');
+  assert.equal(powerups.chargesOf(state, 'aegis'), 3);
+  assert.equal(powerups.awardCharge(state), null, 'a full holder earns nothing further');
+
+  powerups.spendCharge(state, 'aegis');
+  powerups.spendCharge(state, 'aegis');
+  powerups.spendCharge(state, 'aegis');
+  assert.equal(powerups.chargesOf(state, 'aegis'), 0);
+  assert.equal(powerups.spendCharge(state, 'aegis'), false, 'cannot spend what you do not have');
+}
+
+
+{
+  const state = powerups.createState();
   assert.deepEqual(powerups.recordBand(state, 3), [], 're-reaching a band unseals nothing new');
 
   // A bad run cannot revoke what the player already earned.
   assert.deepEqual(powerups.recordBand(state, 0), []);
   assert.equal(state.highestBand, 3, 'a run that ends in MALKUTH must not undo the ascent');
-  assert.equal(powerups.isUnlocked(state, 'dissolution'), true);
 
   // Out-of-range input is clamped, not trusted.
   powerups.recordBand(state, 9999);
@@ -101,35 +113,14 @@ for (const powerup of POWERUPS) {
   assert.equal(powerups.spendCharge(state, 'not.a.powerup'), false);
 }
 
-// --- awards route to whichever has the most room -------------------------
+// --- one power-up means every award lands on it --------------------------
 {
-  const state = stateAtBand(6); // aegis cap 3, dissolution cap 2
-  assert.equal(powerups.awardCharge(state), 'aegis', 'the roomier slot wins first');
-
-  // What matters is that awards spread across both rather than filling one and
-  // then the other. Ties break toward the earlier ladder entry, so the exact
-  // order is an implementation detail; the distribution is the contract.
-  const spread = stateAtBand(6);
-  const order = [];
-  for (let attempt = 0; attempt < 5; attempt += 1) order.push(powerups.awardCharge(spread));
-  assert.equal(powerups.chargesOf(spread, 'aegis'), 3);
-  assert.equal(powerups.chargesOf(spread, 'dissolution'), 2);
-  assert.ok(
-    order.indexOf('dissolution') < 4,
-    `the breaker must start filling before the shield is done, got ${order.join(',')}`
-  );
-
-  // Filling one must divert to the other rather than wasting the reward.
-  const diverted = stateAtBand(6);
-  diverted.charges.aegis = 3;
-  assert.equal(powerups.awardCharge(diverted), 'dissolution', 'a full shield must divert to the breaker');
-}
-
-// Before GEBURAH every award has to land on AEGIS.
-{
-  const state = stateAtBand(1);
+  const state = powerups.createState();
   assert.equal(powerups.awardCharge(state), 'aegis');
-  assert.equal(powerups.awardCharge(state), null, 'AEGIS caps at 1 in YESOD and nothing else is unlocked');
+  assert.equal(powerups.awardCharge(state), 'aegis');
+  assert.equal(powerups.awardCharge(state), 'aegis');
+  assert.equal(powerups.chargesOf(state, 'aegis'), powerups.MAX_AEGIS_CHARGES);
+  assert.equal(powerups.awardCharge(state), null, 'a full holder earns nothing further');
 }
 
 // --- gate milestones fire once per threshold -----------------------------
@@ -158,7 +149,7 @@ for (const powerup of POWERUPS) {
 {
   const state = stateAtBand(1);
   powerups.applyGateMilestones(state, GATES_PER_CHARGE * 10);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 1, 'capacity still bounds milestone awards');
+  assert.equal(powerups.chargesOf(state, 'aegis'), powerups.MAX_AEGIS_CHARGES, 'capacity still bounds milestone awards');
   assert.equal(state.gateChargeMarker, 10, 'but the marker still advances so it cannot re-fire');
 }
 
@@ -172,11 +163,9 @@ for (const powerup of POWERUPS) {
 
   powerups.beginRunState(state);
   assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'charges must not carry between runs');
-  assert.equal(powerups.chargesOf(state, 'dissolution'), 0);
   assert.equal(state.gateChargeMarker, 0, 'the milestone marker must reset with the run');
   assert.equal(state.earned, 0);
   assert.equal(state.highestBand, 6, 'the ascent survives the run');
-  assert.equal(powerups.isUnlocked(state, 'dissolution'), true);
 }
 
 // --- persistence ---------------------------------------------------------
@@ -190,7 +179,6 @@ for (const powerup of POWERUPS) {
   const restored = powerups.readState(storage);
   assert.equal(restored.highestBand, 5, 'the ascent persists');
   assert.equal(powerups.chargesOf(restored, 'aegis'), 0, 'charges must never be restored');
-  assert.equal(powerups.chargesOf(restored, 'dissolution'), 0);
 
   // Only the ascent is written. Nothing about the run leaves memory.
   const persisted = storage.snapshot()[powerups.STORAGE_KEY];
@@ -331,7 +319,6 @@ for (const raw of [null, '', 'not json', '{}', '[]', '{"version":999,"highestBan
 
 // --- M20: no activation control ------------------------------------------
 // The owner removed the button; the API must not offer a manual trigger either.
-assert.equal(typeof powerups.useDissolution, 'undefined', 'manual activation must be gone');
 
 // The ward colour must not collide with any reserved colour.
 {
@@ -348,24 +335,24 @@ assert.ok(powerups.UNAVOIDABLE_LOOKAHEAD_FRAMES > 0 && powerups.UNAVOIDABLE_LOOK
 
 console.log(`powerups v${powerups.POWERUP_VERSION}: all deterministic contracts passed`);
 
-// --- D-061: AEGIS is a wall shield, and says so --------------------------
+// --- D-062: the shield is reachable, and it is the only one -------------
 //
-// D-060 briefly extended AEGIS to cover falls. Playing it showed the premise
-// was wrong: the owner had never held a charge at all, and what looked like a
-// shield being ignored was the avatar's own outline. AEGIS is wall-only again,
-// so the first charge must be reachable early enough to ever be seen.
+// D-061 pinned the legibility gap that made AEGIS read as broken: unsealed at
+// YESOD, first charge at 25 gates, nothing on screen distinguishing "unsealed
+// but empty" from "armed". D-062 closes it rather than documenting it.
 {
-  assert.equal(powerups.isFloorDeath, undefined, 'floor-save machinery must be gone');
-  assert.equal(powerups.liftFromFloor, undefined, 'floor-save machinery must be gone');
+  assert.equal(powerups.isFloorDeath, undefined, 'floor-save machinery stays gone');
 
-  // The legibility problem in one assertion: AEGIS unseals at YESOD, but the
-  // first charge needs 25 cleared gates or a Void survival. A player who has
-  // seen "AEGIS UNSEALED" can hold zero charges for a long time afterwards.
-  const state = stateAtBand(1);
-  assert.equal(powerups.isUnlocked(state, 'aegis'), true, 'YESOD unseals AEGIS');
-  assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'unsealing grants no charge');
-  powerups.applyGateMilestones(state, 24);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'still nothing at 24 gates');
-  powerups.applyGateMilestones(state, 25);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 1, 'the first charge lands at 25 gates');
+  const state = powerups.createState();
+  assert.equal(powerups.isUnlocked(state, 'aegis'), true, 'no band gate to wait out');
+  powerups.applyGateMilestones(state, powerups.GATES_PER_CHARGE);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 1, 'a shield inside the first ten gates');
+
+  // Three, then a crash, then earn it back - the loop the owner asked for.
+  powerups.applyGateMilestones(state, powerups.GATES_PER_CHARGE * 3);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 3);
+  assert.equal(powerups.spendCharge(state, 'aegis'), true, 'a wall crash costs one');
+  assert.equal(powerups.chargesOf(state, 'aegis'), 2);
+  powerups.applyGateMilestones(state, powerups.GATES_PER_CHARGE * 4);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 3, 'and the third is earned back');
 }

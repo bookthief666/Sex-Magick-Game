@@ -184,9 +184,12 @@
          See D-060. */
       #sex-magick-ascent-banner {
         position: fixed;
-        bottom: max(206px, calc(env(safe-area-inset-bottom) + 196px));
+        /* D-062: 206px was still 65% down a 643px viewport - the same bad
+           neighbourhood as the telegraph. Sits just above it, both clear of
+           the play field. */
+        bottom: max(74px, calc(env(safe-area-inset-bottom) + 72px));
         left: 50%;
-        z-index: 31;
+        z-index: 34;
         min-width: min(430px, calc(100vw - 44px));
         max-width: calc(100vw - 32px);
         transform: translateX(-50%);

@@ -17,7 +17,13 @@
   // clean stretch is the implicit one. The second path exists because the
   // 2026-08-12 pilot recorded under one Void survival per run - without it,
   // charges would be too rare to feel like a system.
-  const GATES_PER_CHARGE = 25;
+  // D-062: was 25, which on the owner's device meant the first shield arrived
+  // long after the runs they were actually playing ended. A shield nobody ever
+  // holds cannot be judged, and the owner reported it as simply not working.
+  const GATES_PER_CHARGE = 10;
+
+  // One ring drawn per charge, so this is also how many rings can appear.
+  const MAX_AEGIS_CHARGES = 3;
 
   // Ward violet. Must avoid all three reserved colours - hazard #ff2f6d/#ff003c,
   // Hexagram #00e5ff and Monas #ffd700 - so protection can never be mistaken for
@@ -44,18 +50,13 @@
     Object.freeze({
       id: 'aegis',
       label: 'AEGIS',
-      detail: 'Absorbs one crash. Not inside the Void.',
+      detail: 'Breaks the wall you crash into. Three held at most.',
       glyph: '◈',
-      unlockBand: 1,
-      capAt: bandIndex => (bandIndex >= 6 ? 3 : bandIndex >= 3 ? 2 : 1)
-    }),
-    Object.freeze({
-      id: 'dissolution',
-      label: 'DISSOLUTION',
-      detail: 'Dissolves the next wall. Grants no gate credit.',
-      glyph: '◇',
-      unlockBand: 3,
-      capAt: bandIndex => (bandIndex >= 6 ? 2 : 1)
+      // D-062: available from the first band. Gating the only power-up behind
+      // YESOD meant a new player met the shield as a HUD label long before they
+      // could ever hold one, which is most of why it read as broken.
+      unlockBand: 0,
+      capAt: () => MAX_AEGIS_CHARGES
     })
   ]);
 
@@ -406,25 +407,26 @@
     }
 
     const aegis = describe(liveState).find(entry => entry.id === 'aegis');
-    const dissolution = describe(liveState).find(entry => entry.id === 'dissolution');
-
     const status = document.getElementById('sex-magick-aegis-status');
     if (aegis.unlocked) {
-      status.textContent = `${'◈'.repeat(aegis.charges) || '·'} AEGIS`;
+      // D-062: the count is the message. Filled diamonds for shields held,
+      // an explicit EMPTY for none - a player must never have to infer from
+      // an absent glyph whether they are protected.
+      status.textContent = aegis.charges > 0
+        ? `${'◈'.repeat(aegis.charges)} AEGIS ${aegis.charges}/${MAX_AEGIS_CHARGES}`
+        : '◇ AEGIS EMPTY';
+      status.classList.toggle('is-armed', aegis.charges > 0);
       status.hidden = false;
     } else {
       status.hidden = true;
     }
 
+    // D-062 retired DISSOLUTION; its row is left in the DOM but never shown so
+    // an older cached page cannot leave a stale label behind.
     const dissolveRow = document.getElementById('sex-magick-dissolve-status');
-    if (dissolution.unlocked) {
-      dissolveRow.textContent = `${'◇'.repeat(dissolution.charges) || '·'} DISSOLUTION`;
-      dissolveRow.hidden = false;
-    } else {
-      dissolveRow.hidden = true;
-    }
+    if (dissolveRow) dissolveRow.hidden = true;
 
-    hud.hidden = !(aegis.unlocked || dissolution.unlocked);
+    hud.hidden = !aegis.unlocked;
   }
 
   function announce(text) {
@@ -591,6 +593,22 @@
    * Pillars the player's collision rect currently overlaps. Dissolving these on a
    * shield absorb is what stops the very next frame killing them again.
    */
+  /**
+   * Not `CONFIG?.x` - optional chaining does not stop an *undeclared*
+   * identifier throwing, and this is reached from inside `gameOver`, where a
+   * ReferenceError takes the whole death path down with it. D-061 introduced
+   * this guard and then deleted it by accident while reverting the floor save,
+   * which left `overlappingPillars` calling a function that no longer existed:
+   * every absorb threw, and the shield stopped working entirely. The browser
+   * suite caught it; the unit suite could not, because it never enters this
+   * code path.
+   */
+  function configOf() {
+    try { if (typeof CONFIG !== 'undefined' && CONFIG) return CONFIG; }
+    catch (_error) {}
+    return root.CONFIG || {};
+  }
+
   function overlappingPillars(gameInstance) {
     const player = gameInstance?.player;
     if (!player) return [];
@@ -625,17 +643,27 @@
     ctx.translate(finiteNumber(player?.x, 0), finiteNumber(player?.y, 0));
     for (let index = 0; index < charges; index += 1) {
       const breathe = reduced ? 0 : Math.sin(wardPulse + index * 0.9) * 1.6;
+      const ringRadius = radius + 10 + index * 7 + breathe;
+
+      // D-062: the owner repeatedly read the avatar's own outline as a shield
+      // and concluded AEGIS was broken. A thin violet circle concentric with a
+      // round avatar is not a distinguishable signal. Each charge is now a
+      // heavy dashed ring that visibly counter-rotates - a texture and a motion
+      // the avatar never has - so "armed" and "empty" cannot be confused.
       ctx.beginPath();
       ctx.strokeStyle = WARD_COLOR;
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = 0.9 - index * 0.16;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.95 - index * 0.14;
+      ctx.setLineDash([ringRadius * 0.42, ringRadius * 0.30]);
+      ctx.lineDashOffset = reduced ? 0 : (index % 2 === 0 ? -wardPulse * 9 : wardPulse * 9);
       if (!reduced) {
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 14;
         ctx.shadowColor = WARD_COLOR;
       }
-      ctx.arc(0, 0, radius + 7 + index * 5 + breathe, 0, Math.PI * 2);
+      ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
       ctx.stroke();
     }
+    ctx.setLineDash([]);
     ctx.restore();
   }
 
@@ -656,9 +684,10 @@
   function tryAbsorb(gameInstance) {
     if (!liveState || !gameInstance) return false;
     if (gameInstance.state === GameState.GAME_OVER) return false;
-    // The Void is the wager. Letting a shield cover it would remove the stakes
-    // the 2026-08-12 pilot showed are working, so AEGIS declines there.
-    if (gameInstance.__gateSliceVoidActive) return false;
+    // D-062 removes the Void exception. It was defensible - the Void is the
+    // wager - but it was invisible: a player crashing inside a Gate run saw a
+    // shield decline for a reason nothing on screen ever stated, which is a
+    // large part of why AEGIS read as broken. A wall is a wall.
     if (chargesOf(liveState, 'aegis') <= 0) return false;
 
     // AEGIS is a wall shield and nothing else. D-060 briefly extended it to cover
@@ -836,6 +865,7 @@
     POWERUP_VERSION,
     STORAGE_KEY,
     GATES_PER_CHARGE,
+    MAX_AEGIS_CHARGES,
     POWERUPS,
     getPowerup,
     validateLadder,

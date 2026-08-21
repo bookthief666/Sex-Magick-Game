@@ -490,9 +490,13 @@
       #gate-slice-telegraph {
         position: fixed;
         left: 50%;
-        bottom: max(230px, calc(env(safe-area-inset-bottom) + 220px));
+        /* D-062: was 230px, which on a 643px-tall Fold viewport put this box
+           at 64% down - the middle of the play field. Transient messages live
+           on the bottom edge now, briefly over the HUD strips rather than ever
+           over the corridor. */
+        bottom: max(6px, calc(env(safe-area-inset-bottom) + 4px));
         transform: translateX(-50%);
-        z-index: 29;
+        z-index: 33;
         width: min(560px, calc(100vw - 30px));
         padding: 10px 16px;
         border: 1px solid rgba(0,229,255,.5);
