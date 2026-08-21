@@ -881,6 +881,26 @@
   const BONUS_EVERY_GATES = 25;
   const BONUS_DURATION_FRAMES = 5 * 60;
 
+  /**
+   * `?bonusEvery=N` - QA and playtest only.
+   *
+   * A corridor every 25 gates is right for play and wrong for testing: checking
+   * the star section meant clearing 25 gates first, every time, which is about
+   * forty seconds of unrelated play before the thing under test appears. That
+   * cost is what makes a section go unverified. Clamped to at least 1 and
+   * ignored when absent, so the shipped cadence is what a normal load gets.
+   */
+  function bonusEveryGates() {
+    try {
+      const raw = new URLSearchParams(root.location?.search || '').get('bonusEvery');
+      if (raw === null) return BONUS_EVERY_GATES;
+      const parsed = Math.floor(Number(raw));
+      return Number.isFinite(parsed) && parsed >= 1 ? parsed : BONUS_EVERY_GATES;
+    } catch (_error) {
+      return BONUS_EVERY_GATES;
+    }
+  }
+
   function tickBonusCorridor(gameInstance) {
     const state = gameInstance.gateSliceState;
     if (!state) return false;
@@ -896,7 +916,7 @@
     if (gameInstance.__gateSliceVoidActive || gameInstance.gateSliceOffer) return false;
 
     const gates = Math.max(0, Math.floor(finiteNumber(Number(state.gatesCleared), 0)));
-    if (gates <= 0 || gates % BONUS_EVERY_GATES !== 0) return false;
+    if (gates <= 0 || gates % bonusEveryGates() !== 0) return false;
     if (gameInstance.__bonusCorridorLastGate === gates) return false;
 
     gameInstance.__bonusCorridorLastGate = gates;

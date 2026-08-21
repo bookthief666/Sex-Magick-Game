@@ -681,9 +681,194 @@ async function main() {
       'the Void wager must still spawn pillars - the challenge tunnel must survive this change'
     );
 
+    // M40.6: the corridor is a constellation - a finite set with a streak, a
+    // completion, and a payout. Driven through the real page rather than the
+    // unit tests because everything interesting here is the *wiring*: the unit
+    // tests already prove void-constellation.js scores correctly in isolation,
+    // and would have gone on passing if the script tag were missing, if the
+    // spawn seam attached to the wrong section, or if the award were never
+    // called. That is the exact shape of the D-062 shield bug.
+    const constellation = await evaluate(client, `
+      (() => {
+        const enterCorridor = () => {
+          game.__gateSliceVoidActive = false;
+          game.gateSliceOffer = null;
+          game.obstacles = [];
+          game.pentagrams = [];
+          game.constellation = null;
+          game.__bonusCorridorFrames = 0;
+          game.__bonusCorridorLastGate = -1;
+          game.gateSliceState.gatesCleared = SexMagickGateSlice.BANDS[2].gateThreshold + 3;
+        };
+
+        const modules = {
+          polygram: Boolean(window.SexMagickPolygram),
+          constellation: Boolean(window.SexMagickVoidConstellation),
+          // Read from the module rather than pinned here, so retuning the set
+          // size stays a one-line change instead of a two-file one.
+          minStars: window.SexMagickVoidConstellation?.MIN_STARS ?? null,
+          maxStars: window.SexMagickVoidConstellation?.MAX_STARS ?? null,
+          minPoints: window.SexMagickPolygram?.MIN_POINTS ?? null,
+          maxPoints: window.SexMagickPolygram?.MAX_POINTS ?? null
+        };
+
+        // --- the set is finite -------------------------------------------
+        enterCorridor();
+        let spawned = 0;
+        let total = null;
+        let lastSpawnFrame = 0;
+        const pointsSeen = [];
+        for (let f = 0; f < 300; f += 1) {
+          game.frames += 1;
+          game.updateGameObjects();
+          if (game.constellation && total === null) total = game.constellation.total;
+          for (const star of game.pentagrams) {
+            if (!star.__qaSeen) {
+              star.__qaSeen = true;
+              spawned += 1;
+              lastSpawnFrame = f;
+              pointsSeen.push(star.points);
+            }
+          }
+        }
+        const finite = { total, spawned, lastSpawnFrame, pointsSeen };
+
+        // --- catching every star -----------------------------------------
+        enterCorridor();
+        const scoreBefore = game.score;
+        const orders = [];
+        let completed = false;
+        let caughtTotal = null;
+        for (let f = 0; f < 420; f += 1) {
+          const star = game.pentagrams[0];
+          if (star) {
+            game.player.x = star.x;
+            game.player.y = star.y;
+            game.player.vy = 0;
+            orders.push(star.points);
+          }
+          game.frames += 1;
+          game.updateGameObjects();
+          if (game.constellation) {
+            if (caughtTotal === null) caughtTotal = game.constellation.total;
+            if (game.constellation.completed) completed = true;
+          }
+        }
+        const perfect = {
+          scoreGain: game.score - scoreBefore,
+          total: caughtTotal,
+          completed,
+          minOrder: orders.length ? Math.min(...orders) : null,
+          maxOrder: orders.length ? Math.max(...orders) : null
+        };
+
+        // --- a miss is counted exactly once ------------------------------
+        enterCorridor();
+        for (let f = 0; f < 120; f += 1) { game.frames += 1; game.updateGameObjects(); }
+        const live = game.constellation;
+        const stray = { points: 5, collected: false, x: -400 };
+        const missedBefore = live ? live.missed : null;
+        game.retireStar(stray);
+        game.retireStar(stray);
+        const missAccounting = {
+          before: missedBefore,
+          after: live ? live.missed : null,
+          streak: live ? live.streak : null
+        };
+
+        // --- the wager gets no constellation ------------------------------
+        // The catch block above parks the player on top of a star, which leaves
+        // it somewhere a pillar can reach. Put it back before spawning walls,
+        // and stop sampling the moment the wager ends: a death clears
+        // __gateSliceVoidActive, and the frames after that are an ordinary run
+        // that may legitimately open a corridor. Sampling through them was
+        // measuring the wrong section.
+        enterCorridor();
+        game.__bonusCorridorFrames = 0;
+        game.__bonusCorridorLastGate = -1;
+        game.constellation = null;
+        game.player.x = window.innerWidth * 0.25;
+        game.player.y = window.innerHeight / 2;
+        game.player.vy = 0;
+        game.__gateSliceVoidActive = true;
+
+        let sawConstellationDuringWager = false;
+        let wagerFrames = 0;
+        for (let f = 0; f < 90; f += 1) {
+          if (!game.__gateSliceVoidActive) break;
+          game.frames += 1;
+          game.updateGameObjects();
+          wagerFrames += 1;
+          if (game.constellation) sawConstellationDuringWager = true;
+        }
+        game.__gateSliceVoidActive = false;
+
+        return {
+          modules,
+          finite,
+          perfect,
+          missAccounting,
+          wager: { frames: wagerFrames, sawConstellation: sawConstellationDuringWager }
+        };
+      })();
+    `);
+
+    assert.ok(constellation.modules.polygram, 'tools/polygram.js must load from index.html');
+    assert.ok(constellation.modules.constellation, 'tools/void-constellation.js must load from index.html');
+
+    // The pre-M40.6 spawn was one star per 10 frames for as long as the
+    // corridor ran - 30 of them, unbounded. A set you can finish is the whole
+    // premise of the streak and the completion bonus.
+    assert.ok(
+      constellation.finite.total >= constellation.modules.minStars &&
+      constellation.finite.total <= constellation.modules.maxStars,
+      `a corridor must hold a bounded set, saw total ${constellation.finite.total}`
+    );
+    assert.equal(
+      constellation.finite.spawned, constellation.finite.total,
+      `the corridor must spawn exactly its set, saw ${constellation.finite.spawned} of ${constellation.finite.total}`
+    );
+    assert.ok(
+      constellation.finite.pointsSeen.every(points =>
+        points >= constellation.modules.minPoints && points <= constellation.modules.maxPoints),
+      `every star must be a drawable polygram order, saw ${JSON.stringify(constellation.finite.pointsSeen)}`
+    );
+    // The set must actually span the corridor. A fixed spawn interval left the
+    // smallest set finishing in 120 of 300 frames, with the rest of the section
+    // empty - the reason spawn pacing is derived from the corridor's countdown.
+    assert.ok(
+      constellation.finite.lastSpawnFrame >= 200,
+      `the set must span the corridor, last star arrived at frame ${constellation.finite.lastSpawnFrame} of 300`
+    );
+
+    assert.ok(constellation.perfect.completed, 'catching every star must complete the set');
+    assert.ok(
+      constellation.perfect.maxOrder > constellation.perfect.minOrder,
+      `a streak must raise the star order, saw ${constellation.perfect.minOrder}..${constellation.perfect.maxOrder}`
+    );
+    // The owner asked for stars worth significantly more than the old flat +10.
+    assert.ok(
+      constellation.perfect.scoreGain > constellation.perfect.total * 40,
+      `clearing a set must dwarf the old 10-a-star rate, saw ${constellation.perfect.scoreGain} for ${constellation.perfect.total} stars`
+    );
+
+    assert.equal(
+      constellation.missAccounting.after, constellation.missAccounting.before + 1,
+      'a star retired twice - once by the splice, once by the compaction filter - must break the streak only once'
+    );
+
+    // Guards against the assertion below passing vacuously on zero sampled frames.
+    assert.ok(
+      constellation.wager.frames > 30,
+      `the wager must survive long enough to be measured, saw ${constellation.wager.frames} frames`
+    );
+    assert.equal(
+      constellation.wager.sawConstellation, false,
+      'the Void wager is a wall run, not a star section: it must never build a constellation'
+    );
 
     console.log('gate-slice-browser: all integration checks passed');
-    console.log(JSON.stringify({ ...result, requestedUrls, punch, quiet, backgrounds: { gallerySize: backgrounds.gallery.size, seen: backgrounds.seen }, corridors }, null, 2));
+    console.log(JSON.stringify({ ...result, requestedUrls, punch, quiet, backgrounds: { gallerySize: backgrounds.gallery.size, seen: backgrounds.seen }, corridors, constellation }, null, 2));
   } finally {
     client.close();
     for (const child of children.reverse()) {

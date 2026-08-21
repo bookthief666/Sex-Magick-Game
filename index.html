@@ -1264,6 +1264,7 @@
                 this.hitStop = 0;
                 this.voidMode = false;
                 this.voidTimer = 0;
+                this.constellation = null;
                 document.getElementById('scoreUi').innerText = "0";
                 document.getElementById('game-container').classList.remove('void-active');
                 this.applyLevel();
@@ -1604,6 +1605,143 @@
                 this.ctx.globalAlpha = 1;
             }
             
+            /**
+             * The bonus corridor's star set (M40.6).
+             *
+             * `voidMode` read from inside updateGameObjects is exactly the right
+             * seam for this. The wagered Void clears the flag before delegating
+             * here and the bonus corridor sets it, so a constellation attaches
+             * to the star section and to nothing else - the wager keeps spawning
+             * walls and never sees one.
+             *
+             * Before M40.6 this spawned a star every 10 frames for as long as
+             * the corridor lasted, at +10 each: thirty pickups worth about as
+             * much as sixty walls, with no relationship between them. A known,
+             * finite set is what lets a streak and a completion mean anything.
+             */
+            tickConstellation() {
+                const stars = window.SexMagickVoidConstellation;
+
+                if (!this.voidMode) {
+                    // Leaving the corridor abandons the set. Stars still in
+                    // flight are not counted as misses on the way out; the
+                    // section ended, the player did not fail it.
+                    this.constellation = null;
+                    return;
+                }
+
+                if (!stars) {
+                    // The pre-M40.6 spawn, verbatim, for a page whose module
+                    // failed to load. The corridor still pays, just flatly.
+                    if (this.frames % 10 === 0) {
+                        const y = Math.random() * (this.canvas.height - 100) + 50;
+                        this.pentagrams.push(new Pentagram(window.innerWidth, y));
+                    }
+                    return;
+                }
+
+                if (!this.constellation) {
+                    this.constellation = stars.createConstellation(this.gateSliceState?.bandIndex || 0);
+                    this.constellationSpawned = 0;
+                    this.constellationNextSpawn = this.frames;
+                    this.lastStarY = this.canvas.height / 2;
+                }
+
+                if (this.constellationSpawned >= this.constellation.total) return;
+                if (this.frames < this.constellationNextSpawn) return;
+
+                // Paced to fill the corridor rather than at a fixed interval.
+                // A fixed half-second gap emptied the section early: the
+                // smallest set finished in 120 of the corridor's 300 frames and
+                // the player spent the rest looking at nothing. Spreading the
+                // remaining stars over the remaining frames keeps the section
+                // full whatever its size, and the clamp keeps them far enough
+                // apart to miss and close enough to read as a run.
+                // `__bonusCorridorFrames` is gate-slice-runtime's countdown;
+                // absent outside HEX, where the fallback interval applies.
+                const remainingStars = this.constellation.total - this.constellationSpawned;
+                const remainingFrames = Number(this.__bonusCorridorFrames);
+                const paced = Number.isFinite(remainingFrames) && remainingFrames > 0
+                    ? Math.floor(remainingFrames / remainingStars)
+                    : 30;
+                this.constellationNextSpawn = this.frames + Math.min(45, Math.max(24, paced));
+                this.constellationSpawned += 1;
+
+                const polygram = window.SexMagickPolygram;
+                const order = polygram
+                    ? polygram.orderForBand(stars.nextOrderIndex(this.constellation))
+                    : null;
+
+                // Chained rather than uniformly random. Now that a streak is
+                // worth something, a target that teleports across the screen
+                // would make the streak a coin flip; keeping each star within
+                // reach of the last makes a miss the player's.
+                const height = this.canvas.height;
+                const margin = 60;
+                const spread = Math.min(height * 0.3, 190);
+                const drift = ((Math.random() * 2) - 1) * spread;
+                const y = Math.min(height - margin, Math.max(margin, this.lastStarY + drift));
+                this.lastStarY = y;
+
+                this.pentagrams.push(new Pentagram(window.innerWidth, y, order));
+            }
+
+            /**
+             * Pay for a caught star and fire the reward glitch.
+             *
+             * The glitch violence tracks the streak, so the picture-tear the
+             * owner asked for starts subtle and ends loud, and completing a set
+             * is the brightest moment in the game. Fired per catch and never per
+             * frame on purpose: rgbSplit and shearTear each do a full-canvas
+             * getImageData, which is the one thing here that could cost a frame
+             * on a 6.9x-DPR Fold.
+             */
+            awardStar(star) {
+                const stars = window.SexMagickVoidConstellation;
+                if (!stars || !this.constellation) {
+                    this.score += 10;
+                    return;
+                }
+
+                const result = stars.catchStar(this.constellation, star.points);
+                this.score += result.awarded;
+
+                const tint = `hsl(${star.hue % 360}, 100%, 70%)`;
+                if (result.completed) {
+                    // The same triumphant beam a won wager gets - this is the
+                    // other way to beat a challenge section.
+                    GlitchFX.trigger(200, 'sweep', '#00e5ff');
+                    this.screenFlash = { active: true, duration: 24, color: '#00e5ff', intensity: 0.45 };
+                } else {
+                    const intensity = result.glitchIntensity;
+                    // A soft channel drift early, a torn frame once the streak
+                    // is running - the picture glitching harder as you earn it.
+                    const type = intensity > 0.6 ? 'shear' : 'orb';
+                    GlitchFX.trigger(60 + Math.round(intensity * 90), type, tint);
+                }
+
+                const burst = 10 + Math.round(result.glitchIntensity * 22);
+                for (let k = 0; k < burst; k++) {
+                    this.particles.push(new Particle(star.x, star.y, tint, 12, 'hexagram'));
+                }
+            }
+
+            /**
+             * A star left the screen uncaught.
+             *
+             * Called from both removal paths - the per-frame splice and the
+             * every-60-frames compaction filter - because either can be the one
+             * that drops a given star. The guard is what keeps a star that
+             * survives one and is caught by the other from breaking the streak
+             * twice.
+             */
+            retireStar(star) {
+                if (!star || star.collected || star.__missed) return;
+                star.__missed = true;
+                const stars = window.SexMagickVoidConstellation;
+                if (stars && this.constellation) stars.missStar(this.constellation);
+            }
+
             updateGameObjects() {
                 const currentGap = this.getCurrentGap();
                 const spawnRate = Math.floor(CONFIG.PILLAR_SPAWN_BASE / (this.gameSpeed / 3)); 
@@ -1616,10 +1754,7 @@
                     }
                 }
                 
-                if (this.voidMode && this.frames % 10 === 0) {
-                     const y = Math.random() * (this.canvas.height - 100) + 50;
-                     this.pentagrams.push(new Pentagram(window.innerWidth, y));
-                }
+                this.tickConstellation();
                 
                 this.obstacles.forEach((o, i) => {
                     o.update(this.gameSpeed);
@@ -1664,16 +1799,19 @@
                     p.update(this.gameSpeed);
                     const dist = Math.hypot(this.player.x - p.x, this.player.y - p.y);
                     if (dist < this.player.r + p.size && !p.collected) {
-                        this.score += 10;
-                        document.getElementById('scoreUi').innerText = this.score;
+                        // Marked before the award so retireStar can never also
+                        // fire on this star, and because gate-slice-runtime
+                        // reads `collected` to decide whether to add hit-stop.
                         p.collected = true;
-                        for (let k = 0; k < 10; k++) {
-                            this.particles.push(new Particle(p.x, p.y, '#00ffff', 12, 'hexagram'));
-                        }
+                        this.awardStar(p);
+                        document.getElementById('scoreUi').innerText = this.score;
                         if (this.settings.sfx) SFX.collect();
                         this.pentagrams.splice(i, 1);
                     }
-                    if (p.x < -50) this.pentagrams.splice(i, 1);
+                    if (p.x < -50) {
+                        this.retireStar(p);
+                        this.pentagrams.splice(i, 1);
+                    }
                 });
                 
                 this.player.update();
@@ -1686,7 +1824,16 @@
                 if (this.frames % 60 === 0) {
                     this.obstacles = this.obstacles.filter(o => o.x > -100);
                     this.collectibles = this.collectibles.filter(c => c.x > -50 && !c.collected);
-                    this.pentagrams = this.pentagrams.filter(p => p.x > -50 && !p.collected);
+                    // The forEach above splices while iterating, so it skips an
+                    // entry every time it removes one; this compaction is what
+                    // actually drops those. It therefore has to count misses
+                    // too - before M40.6 it discarded uncaught stars silently,
+                    // which would have let a streak survive a miss at random.
+                    this.pentagrams = this.pentagrams.filter(p => {
+                        if (p.collected) return false;
+                        if (p.x <= -50) { this.retireStar(p); return false; }
+                        return true;
+                    });
                     this.particles = this.particles.filter(p => p.life > 0);
                 }
             }
@@ -2080,11 +2227,26 @@
             }
         }
 
+        /**
+         * A star in the bonus corridor.
+         *
+         * The name is now a little wrong and kept anyway: gate-slice-runtime.js
+         * and the QA harnesses all refer to `game.pentagrams`, and renaming the
+         * collection to correct one word is not worth touching four files. What
+         * changed in M40.6 is that the figure is no longer always a pentagram -
+         * an `order` from tools/polygram.js decides how many points it has, and
+         * the constellation raises that order as a streak builds.
+         */
         class Pentagram {
-            constructor(x, y) {
+            constructor(x, y, order) {
                 this.x = x;
                 this.y = y;
-                this.size = 20;
+                this.points = order?.points || 5;
+                this.skip = order?.skip || 2;
+                this.name = order?.name || 'PENTAGRAM';
+                // Higher orders read as a bigger, denser object, so the reward
+                // for a streak is legible at a glance and not only on the score.
+                this.size = 20 + ((this.points - 5) * 1.6);
                 this.collected = false;
                 this.rotation = 0;
                 this.hue = Math.random() * 360;
@@ -2103,15 +2265,26 @@
                 optimizedShadow.apply(ctx, 20, color);
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 3;
-                ctx.beginPath();
-                for(let k = 0; k < 5; k++) {
-                    const angle = (k * 4 * Math.PI / 5) - (Math.PI / 2);
-                    const px = Math.cos(angle) * this.size;
-                    const py = Math.sin(angle) * this.size;
-                    if(k===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                const polygram = window.SexMagickPolygram;
+                if (polygram) {
+                    polygram.strokePolygram(ctx, {
+                        points: this.points,
+                        skip: this.skip,
+                        radius: this.size
+                    });
+                } else {
+                    // The pre-M40 figure, kept as the fallback so a module that
+                    // fails to load costs the progression and nothing else.
+                    ctx.beginPath();
+                    for(let k = 0; k < 5; k++) {
+                        const angle = (k * 4 * Math.PI / 5) - (Math.PI / 2);
+                        const px = Math.cos(angle) * this.size;
+                        const py = Math.sin(angle) * this.size;
+                        if(k===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
                 }
-                ctx.closePath();
-                ctx.stroke();
                 ctx.restore();
                 optimizedShadow.clear(ctx);
             }
@@ -2255,6 +2428,19 @@
             game = new Game();
         });
     </script>
+    <!--
+      M40.6 star geometry and the constellation that scores it.
+
+      Parser-inserted and synchronous on purpose, unlike the runtimes below,
+      which fixed-step-prototype.js injects dynamically and which therefore land
+      after DOMContentLoaded. These two are read from inside the frame loop by
+      the Pentagram draw and the bonus-corridor scoring, so having them defined
+      before `new Game()` keeps the first bonus corridor of a session identical
+      to every later one. Both call sites still guard, so a failed load degrades
+      to the pre-M40 flat pentagram rather than breaking the frame.
+    -->
+    <script src="tools/polygram.js"></script>
+    <script src="tools/void-constellation.js"></script>
     <!-- SEX MAGICK 2.0 FIXED-STEP RUNTIME -->
     <script src="tools/fixed-step-clock.js"></script>
     <script src="tools/fixed-step-prototype.js"></script>

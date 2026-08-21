@@ -92,7 +92,7 @@
    * line from the device itself, with no git or server involved.
    */
   function buildMarker() {
-    return 'D-066 notice slot: shared band, one at a time, no hard box';
+    return 'M40.6 constellation corridor (D-069) · notice slot: shared band, one at a time, no hard box';
   }
 
   return Object.freeze({
