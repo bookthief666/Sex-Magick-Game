@@ -17,10 +17,18 @@
   // clean stretch is the implicit one. The second path exists because the
   // 2026-08-12 pilot recorded under one Void survival per run - without it,
   // charges would be too rare to feel like a system.
-  // D-062: was 25, which on the owner's device meant the first shield arrived
-  // long after the runs they were actually playing ended. A shield nobody ever
-  // holds cannot be judged, and the owner reported it as simply not working.
-  const GATES_PER_CHARGE = 10;
+  // D-067: gates no longer award charges at all. D-062 dropped the cadence to
+  // one shield per 10 gates so the owner would hold one often enough to judge
+  // it; having played it they reported shields arriving far too freely, which
+  // is the same lever pulled too far the other way. Distance covered is not an
+  // achievement - `applyGateMilestones` and its marker are deleted rather than
+  // left inert, so nothing can quietly re-enable them.
+
+  // D-067: the surviving passive source. A shield every 500 points is rare
+  // enough to feel like a checkpoint rather than a drip, and it exists so a
+  // player who keeps refusing the Gate - and therefore never banks a Void - is
+  // not locked out of the mechanic entirely.
+  const SCORE_PER_CHARGE = 500;
 
   // One ring drawn per charge, so this is also how many rings can appear.
   const MAX_AEGIS_CHARGES = 3;
@@ -114,7 +122,7 @@
       charges: { aegis: 0, dissolution: 0 },
       earned: 0,
       spent: { aegis: 0, dissolution: 0 },
-      gateChargeMarker: 0
+      scoreChargeMarker: 0
     };
   }
 
@@ -192,12 +200,18 @@
    * per frame, and survives a jump of several gates in a single observation by
    * awarding for each threshold passed.
    */
-  function applyGateMilestones(state, gatesCleared) {
-    const cleared = wholeNumber(gatesCleared, 0);
-    const reachedMarker = Math.floor(cleared / GATES_PER_CHARGE);
+  /**
+   * The in-run score checkpoint. Same shape as the gate milestone it replaces:
+   * fires once per threshold crossed, and survives a jump of several thresholds
+   * in one observation (a full constellation can pay hundreds of points at once)
+   * by awarding for each threshold passed.
+   */
+  function applyScoreMilestones(state, score) {
+    const points = wholeNumber(score, 0);
+    const reachedMarker = Math.floor(points / SCORE_PER_CHARGE);
     const awarded = [];
-    while (state.gateChargeMarker < reachedMarker) {
-      state.gateChargeMarker += 1;
+    while (state.scoreChargeMarker < reachedMarker) {
+      state.scoreChargeMarker += 1;
       const id = awardCharge(state);
       if (id) awarded.push(id);
     }
@@ -208,7 +222,7 @@
     state.charges = { aegis: 0, dissolution: 0 };
     state.spent = { aegis: 0, dissolution: 0 };
     state.earned = 0;
-    state.gateChargeMarker = 0;
+    state.scoreChargeMarker = 0;
     return state;
   }
 
@@ -763,10 +777,13 @@
     // Pre-emptive, so it must run before the frame's collision test can land.
     tryDissolve(gameInstance);
 
-    const milestoneAwards = applyGateMilestones(liveState, slice.gatesCleared);
+    // D-067: the gate milestone no longer awards. Charges come from banking a
+    // Void and from the score checkpoint below, both of which are things the
+    // player did rather than distance they covered.
+    const milestoneAwards = applyScoreMilestones(liveState, gameInstance?.score);
     if (milestoneAwards.length > 0) {
       if (sessionTotals) sessionTotals.earnedFromGates += milestoneAwards.length;
-      announce(`ASCENT · ${getPowerup(milestoneAwards[0])?.label} +${milestoneAwards.length}`);
+      announce(`${SCORE_PER_CHARGE * liveState.scoreChargeMarker} POINTS · ${getPowerup(milestoneAwards[0])?.label} +${milestoneAwards.length}`);
     }
 
     renderHud(gameInstance);
@@ -837,7 +854,7 @@
     root.__SEX_MAGICK_POWERUPS__ = Object.freeze({
       version: POWERUP_VERSION,
       mode: 'local-powerups-no-network',
-      gatesPerCharge: GATES_PER_CHARGE,
+      scorePerCharge: SCORE_PER_CHARGE,
       getSnapshot: () => (liveState ? JSON.parse(JSON.stringify(liveState)) : null),
       getSessionTotals: () => (sessionTotals ? JSON.parse(JSON.stringify(sessionTotals)) : null),
       getPowerups: () => (liveState ? describe(liveState) : []),
@@ -886,7 +903,6 @@
   return Object.freeze({
     POWERUP_VERSION,
     STORAGE_KEY,
-    GATES_PER_CHARGE,
     MAX_AEGIS_CHARGES,
     POWERUPS,
     getPowerup,
@@ -899,7 +915,8 @@
     recordBand,
     awardCharge,
     spendCharge,
-    applyGateMilestones,
+    applyScoreMilestones,
+    SCORE_PER_CHARGE,
     beginRunState,
     describe,
     reachableBand,

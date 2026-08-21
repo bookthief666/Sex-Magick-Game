@@ -5,10 +5,21 @@ const gate = require('./gate-slice-runtime.js');
 
 assert.equal(gate.queryEnabled({ search: '?gateSlice=1' }), true);
 assert.equal(gate.queryEnabled({ search: '?gateSlice=0' }), false);
+// Derived from BANDS rather than hardcoded: D-067 re-spaced the thresholds and
+// literals here broke a contract that had not actually changed. Every band must
+// begin exactly at its own threshold and one gate earlier must still be the
+// band below - that is the invariant, whatever the spacing.
 assert.equal(gate.getBandIndex(0), 0);
-assert.equal(gate.getBandIndex(6), 1);
-assert.equal(gate.getBandIndex(16), 2);
-assert.equal(gate.getBandIndex(32), 3);
+gate.BANDS.forEach((band, index) => {
+  assert.equal(gate.getBandIndex(band.gateThreshold), index, `${band.name} begins at its threshold`);
+  if (index > 0) {
+    assert.equal(
+      gate.getBandIndex(band.gateThreshold - 1),
+      index - 1,
+      `one gate before ${band.name} is still the band below`
+    );
+  }
+});
 
 const topRisk = gate.classifyGateClear({ playerY: 130, gapTop: 100, gapSize: 180, playerHalf: 12 });
 assert.equal(topRisk.zone, 'risk-top');

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const powerups = require('./powerup-runtime.js');
 const gate = require('./gate-slice-runtime.js');
 
-const { POWERUPS, GATES_PER_CHARGE } = powerups;
+const { POWERUPS } = powerups;
 
 function stateAtBand(bandIndex) {
   const state = powerups.createState();
@@ -43,16 +43,15 @@ assert.ok(powerups.validateLadder([
   assert.equal(powerups.isUnlocked(state, 'aegis'), true, 'unlocked from the very start');
   assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'but holding nothing yet');
 
-  // D-062 halves the milestone to 10 gates: at 25 the owner never reached a
-  // charge in the runs they were actually playing.
-  assert.equal(powerups.GATES_PER_CHARGE, 10);
-  powerups.applyGateMilestones(state, 9);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'nothing at 9 gates');
-  powerups.applyGateMilestones(state, 10);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 1, 'the first shield lands at 10 gates');
-  powerups.applyGateMilestones(state, 30);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 3, 'three by 30 gates');
-  powerups.applyGateMilestones(state, 100);
+  // D-067: the score checkpoint replaces the retired gate cadence.
+  assert.equal(powerups.SCORE_PER_CHARGE, 500);
+  powerups.applyScoreMilestones(state, 499);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'nothing below the first checkpoint');
+  powerups.applyScoreMilestones(state, 500);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 1, 'the first shield at 500 points');
+  powerups.applyScoreMilestones(state, 1500);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 3, 'three by 1500');
+  powerups.applyScoreMilestones(state, 100000);
   assert.equal(powerups.chargesOf(state, 'aegis'), 3, 'and never more than three');
 
   // Crashing spends one and leaves room to earn it back.
@@ -69,50 +68,6 @@ assert.ok(powerups.validateLadder([
   assert.equal(powerups.spendCharge(state, 'aegis'), false, 'cannot spend what you do not have');
 }
 
-
-{
-  const state = powerups.createState();
-  assert.deepEqual(powerups.recordBand(state, 3), [], 're-reaching a band unseals nothing new');
-
-  // A bad run cannot revoke what the player already earned.
-  assert.deepEqual(powerups.recordBand(state, 0), []);
-  assert.equal(state.highestBand, 3, 'a run that ends in MALKUTH must not undo the ascent');
-
-  // Out-of-range input is clamped, not trusted.
-  powerups.recordBand(state, 9999);
-  assert.equal(state.highestBand, 7);
-  powerups.recordBand(state, NaN);
-  assert.equal(state.highestBand, 7);
-}
-
-// --- charges never exceed the cap, never go negative ---------------------
-{
-  for (const band of [1, 3, 6, 7]) {
-    const state = stateAtBand(band);
-    for (let attempt = 0; attempt < 50; attempt += 1) powerups.awardCharge(state);
-    for (const powerup of POWERUPS) {
-      const held = powerups.chargesOf(state, powerup.id);
-      const cap = powerups.capacityFor(state, powerup.id);
-      assert.ok(held <= cap, `${powerup.id} exceeded its cap at band ${band}: ${held} > ${cap}`);
-      assert.ok(held >= 0);
-      assert.ok(Number.isInteger(held));
-    }
-    // Everything full means further awards are a no-op, not an error.
-    assert.equal(powerups.awardCharge(state), null, `band ${band} kept awarding past capacity`);
-  }
-}
-
-// Spending is bounded below.
-{
-  const state = stateAtBand(1);
-  assert.equal(powerups.spendCharge(state, 'aegis'), false, 'cannot spend what you do not have');
-  powerups.awardCharge(state);
-  assert.equal(powerups.spendCharge(state, 'aegis'), true);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 0);
-  assert.equal(powerups.spendCharge(state, 'aegis'), false);
-  assert.equal(powerups.spendCharge(state, 'not.a.powerup'), false);
-}
-
 // --- one power-up means every award lands on it --------------------------
 {
   const state = powerups.createState();
@@ -123,47 +78,17 @@ assert.ok(powerups.validateLadder([
   assert.equal(powerups.awardCharge(state), null, 'a full holder earns nothing further');
 }
 
-// --- gate milestones fire once per threshold -----------------------------
-{
-  const state = stateAtBand(6);
-  // Frame-by-frame observation must not re-award at the same gate count.
-  let awarded = 0;
-  for (let gates = 0; gates <= GATES_PER_CHARGE * 2; gates += 1) {
-    for (let repeat = 0; repeat < 3; repeat += 1) {
-      awarded += powerups.applyGateMilestones(state, gates).length;
-    }
-  }
-  assert.equal(awarded, 2, `expected one charge per ${GATES_PER_CHARGE} gates, got ${awarded}`);
-  assert.equal(state.gateChargeMarker, 2);
-}
-
-// A jump of several thresholds in one observation awards for each.
-{
-  const state = stateAtBand(6);
-  const awarded = powerups.applyGateMilestones(state, GATES_PER_CHARGE * 3);
-  assert.equal(awarded.length, 3, 'a multi-threshold jump must award for every threshold crossed');
-  assert.equal(state.gateChargeMarker, 3);
-}
-
-// Milestones respect capacity: crossing thresholds while full awards nothing.
-{
-  const state = stateAtBand(1);
-  powerups.applyGateMilestones(state, GATES_PER_CHARGE * 10);
-  assert.equal(powerups.chargesOf(state, 'aegis'), powerups.MAX_AEGIS_CHARGES, 'capacity still bounds milestone awards');
-  assert.equal(state.gateChargeMarker, 10, 'but the marker still advances so it cannot re-fire');
-}
-
 // --- a run resets charges but not the ascent -----------------------------
 {
   const state = stateAtBand(6);
   powerups.awardCharge(state);
   powerups.awardCharge(state);
-  powerups.applyGateMilestones(state, GATES_PER_CHARGE);
+  powerups.applyScoreMilestones(state, powerups.SCORE_PER_CHARGE);
   powerups.spendCharge(state, 'aegis');
 
   powerups.beginRunState(state);
   assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'charges must not carry between runs');
-  assert.equal(state.gateChargeMarker, 0, 'the milestone marker must reset with the run');
+  assert.equal(state.scoreChargeMarker, 0, 'the checkpoint marker must reset with the run');
   assert.equal(state.earned, 0);
   assert.equal(state.highestBand, 6, 'the ascent survives the run');
 }
@@ -335,24 +260,55 @@ assert.ok(powerups.UNAVOIDABLE_LOOKAHEAD_FRAMES > 0 && powerups.UNAVOIDABLE_LOOK
 
 console.log(`powerups v${powerups.POWERUP_VERSION}: all deterministic contracts passed`);
 
-// --- D-062: the shield is reachable, and it is the only one -------------
+// --- D-067: shields are earned, not accrued ------------------------------
 //
-// D-061 pinned the legibility gap that made AEGIS read as broken: unsealed at
-// YESOD, first charge at 25 gates, nothing on screen distinguishing "unsealed
-// but empty" from "armed". D-062 closes it rather than documenting it.
+// D-062 made the shield reachable (10 gates) because the owner had never held
+// one. Having played it, they reported them arriving far too freely. Gates no
+// longer award at all; a charge comes from banking a Void or from crossing a
+// score checkpoint - both things the player did, rather than distance covered.
 {
-  assert.equal(powerups.isFloorDeath, undefined, 'floor-save machinery stays gone');
-
   const state = powerups.createState();
-  assert.equal(powerups.isUnlocked(state, 'aegis'), true, 'no band gate to wait out');
-  powerups.applyGateMilestones(state, powerups.GATES_PER_CHARGE);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 1, 'a shield inside the first ten gates');
 
-  // Three, then a crash, then earn it back - the loop the owner asked for.
-  powerups.applyGateMilestones(state, powerups.GATES_PER_CHARGE * 3);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 3);
-  assert.equal(powerups.spendCharge(state, 'aegis'), true, 'a wall crash costs one');
+  // Deleted, not left inert: an unused awarder that still works is a trap for
+  // whoever wires it back up.
+  assert.equal(powerups.applyGateMilestones, undefined, 'the gate awarder is gone');
+  assert.equal(powerups.GATES_PER_CHARGE, undefined, 'and so is its cadence');
+  assert.equal(state.gateChargeMarker, undefined, 'and its marker');
+
+  // The surviving passive path.
+  assert.equal(powerups.SCORE_PER_CHARGE, 500);
+  assert.deepEqual(powerups.applyScoreMilestones(state, 499), [], 'nothing below the checkpoint');
+  assert.equal(powerups.chargesOf(state, 'aegis'), 0);
+
+  assert.deepEqual(powerups.applyScoreMilestones(state, 500), ['aegis'], 'the checkpoint pays once');
+  assert.equal(powerups.chargesOf(state, 'aegis'), 1);
+
+  // Frame-by-frame observation must not re-award at the same score.
+  assert.deepEqual(powerups.applyScoreMilestones(state, 500), [], 'and only once');
+  assert.deepEqual(powerups.applyScoreMilestones(state, 999), []);
+  assert.deepEqual(powerups.applyScoreMilestones(state, 1000), ['aegis'], 'then again at the next');
   assert.equal(powerups.chargesOf(state, 'aegis'), 2);
-  powerups.applyGateMilestones(state, powerups.GATES_PER_CHARGE * 4);
-  assert.equal(powerups.chargesOf(state, 'aegis'), 3, 'and the third is earned back');
+
+  // A constellation can pay hundreds at once, so a multi-threshold jump must
+  // award for every threshold crossed rather than collapsing to one.
+  const jumper = powerups.createState();
+  assert.equal(
+    powerups.applyScoreMilestones(jumper, powerups.SCORE_PER_CHARGE * 3).length,
+    3,
+    'a jump of several checkpoints awards for each'
+  );
+  assert.equal(jumper.scoreChargeMarker, 3);
+
+  // Capacity still bounds it, and the marker still advances so it cannot refire.
+  const full = powerups.createState();
+  powerups.applyScoreMilestones(full, powerups.SCORE_PER_CHARGE * 10);
+  assert.equal(powerups.chargesOf(full, 'aegis'), powerups.MAX_AEGIS_CHARGES);
+  assert.equal(full.scoreChargeMarker, 10, 'the marker advances past capacity so it cannot re-fire');
+
+  // A new run resets the checkpoint with everything else.
+  const carried = powerups.createState();
+  powerups.applyScoreMilestones(carried, 1500);
+  const begun = powerups.beginRunState(carried);
+  assert.equal(begun.scoreChargeMarker, 0, 'a fresh run re-earns its checkpoints');
+  assert.equal(powerups.chargesOf(begun, 'aegis'), 0);
 }

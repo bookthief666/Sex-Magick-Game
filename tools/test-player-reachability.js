@@ -114,8 +114,17 @@ function testReachabilityMatrix() {
   // and the clamp covers the moving geometry on top of it.
   const gate = require('./gate-slice-runtime.js');
   const variety = require('./obstacle-variety-runtime.js');
-  const extendedBands = gate.BANDS.filter(band => band.gateThreshold > 32);
+  // Identify the bands M17 added by position, not by gate threshold. D-067
+  // re-spaced the thresholds and a `> 32` filter silently changed which bands
+  // this audit covered - the audit must track the bands themselves, not where
+  // the ladder happens to place them this week.
+  const extendedBands = gate.BANDS.slice(4);
   assert.equal(extendedBands.length, 4, 'M17 added four bands past GEBURAH');
+  assert.deepEqual(
+    extendedBands.map(band => band.name),
+    ['CHESED', 'BINAH', 'CHOKMAH', 'KETHER'],
+    'the four post-GEBURAH bands'
+  );
 
   const bandScenarios = extendedBands.flatMap(band => {
     const gap = band.gap - 10;

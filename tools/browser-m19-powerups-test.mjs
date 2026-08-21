@@ -285,7 +285,8 @@ async function main() {
           gatesCleared: game.gateSliceState.gatesCleared,
           voidSurvivals: game.gateSliceState.voidSurvivals,
           snapshot: api.getSnapshot(),
-          gatesPerCharge: api.gatesPerCharge
+          scorePerCharge: api.scorePerCharge,
+          score: game.score
         };
       })();
     `);
@@ -300,12 +301,19 @@ async function main() {
     const aegisEnd = climb.atEnd.find(entry => entry.id === 'aegis');
     assert.ok(aegisEnd.unlocked, 'AEGIS is unlocked from the first band');
 
-    // Charges must have been earned from real play, not granted.
-    const expectedMinimum = Math.floor(climb.gatesCleared / climb.gatesPerCharge) + climb.voidSurvivals;
-    assert.ok(expectedMinimum > 0, 'the probe run earned no charges to check');
+    // D-067: gates no longer award. Charges come from banking a Void and from
+    // crossing a score checkpoint, so the probe must have done one of those for
+    // this section to be checking anything at all.
+    assert.equal(climb.scorePerCharge, 500, 'the live checkpoint cadence');
+    const expectedMinimum =
+      Math.floor(climb.score / climb.scorePerCharge) + climb.voidSurvivals;
+    assert.ok(
+      expectedMinimum > 0,
+      `the probe run crossed no checkpoint (score ${climb.score}) and banked no Void`
+    );
     assert.ok(
       climb.snapshot.earned > 0,
-      `no charges earned across ${climb.gatesCleared} gates and ${climb.voidSurvivals} Void survivals`
+      `no charges earned at score ${climb.score} across ${climb.voidSurvivals} Void survivals`
     );
     for (const entry of climb.atEnd) {
       assert.ok(entry.charges <= entry.capacity, `${entry.id} exceeded its cap in a real run`);

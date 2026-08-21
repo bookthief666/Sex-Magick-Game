@@ -16,26 +16,32 @@ assert.deepEqual(
   ['KINGDOM', 'FOUNDATION', 'BEAUTY', 'SEVERITY', 'MERCY', 'UNDERSTANDING', 'WISDOM', 'CROWN']
 );
 
+// Spans are read off BANDS rather than hardcoded - D-067 re-spaced the ladder
+// and literal gate counts here asserted the spacing, not the progress maths.
+const YESOD_AT = gate.BANDS[1].gateThreshold;
+const TIPHARETH_AT = gate.BANDS[2].gateThreshold;
+
 {
   const progress = ritual.bandProgress({ gatesCleared: 0, bandIndex: 0 }, gate.BANDS);
   assert.equal(progress.currentName, 'MALKUTH');
   assert.equal(progress.nextName, 'YESOD');
-  assert.equal(progress.gatesToNext, 6);
+  assert.equal(progress.gatesToNext, YESOD_AT);
   assert.equal(progress.ratio, 0);
   assert.equal(progress.atCrown, false);
 }
 
 {
-  const progress = ritual.bandProgress({ gatesCleared: 5, bandIndex: 0 }, gate.BANDS);
+  const oneShort = YESOD_AT - 1;
+  const progress = ritual.bandProgress({ gatesCleared: oneShort, bandIndex: 0 }, gate.BANDS);
   assert.equal(progress.gatesToNext, 1);
-  assert.equal(progress.ratio, 5 / 6);
+  assert.equal(progress.ratio, oneShort / YESOD_AT);
 }
 
 {
-  const progress = ritual.bandProgress({ gatesCleared: 6, bandIndex: 1 }, gate.BANDS);
+  const progress = ritual.bandProgress({ gatesCleared: YESOD_AT, bandIndex: 1 }, gate.BANDS);
   assert.equal(progress.currentName, 'YESOD');
   assert.equal(progress.nextName, 'TIPHARETH');
-  assert.equal(progress.gatesToNext, 10);
+  assert.equal(progress.gatesToNext, TIPHARETH_AT - YESOD_AT);
   assert.equal(progress.ratio, 0);
   assert.deepEqual(ritual.themeForBand(1, gate.BANDS), {
     index: 1,

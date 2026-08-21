@@ -67,15 +67,31 @@
   // continue the ascent to the edge of the proven envelope: KETHER sits exactly
   // at speed 8.5, and its 122 px gap stays at or above CONFIG.MIN_PILLAR_GAP even
   // at the bottom of the +/-10 px breathing that getCurrentGap applies.
+  // D-067 re-spaced these thresholds. Speeds and gaps are untouched - every pair
+  // is still an audited coordinate - only *when* the player arrives changed.
+  //
+  // The old spacing (0/6/16/32/48/68/92/120) was front-loaded: +0.9, +1.2, +1.2
+  // across the first 32 gates, then +0.7, +0.6, +0.5, +0.5 across the next 88.
+  // The owner reported speed that "kept increasing until it sortve topped off",
+  // and that is this deceleration, felt at gate 32 rather than at the real
+  // ceiling. Intervals now widen monotonically - 9, 13, 18, 22, 26, 30, 34 - so
+  // each band lasts longer than the one before it and the ascent reads as a long
+  // arc instead of a sprint into a plateau. KETHER moves 120 -> 152, keeping the
+  // crown attainable in a strong run (the 2026-08-12 pilot's best was 507 gates,
+  // with good runs of 81, 78, 64, 64 and 53).
+  //
+  // The deceleration in *speed* is unchanged and cannot be fixed by re-spacing:
+  // it exists because 8.5 is the top of the proven envelope. Raising it is a
+  // search, not an edit - see MAX_VALIDATED_SPEED.
   const BANDS = Object.freeze([
     Object.freeze({ name: 'MALKUTH', gateThreshold: 0, speed: 2.9, gap: 220, riskActive: false }),
-    Object.freeze({ name: 'YESOD', gateThreshold: 6, speed: 3.8, gap: 190, riskActive: true }),
-    Object.freeze({ name: 'TIPHARETH', gateThreshold: 16, speed: 5.0, gap: 165, riskActive: true }),
-    Object.freeze({ name: 'GEBURAH', gateThreshold: 32, speed: 6.2, gap: 145, riskActive: true }),
-    Object.freeze({ name: 'CHESED', gateThreshold: 48, speed: 6.9, gap: 138, riskActive: true }),
-    Object.freeze({ name: 'BINAH', gateThreshold: 68, speed: 7.5, gap: 132, riskActive: true }),
-    Object.freeze({ name: 'CHOKMAH', gateThreshold: 92, speed: 8.0, gap: 127, riskActive: true }),
-    Object.freeze({ name: 'KETHER', gateThreshold: 120, speed: MAX_VALIDATED_SPEED, gap: 122, riskActive: true })
+    Object.freeze({ name: 'YESOD', gateThreshold: 9, speed: 3.8, gap: 190, riskActive: true }),
+    Object.freeze({ name: 'TIPHARETH', gateThreshold: 22, speed: 5.0, gap: 165, riskActive: true }),
+    Object.freeze({ name: 'GEBURAH', gateThreshold: 40, speed: 6.2, gap: 145, riskActive: true }),
+    Object.freeze({ name: 'CHESED', gateThreshold: 62, speed: 6.9, gap: 138, riskActive: true }),
+    Object.freeze({ name: 'BINAH', gateThreshold: 88, speed: 7.5, gap: 132, riskActive: true }),
+    Object.freeze({ name: 'CHOKMAH', gateThreshold: 118, speed: 8.0, gap: 127, riskActive: true }),
+    Object.freeze({ name: 'KETHER', gateThreshold: 152, speed: MAX_VALIDATED_SPEED, gap: 122, riskActive: true })
   ]);
 
   let installed = false;

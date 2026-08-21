@@ -264,7 +264,9 @@ async function main() {
         const preflight = __SEX_MAGICK_GATE_PREFLIGHT__.getSnapshot();
         const orderedLevels = game.gameLevels.map(level => level.name);
 
-        game.gateSliceState.gatesCleared = 6;
+        // D-067: one short of YESOD, derived so a re-spacing cannot silently
+        // move this probe back into risk-free MALKUTH.
+        game.gateSliceState.gatesCleared = SexMagickGateSlice.BANDS[1].gateThreshold;
         game.gateSliceState.bandIndex = 1;
         game.applyLevel();
         game.frames = 1;
@@ -389,6 +391,7 @@ async function main() {
           preflight,
           orderedLevels,
           afterRisk,
+          yesodAt: SexMagickGateSlice.BANDS[1].gateThreshold,
           scoreAfterRisk,
           afterBank,
           scoreAfterBank,
@@ -436,7 +439,7 @@ async function main() {
     );
     assert.deepEqual(result.orderedLevels, ['MALKUTH', 'YESOD', 'TIPHARETH', 'GEBURAH', 'CHESED', 'BINAH', 'CHOKMAH', 'KETHER']);
 
-    assert.equal(result.afterRisk.state.gatesCleared, 7);
+    assert.equal(result.afterRisk.state.gatesCleared, result.yesodAt + 1);
     assert.equal(result.afterRisk.state.gnosis, 1);
     assert.equal(result.afterRisk.state.lastClear.zone, 'risk-top');
     assert.equal(result.afterRisk.state.lastClear.family, 'pressure');
@@ -528,7 +531,7 @@ async function main() {
     const punch = await evaluate(client, `
       (() => {
         game.gameLevels.forEach(l => { l.img = null; l.loaded = false; });
-        game.gateSliceState.gatesCleared = 5;
+        game.gateSliceState.gatesCleared = SexMagickGateSlice.BANDS[1].gateThreshold - 1;
         game.gateSliceState.bandIndex = 0;
         game.shake = 0;
         game.hitStop = 0;
@@ -536,7 +539,7 @@ async function main() {
         GlitchFX.active = false;
         GlitchFX.duration = 0;
 
-        game.gateSliceState.gatesCleared = 6; // crosses into YESOD (band 1)
+        game.gateSliceState.gatesCleared = SexMagickGateSlice.BANDS[1].gateThreshold; // crosses into YESOD (band 1)
         game.checkLevel();
 
         const matched = game.gameLevels.find(l => l.name.toUpperCase() === 'YESOD');
@@ -583,7 +586,7 @@ async function main() {
         game.hitStop = 0;
         game.particles = [];
         GlitchFX.active = false;
-        game.gateSliceState.gatesCleared = 7; // still inside YESOD (next boundary is 16)
+        game.gateSliceState.gatesCleared = SexMagickGateSlice.BANDS[1].gateThreshold + 1; // still inside YESOD
         game.checkLevel();
         return { shake: game.shake, hitStop: game.hitStop, particleCount: game.particles.length, glitchActive: GlitchFX.active };
       })();
@@ -645,7 +648,7 @@ async function main() {
         game.pentagrams = [];
         game.__bonusCorridorFrames = 0;
         game.__bonusCorridorLastGate = -1;
-        game.gateSliceState.gatesCleared = 25;
+        game.gateSliceState.gatesCleared = SexMagickGateSlice.BANDS[2].gateThreshold + 3;
         const bonusPillars = runWindow(90);
         const bonus = { pentagrams: game.pentagrams.length, pillars: bonusPillars };
 
