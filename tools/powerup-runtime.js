@@ -29,17 +29,6 @@
   // are still perfectly survivable.
   const UNAVOIDABLE_LOOKAHEAD_FRAMES = 70;
 
-  // Mirrors the floor-death line in index.html's Player.update:
-  //   if (this.y > window.innerHeight - this.r * 1.5) game.gameOver();
-  // If that constant moves, this must move with it.
-  const FLOOR_DEATH_RADIUS_FACTOR = 1.5;
-  // How hard a floor save throws the player back up, as a multiple of the base
-  // game's own jump impulse. Slightly stronger than a jump so the save reads as
-  // the ward doing something a player could not have done themselves.
-  const FLOOR_SAVE_LIFT_MULTIPLIER = 1.35;
-  // Player radii of daylight put between the avatar and the death line, so the
-  // save survives one integration step regardless of check ordering.
-  const FLOOR_SAVE_CLEARANCE_RADII = 3;
 
   /**
    * The unlock ladder.
@@ -605,7 +594,7 @@
   function overlappingPillars(gameInstance) {
     const player = gameInstance?.player;
     if (!player) return [];
-    const inset = finiteNumber(CONFIG?.HITBOX_OFFSET, 0);
+    const inset = finiteNumber(configOf().HITBOX_OFFSET, 0);
     const left = player.x - player.r + inset;
     const right = player.x + player.r - inset;
     const top = player.y - player.r + inset;
@@ -663,53 +652,6 @@
     } catch (_error) {}
   }
 
-  /**
-   * True when the player is at or past the floor line index.html's Player.update
-   * kills on - `this.y > window.innerHeight - this.r * 1.5`. Mirrored rather
-   * than exported because that check lives inline in the base game's update
-   * loop; the constant below must stay in step with it.
-   */
-  function configOf() {
-    try { if (typeof CONFIG !== 'undefined' && CONFIG) return CONFIG; }
-    catch (_error) {}
-    return root.CONFIG || {};
-  }
-
-  function isFloorDeath(gameInstance) {
-    const player = gameInstance?.player;
-    if (!player) return false;
-    // Without a real viewport height the floor line would compute negative and
-    // every death that is not a pillar would be claimed as a fall - spending a
-    // charge on a death AEGIS has no business covering. Unknown means no.
-    const viewportHeight = finiteNumber(root.innerHeight, 0);
-    if (!(viewportHeight > 0)) return false;
-    const radius = finiteNumber(player.r, 0);
-    return finiteNumber(player.y, 0) > viewportHeight - radius * FLOOR_DEATH_RADIUS_FACTOR;
-  }
-
-  /**
-   * A floor save has nothing to dissolve, so it has to buy the player altitude
-   * instead - otherwise `y` is still past the death line on the very next
-   * update and the charge is spent for one frame of life.
-   *
-   * The lift is the base game's own jump impulse, and `y` is moved clear of the
-   * line in the same breath so the save cannot depend on whether the death
-   * check happens before or after the next position integration.
-   */
-  function liftFromFloor(gameInstance) {
-    const player = gameInstance?.player;
-    if (!player) return;
-    const radius = finiteNumber(player.r, 0);
-    // Not `CONFIG?.x` - optional chaining does not save an *undeclared*
-    // identifier from throwing, and this runs inside the gameOver path where a
-    // ReferenceError would take the death handler down with it.
-    const jump = finiteNumber(configOf().PLAYER_JUMP_FORCE, -7.5);
-    player.vy = jump * FLOOR_SAVE_LIFT_MULTIPLIER;
-    const ceiling = radius * FLOOR_DEATH_RADIUS_FACTOR;
-    const floorLine = (root.innerHeight || 0) - ceiling;
-    player.y = Math.max(ceiling, floorLine - radius * FLOOR_SAVE_CLEARANCE_RADII);
-    if (typeof player.jumpCooldown === 'number') player.jumpCooldown = 0;
-  }
 
   function tryAbsorb(gameInstance) {
     if (!liveState || !gameInstance) return false;
@@ -719,25 +661,23 @@
     if (gameInstance.__gateSliceVoidActive) return false;
     if (chargesOf(liveState, 'aegis') <= 0) return false;
 
-    // Two things call gameOver(): a pillar collision, and falling past the floor
-    // line. Until D-060 this only ever looked for pillars, so a floor death
-    // spent no charge and killed the player outright *while the ward rings were
-    // still drawn around them* - the rings promised cover for the most common
-    // death in a gravity game and did not provide it. The owner chose to make
-    // the rings mean what they look like they mean.
+    // AEGIS is a wall shield and nothing else. D-060 briefly extended it to cover
+    // falls; playing that (D-061) showed the premise was wrong - the owner had
+    // never actually held a charge, and what looked like a shield being ignored
+    // was the avatar's own outline. A fall is the player's own altitude
+    // management and stays fatal, which also keeps the charge for the hit that
+    // could not be seen coming.
     const blocking = overlappingPillars(gameInstance);
-    const floorDeath = blocking.length === 0 && isFloorDeath(gameInstance);
-    if (blocking.length === 0 && !floorDeath) return false;
+    if (blocking.length === 0) return false;
 
     spendCharge(liveState, 'aegis');
     if (sessionTotals) sessionTotals.absorbs += 1;
     shatterWard(gameInstance);
     for (const pillar of blocking) dissolvePillar(gameInstance, pillar);
-    if (floorDeath) liftFromFloor(gameInstance);
     gameInstance.hitStop = 3;
     gameInstance.shake = Math.max(finiteNumber(gameInstance.shake, 0), 8);
     try { if (gameInstance.settings?.sfx) SFX.levelUp(); } catch (_error) {}
-    announce(floorDeath ? 'AEGIS SHATTERS · THE FALL IS REFUSED' : 'AEGIS SHATTERS · YOU SURVIVE');
+    announce('AEGIS SHATTERS · THE WALL IS REFUSED');
     renderHud(gameInstance);
     return true;
   }
@@ -913,11 +853,6 @@
     reachableBand,
     WARD_COLOR,
     UNAVOIDABLE_LOOKAHEAD_FRAMES,
-    FLOOR_DEATH_RADIUS_FACTOR,
-    FLOOR_SAVE_LIFT_MULTIPLIER,
-    FLOOR_SAVE_CLEARANCE_RADII,
-    isFloorDeath,
-    liftFromFloor,
     createMemoryStorage,
     safeBrowserStorage,
     readState,

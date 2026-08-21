@@ -348,95 +348,24 @@ assert.ok(powerups.UNAVOIDABLE_LOOKAHEAD_FRAMES > 0 && powerups.UNAVOIDABLE_LOOK
 
 console.log(`powerups v${powerups.POWERUP_VERSION}: all deterministic contracts passed`);
 
-// --- D-060: AEGIS covers the floor, not just the walls -------------------
+// --- D-061: AEGIS is a wall shield, and says so --------------------------
 //
-// Two things call gameOver(): a pillar collision and falling past
-// `y > innerHeight - r * 1.5`. Until D-060 tryAbsorb only ever looked for
-// overlapping pillars, so a floor death killed the player outright while the
-// ward rings were still drawn around them. These pin the geometry that fix
-// depends on; the absorb path itself is exercised in the browser suite.
+// D-060 briefly extended AEGIS to cover falls. Playing it showed the premise
+// was wrong: the owner had never held a charge at all, and what looked like a
+// shield being ignored was the avatar's own outline. AEGIS is wall-only again,
+// so the first charge must be reachable early enough to ever be seen.
 {
-  // The module resolves its root to globalThis, so that - not a synthesized
-  // `window` - is where a viewport height has to be staged.
-  const originalInnerHeight = globalThis.innerHeight;
-  const restore = () => {
-    if (originalInnerHeight === undefined) delete globalThis.innerHeight;
-    else globalThis.innerHeight = originalInnerHeight;
-  };
-  globalThis.innerHeight = 1000;
+  assert.equal(powerups.isFloorDeath, undefined, 'floor-save machinery must be gone');
+  assert.equal(powerups.liftFromFloor, undefined, 'floor-save machinery must be gone');
 
-  // An unknown viewport must never be read as a fall: the floor line would go
-  // negative and AEGIS would spend a charge on any death at all.
-  delete globalThis.innerHeight;
-  assert.equal(
-    powerups.isFloorDeath({ player: { y: 5, r: 20 } }),
-    false,
-    'no viewport height means no floor-death claim'
-  );
-  globalThis.innerHeight = 0;
-  assert.equal(
-    powerups.isFloorDeath({ player: { y: 5, r: 20 } }),
-    false,
-    'a zero viewport height means no floor-death claim'
-  );
-  globalThis.innerHeight = 1000;
-
-  const radius = 20;
-  // The death line index.html uses: 1000 - 20 * 1.5 = 970.
-  const deathLine = 1000 - radius * powerups.FLOOR_DEATH_RADIUS_FACTOR;
-  assert.equal(deathLine, 970);
-
-  assert.equal(
-    powerups.isFloorDeath({ player: { y: deathLine + 1, r: radius } }),
-    true,
-    'past the death line is a floor death'
-  );
-  assert.equal(
-    powerups.isFloorDeath({ player: { y: deathLine, r: radius } }),
-    false,
-    'exactly on the line is not yet a death - index.html uses a strict >'
-  );
-  assert.equal(
-    powerups.isFloorDeath({ player: { y: 10, r: radius } }),
-    false,
-    'high above the floor is not a floor death'
-  );
-  assert.equal(powerups.isFloorDeath({}), false, 'no player is not a floor death');
-  assert.equal(powerups.isFloorDeath(null), false, 'no game is not a floor death');
-
-  // The save must leave the player somewhere the very next death check passes,
-  // whatever order the check and the position integration happen in.
-  const player = { y: deathLine + 40, r: radius, vy: 12, jumpCooldown: 9 };
-  powerups.liftFromFloor({ player });
-  assert.ok(player.vy < 0, 'a floor save must send the player upward');
-  assert.equal(
-    player.vy,
-    -7.5 * powerups.FLOOR_SAVE_LIFT_MULTIPLIER,
-    'lift is the base jump impulse scaled by the documented multiplier'
-  );
-  assert.ok(
-    !powerups.isFloorDeath({ player }),
-    'after the save the player must no longer be past the death line'
-  );
-  assert.equal(
-    player.y,
-    deathLine - radius * powerups.FLOOR_SAVE_CLEARANCE_RADII,
-    'the save puts the documented clearance between avatar and death line'
-  );
-  assert.equal(player.jumpCooldown, 0, 'a saved player may act immediately');
-
-  // A viewport shorter than the clearance must not fling the player through the
-  // ceiling, which index.html clamps at r * 1.5.
-  globalThis.innerHeight = 40;
-  const cramped = { y: 39, r: radius, vy: 12 };
-  powerups.liftFromFloor({ player: cramped });
-  assert.ok(
-    cramped.y >= radius * powerups.FLOOR_DEATH_RADIUS_FACTOR,
-    'the save must never place the player above the ceiling clamp'
-  );
-
-  powerups.liftFromFloor({});
-  powerups.liftFromFloor(null);
-
-  restore();
+  // The legibility problem in one assertion: AEGIS unseals at YESOD, but the
+  // first charge needs 25 cleared gates or a Void survival. A player who has
+  // seen "AEGIS UNSEALED" can hold zero charges for a long time afterwards.
+  const state = stateAtBand(1);
+  assert.equal(powerups.isUnlocked(state, 'aegis'), true, 'YESOD unseals AEGIS');
+  assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'unsealing grants no charge');
+  powerups.applyGateMilestones(state, 24);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 0, 'still nothing at 24 gates');
+  powerups.applyGateMilestones(state, 25);
+  assert.equal(powerups.chargesOf(state, 'aegis'), 1, 'the first charge lands at 25 gates');
 }
