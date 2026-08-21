@@ -560,6 +560,85 @@
   }
 
   /**
+   * M40.4: neon walls that tear, on the bands where risk is live.
+   *
+   * The owner asked for neon, glitching walls in the harder sections. Two things
+   * shape how this is built.
+   *
+   * It reuses the *reading* of `chargeRiskEdges` above - risk-active bands wear
+   * cyan - and extends it rather than introducing a second vocabulary, so the
+   * colour still means one thing. What it adds is a hard neon rim on the
+   * gap-facing edge, and slices of the wall that shear sideways.
+   *
+   * The shear is drawn as offset rectangles rather than as shifted pixels. A
+   * genuine band-shift needs the wall's own pixels, and every route to those -
+   * `getImageData`, or blitting the canvas onto itself - costs a full-frame
+   * readback per pillar per frame with six pillars on screen. Offset bars over
+   * the wall read as the same tear for two `fillRect`s.
+   *
+   * Everything is derived from `pillar.x` and a coarse frame bucket, never from
+   * `Math.random()`: a glitch that re-rolls every frame strobes rather than
+   * tears, and a non-deterministic effect would make the M14 visual baselines
+   * unrepeatable.
+   */
+  const NEON_RISK_COLOR = '0, 229, 255';
+  const SHEAR_FRAME_BUCKET = 6;
+
+  function neonRiskWall(ctx, pillar, gameInstance) {
+    const state = gameInstance?.gateSliceState;
+    if (!ctx || !pillar || !state) return false;
+    // MALKUTH's risk is inactive, and the Void is already its own treatment.
+    const bandIndex = finite(state.bandIndex, 0);
+    if (bandIndex < 1) return false;
+    if (gameInstance.voidMode || gameInstance.__gateSliceVoidActive) return false;
+
+    const gapTop = finite(pillar.top, 0);
+    const gap = finite(pillar.gap, 0);
+    const height = finite(gameInstance?.canvas?.height, 0);
+    if (gap <= 0 || height <= 0) return false;
+
+    const x = finite(pillar.x, 0);
+    const width = Math.max(1, finite(pillar.w, 45));
+    const gapBottom = gapTop + gap;
+    // Climbs with the ladder, so the walls get louder as the run gets harder
+    // rather than being equally loud from the first risk band.
+    const intensity = Math.min(1, 0.35 + (bandIndex * 0.1));
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    // The rim: a hard bright line exactly on the edge the player must clear.
+    ctx.fillStyle = 'rgba(' + NEON_RISK_COLOR + ', ' + (0.55 * intensity).toFixed(3) + ')';
+    ctx.fillRect(x, gapTop - 2, width, 2);
+    ctx.fillRect(x, gapBottom, width, 2);
+
+    // The tear. One bucket in three carries it, so a wall glitches in bursts
+    // rather than continuously - continuous shear stops reading as a fault.
+    const frames = finite(gameInstance?.frames, 0);
+    const bucket = Math.floor(frames / SHEAR_FRAME_BUCKET);
+    const seed = (Math.abs(Math.round(x)) * 73) + (bucket * 151);
+    if (seed % 3 === 0) {
+      const slices = 1 + (seed % 2);
+      for (let index = 0; index < slices; index += 1) {
+        const spanTop = ((seed * (index + 7)) % 100) / 100;
+        // Solid spans only: a bar drawn across the gap would sit where the
+        // player has to fly and read as an obstacle that is not there.
+        const solidTop = spanTop < 0.5;
+        const bandTop = solidTop
+          ? spanTop * 2 * Math.max(0, gapTop - 8)
+          : gapBottom + ((spanTop - 0.5) * 2 * Math.max(0, height - gapBottom - 8));
+        const bandHeight = 3 + (seed % 7);
+        const shift = (((seed % 11) - 5) / 5) * 9 * intensity;
+        ctx.fillStyle = 'rgba(' + NEON_RISK_COLOR + ', ' + (0.3 * intensity).toFixed(3) + ')';
+        ctx.fillRect(x + shift, bandTop, width, bandHeight);
+      }
+    }
+
+    ctx.restore();
+    return true;
+  }
+
+  /**
    * A generated title card, replacing the Drive-hosted photograph on #startScreen.
    *
    * This is the very first frame anyone sees, and until now it depended on a
@@ -689,6 +768,7 @@
         if (typeof game !== 'undefined' && game) {
           decoratePillar(ctx, this, game);
           chargeRiskEdges(ctx, this, game);
+          neonRiskWall(ctx, this, game);
         }
       } catch (_error) {}
       return result;

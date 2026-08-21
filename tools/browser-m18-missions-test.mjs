@@ -302,6 +302,18 @@ async function main() {
     const rotated = await evaluate(client, `
       (() => {
         const api = globalThis.__SEX_MAGICK_MISSIONS__;
+
+        // The band jump below is its own event: arriving at KETHER raises the
+        // ritual-ascent banner, and since D-065 exactly one transient notice is
+        // visible at a time. Doing both in one step let the ascent banner claim
+        // the slot *after* the mission announced, so the mission's notice was
+        // correctly hidden and the assertion below read that as "never
+        // announced". Landing the band change on its own frame first leaves the
+        // mission completion as the last claim, which is the thing under test.
+        const state = game.gateSliceState;
+        state.bandIndex = 7;
+        game.updateGameObjects();
+
         const before = api.getActive();
 
         // The active three are drawn at random, so this cannot depend on which
@@ -309,7 +321,6 @@ async function main() {
         // a step generous enough to finish any mission in the catalogue.
         for (const entry of before) api.forceProgress(entry.id, entry.target - 1);
 
-        const state = game.gateSliceState;
         state.gatesCleared += 1;
         // gateEntries stays at zero so REFUSE THE GATE can also complete; the
         // delta mission that counts entries simply does not advance this step.
@@ -330,7 +341,11 @@ async function main() {
           after: after.map(x => x.id),
           completedIds: before.map(x => x.id).filter(id => (completedCounts[id] || 0) > 0),
           announceShown: Boolean(announce) && !announce.hidden,
-          announceText: announce ? announce.textContent : ''
+          announceText: announce ? announce.textContent : '',
+          slotHolders: (window.SexMagickNoticeSlot?.getRegistered?.() || []).map(id => {
+            const el = document.getElementById(id);
+            return id + '=' + (el ? (el.hidden ? 'hidden' : 'SHOWN:' + String(el.textContent).slice(0, 40)) : 'absent');
+          })
         };
       })();
     `);
@@ -344,7 +359,8 @@ async function main() {
     }
     assert.equal(rotated.after.length, 3, 'every freed slot must be refilled');
     assert.equal(new Set(rotated.after).size, 3, 'rotation must not duplicate a mission');
-    assert.ok(rotated.announceShown, 'completing a mission must announce it');
+    assert.ok(rotated.announceShown,
+      `completing a mission must announce it; slot state ${JSON.stringify(rotated.slotHolders)}`);
     assert.match(rotated.announceText, /RITE FULFILLED/);
 
     // --- progress survives a real reload -----------------------------------
