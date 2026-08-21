@@ -479,7 +479,10 @@
       #sex-magick-missions-announce {
         position: fixed;
         left: 50%;
-        bottom: max(170px, calc(env(safe-area-inset-bottom) + 160px));
+        /* D-064: raised from 170px to clear #gate-slice-telegraph's new
+           128px position (worst-case top ~188px) - a mission completing at the
+           same moment as a gate transition is ordinary play, not an edge case. */
+        bottom: max(200px, calc(env(safe-area-inset-bottom) + 190px));
         transform: translateX(-50%);
         z-index: 29;
         padding: 7px 14px;

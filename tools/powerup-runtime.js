@@ -355,7 +355,10 @@
       #sex-magick-powerups-announce {
         position: fixed;
         left: 50%;
-        bottom: max(120px, calc(env(safe-area-inset-bottom) + 110px));
+        /* D-064: raised from 120px to clear #sex-magick-missions-announce's
+           new 200px position (worst-case top ~240px) - an AEGIS absorb and a
+           mission completing can land in the same frame. */
+        bottom: max(252px, calc(env(safe-area-inset-bottom) + 242px));
         transform: translateX(-50%);
         z-index: 29;
         padding: 7px 14px;

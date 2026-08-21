@@ -490,11 +490,14 @@
       #gate-slice-telegraph {
         position: fixed;
         left: 50%;
-        /* D-062: was 230px, which on a 643px-tall Fold viewport put this box
-           at 64% down - the middle of the play field. Transient messages live
-           on the bottom edge now, briefly over the HUD strips rather than ever
-           over the corridor. */
-        bottom: max(6px, calc(env(safe-area-inset-bottom) + 4px));
+        /* D-064: was 230px (D-062: 6px). D-062 moved this off the corridor but
+           never checked it against the *persistent* #sex-magick-missions list
+           (bottom:46px, up to ~70px tall for three rows) sitting right beneath
+           it - on the owner's device the two visibly overlapped the moment a
+           gate transition and an active mission list coincided, which is most
+           of ordinary play. 128px clears missions' worst-case top with a 12px
+           margin. See D-064 for the full five-element stack this belongs to. */
+        bottom: max(128px, calc(env(safe-area-inset-bottom) + 122px));
         transform: translateX(-50%);
         z-index: 33;
         width: min(560px, calc(100vw - 30px));

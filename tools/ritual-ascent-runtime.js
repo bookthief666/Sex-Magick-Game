@@ -184,10 +184,15 @@
          See D-060. */
       #sex-magick-ascent-banner {
         position: fixed;
-        /* D-062: 206px was still 65% down a 643px viewport - the same bad
-           neighbourhood as the telegraph. Sits just above it, both clear of
-           the play field. */
-        bottom: max(74px, calc(env(safe-area-inset-bottom) + 72px));
+        /* D-064 (D-062 was 74px, itself down from D-060's 206px): 74px cleared
+           the telegraph alone but not the full stack beneath it once missions,
+           the two toast rows, and the telegraph's own D-064 move are accounted
+           for - measured overlap on the owner's device was a real ~21px between
+           this banner and #sex-magick-missions. 304px clears
+           #sex-magick-powerups-announce's worst-case top (~292px) with a 12px
+           margin. This is the tallest, rarest (Sephirah-change only) element in
+           the stack, so it sits highest by design. */
+        bottom: max(304px, calc(env(safe-area-inset-bottom) + 296px));
         left: 50%;
         z-index: 34;
         min-width: min(430px, calc(100vw - 44px));

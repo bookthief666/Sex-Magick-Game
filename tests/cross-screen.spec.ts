@@ -172,8 +172,8 @@ test('power-up readout adds no control and clears the missions HUD', async ({ pa
     api.forceBand(7);
     game.gameMode = 'HEX';
     game.startGame();
+    // D-062 retired DISSOLUTION; AEGIS is the whole ladder now.
     api.grant('aegis', 3);
-    api.grant('dissolution', 2);
 
     const hud = document.getElementById('sex-magick-powerups') as HTMLElement;
     const missions = document.getElementById('sex-magick-missions') as HTMLElement;
@@ -223,6 +223,86 @@ test('power-up readout adds no control and clears the missions HUD', async ({ pa
   expect(overlaps, `power-ups ${JSON.stringify(result.hudRect)} overlap missions ${JSON.stringify(result.missionsRect)}`).toBe(false);
 
   expect(result.bodyScrollWidth).toBeLessThanOrEqual(result.viewport.width + 1);
+  expect(pageErrors).toEqual([]);
+});
+
+test('every centered transient overlay clears every other one, worst case', async ({ page }) => {
+  // D-064: three prior fixes (D-060, D-062, D-063) each moved one overlay
+  // without checking it against the others. On the owner's Fold 6 the ascent
+  // banner and the persistent missions list visibly overlapped by ~21px, and
+  // separately the gate telegraph overlapped the powerup readout - both
+  // findings from real play, not synthetic. This test forces every centered
+  // overlay visible at once, with worst-case content (the longest telegraph
+  // string, a live band-transition banner, both toast rows), and asserts no
+  // two of them ever share screen space. It is the only thing that can catch
+  // a fifth instance of this before a human has to find it by hand again.
+  const pageErrors: string[] = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  await page.goto('/index.html?assetMode=offline&renderDpr=native&gateSlice=1', { waitUntil: 'domcontentloaded' });
+  await page.locator('#game-container').waitFor({ state: 'visible' });
+  await page.waitForFunction(`
+    !!window.__SEX_MAGICK_GATE_SLICE__ && !!window.__SEX_MAGICK_RITUAL_ASCENT__ &&
+    !!window.__SEX_MAGICK_POWERUPS__ && typeof game !== "undefined" && !!game
+  `);
+
+  const result = await page.evaluate(async () => {
+    const api = (window as any).__SEX_MAGICK_POWERUPS__;
+    api.reset();
+    game.gameMode = 'HEX';
+    game.startGame();
+    api.grant('aegis', 3);
+    game.gateSliceState.gatesCleared = 8;
+    game.gateSliceState.bandIndex = 0;
+
+    // Drive real updateGameObjects() calls so the ascent banner shows via its
+    // real band-transition path, not a synthetic DOM write.
+    for (let i = 0; i < 20 && document.getElementById('sex-magick-ascent-banner')?.hidden !== false; i += 1) {
+      game.updateGameObjects();
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+
+    const telegraph = document.getElementById('gate-slice-telegraph');
+    if (telegraph) {
+      telegraph.textContent = 'GATE OPEN  ·  ENTER → VOID ×10  /  PASS → BANK ×3';
+      telegraph.hidden = false;
+    }
+    const missionsAnnounce = document.getElementById('sex-magick-missions-announce');
+    if (missionsAnnounce) { missionsAnnounce.textContent = 'COURT THE EDGE COMPLETE'; missionsAnnounce.hidden = false; }
+    const powerupsAnnounce = document.getElementById('sex-magick-powerups-announce');
+    if (powerupsAnnounce) { powerupsAnnounce.textContent = 'AEGIS SHATTERS · THE WALL IS REFUSED'; powerupsAnnounce.hidden = false; }
+
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    const centeredIds = [
+      'gate-slice-telegraph', 'sex-magick-ascent-banner', 'sex-magick-missions',
+      'sex-magick-missions-announce', 'sex-magick-powerups-announce'
+    ];
+    const rects: Record<string, any> = {};
+    for (const id of centeredIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      rects[id] = { hidden: el.hidden, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+    }
+
+    const visible = Object.keys(rects).filter(id => !rects[id].hidden);
+    const overlaps: string[] = [];
+    for (let i = 0; i < visible.length; i += 1) {
+      for (let j = i + 1; j < visible.length; j += 1) {
+        const a = rects[visible[i]];
+        const b = rects[visible[j]];
+        const overlap = a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        if (overlap) overlaps.push(`${visible[i]} x ${visible[j]}`);
+      }
+    }
+
+    return { rects, visible, overlaps, viewport: { width: innerWidth, height: innerHeight } };
+  });
+
+  // At minimum the persistent missions list and the telegraph must both be
+  // reachable in this scenario - if neither is visible, the test proves nothing.
+  expect(result.visible.length).toBeGreaterThanOrEqual(2);
+  expect(result.overlaps, `overlaps found: ${JSON.stringify(result.overlaps)}\nrects: ${JSON.stringify(result.rects)}`).toEqual([]);
   expect(pageErrors).toEqual([]);
 });
 
