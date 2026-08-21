@@ -136,8 +136,13 @@ try {
   assert.equal(restoredMotion.band, 'MALKUTH');
   assert.ok(Math.abs((restoredMotion.speed / boot.baselineParticle.speed) - 0.62) < 0.001, 'leaving STILLNESS restores authored band motion from baseline');
 
+  // Derived from the ladder, not pinned to it. D-067 re-spaced the bands and
+  // this literal (6) silently stopped reaching YESOD, so the wait timed out
+  // rather than reporting a wrong band - the same brittleness that milestone
+  // fixed in four other suites.
   await page.evaluate(() => {
-    game.gateSliceState.gatesCleared = 6;
+    const bands = window.SexMagickGateSlice.BANDS;
+    game.gateSliceState.gatesCleared = bands.find(band => band.name === 'YESOD').gateThreshold;
     game.checkLevel();
   });
   await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'YESOD');
@@ -153,8 +158,13 @@ try {
   assert.equal(Number(yesod.scanlineOpacity), 0.28);
   assert.equal(Number(yesod.vignetteOpacity), 0.68);
 
+  // Derived from the ladder, not pinned to it. D-067 re-spaced the bands and
+  // this literal (32) silently stopped reaching GEBURAH, so the wait timed out
+  // rather than reporting a wrong band - the same brittleness that milestone
+  // fixed in four other suites.
   await page.evaluate(() => {
-    game.gateSliceState.gatesCleared = 32;
+    const bands = window.SexMagickGateSlice.BANDS;
+    game.gateSliceState.gatesCleared = bands.find(band => band.name === 'GEBURAH').gateThreshold;
     game.checkLevel();
   });
   await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'GEBURAH');
@@ -163,8 +173,13 @@ try {
   assert.equal(geburah.profile.temperament, 'martial / cut / pressure');
   assert.ok(geburah.profile.visual.particleSpeed > 1);
 
+  // Derived from the ladder, not pinned to it. D-067 re-spaced the bands and
+  // this literal (120) silently stopped reaching KETHER, so the wait timed out
+  // rather than reporting a wrong band - the same brittleness that milestone
+  // fixed in four other suites.
   await page.evaluate(() => {
-    game.gateSliceState.gatesCleared = 120;
+    const bands = window.SexMagickGateSlice.BANDS;
+    game.gateSliceState.gatesCleared = bands.find(band => band.name === 'KETHER').gateThreshold;
     game.checkLevel();
   });
   await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'KETHER');

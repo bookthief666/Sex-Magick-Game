@@ -29,6 +29,14 @@
   // and lost the backgrounds; they are asserted in the browser suite.
   const ARTWORK_ALPHA = 0.6;
 
+  // M40.5, the Void's own treatment. Dimmer than a level background so the
+  // picture reads as something glimpsed in the dark and the play field still
+  // sits clearly on top of it, and pushed in close enough that the frame is a
+  // fragment rather than a whole photograph.
+  const VOID_ARTWORK_ALPHA = 0.34;
+  const VOID_ZOOM = 1.42;
+  const VOID_ZOOM_BREATH = 0.06;
+
   let installed = false;
   let installTimer = null;
   let fieldSeed = 0x6d2b79f5;
@@ -728,7 +736,7 @@
    * is an error card, not artwork, so it never draws.
    */
   function drawLevelArtwork(gameInstance) {
-    if (gameInstance.voidMode || gameInstance.__gateSliceVoidActive) return false;
+    const inVoid = Boolean(gameInstance.voidMode || gameInstance.__gateSliceVoidActive);
     const level = activeLevel(gameInstance);
     const image = level?.img;
     if (!level?.loaded || !image || !image.complete) return false;
@@ -737,28 +745,103 @@
     const ctx = gameInstance.ctx;
     const canvas = gameInstance.canvas;
     try {
+      // M40.5: the Void used to return here, which is the single line that made
+      // the section a black screen. It now draws the same picture pushed in
+      // close, so the wager happens somewhere rather than nowhere.
+      const zoom = inVoid ? voidZoom(gameInstance) : 1;
       const canvasRatio = canvas.width / canvas.height;
       const imageRatio = image.width / image.height;
-      let drawWidth, drawHeight, drawX, drawY;
+      let drawWidth, drawHeight;
       if (canvasRatio > imageRatio) {
         drawHeight = canvas.height;
         drawWidth = image.width * (drawHeight / image.height);
-        drawX = (canvas.width - drawWidth) / 2;
-        drawY = 0;
       } else {
         drawWidth = canvas.width;
         drawHeight = image.height * (drawWidth / image.width);
-        drawX = 0;
-        drawY = (canvas.height - drawHeight) / 2;
       }
+      drawWidth *= zoom;
+      drawHeight *= zoom;
+      // Recentred rather than anchored, so the zoom pushes out of the middle of
+      // the frame on both axes. At zoom 1 this is the original's maths exactly,
+      // which is what keeps the M21 artwork contract intact.
+      const drawX = (canvas.width - drawWidth) / 2;
+      const drawY = (canvas.height - drawHeight) / 2;
+
       ctx.save();
-      ctx.globalAlpha = ARTWORK_ALPHA;
-      ctx.filter = 'blur(1px)';
+      ctx.globalAlpha = inVoid ? VOID_ARTWORK_ALPHA : ARTWORK_ALPHA;
+      ctx.filter = inVoid ? 'blur(3px) saturate(0.55)' : 'blur(1px)';
       ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
       ctx.filter = 'none';
       ctx.restore();
+
+      if (inVoid) drawVoidEdges(gameInstance, image, drawX, drawY, drawWidth, drawHeight);
       return true;
     } catch (_error) {
+      return false;
+    }
+  }
+
+  /**
+   * A slow breath in and out, so the Void is never quite still.
+   *
+   * Driven off the frame counter rather than wall time, so a seeded replay and
+   * a visual baseline capture both land on the same zoom for the same frame.
+   */
+  function voidZoom(gameInstance) {
+    const frames = finite(gameInstance?.frames, 0);
+    return VOID_ZOOM + (Math.sin(frames * 0.008) * VOID_ZOOM_BREATH);
+  }
+
+  /**
+   * The electric outlines running along the figures.
+   *
+   * Per frame this is one composite of a cached layer plus one narrow strip -
+   * the Sobel pass itself ran once, on the first Void that used this picture,
+   * and `void-edge-layer.js` owns that caching. Everything here is guarded and
+   * silent on failure: the fallback is a Void that merely looks less good, and
+   * a thrown error inside the draw loop would cost the frame instead.
+   */
+  function drawVoidEdges(gameInstance, image, drawX, drawY, drawWidth, drawHeight) {
+    const edges = root.SexMagickVoidEdgeLayer;
+    if (!edges) return false;
+    const layer = edges.getEdgeLayer(image);
+    if (!layer || !layer.height) return false;
+
+    const ctx = gameInstance.ctx;
+    const canvas = gameInstance.canvas;
+    const frames = finite(gameInstance?.frames, 0);
+
+    try {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      // A slow drift over the cyan baked into the layer, so the outlines change
+      // colour across the section without a second per-pixel pass.
+      ctx.filter = 'hue-rotate(' + ((frames * 0.6) % 360) + 'deg)';
+      ctx.globalAlpha = 0.5;
+      ctx.drawImage(layer, drawX, drawY, drawWidth, drawHeight);
+
+      // A band of current travelling down the silhouettes: the same layer
+      // again, but only a slice of it and brighter. One extra drawImage of a
+      // thin strip, rather than a second effect with its own vocabulary.
+      const bandHeight = Math.max(24, canvas.height * 0.16);
+      const travel = (frames * 3.2) % (canvas.height + bandHeight);
+      const sourceTop = ((travel - bandHeight - drawY) / drawHeight) * layer.height;
+      const sourceHeight = (bandHeight / drawHeight) * layer.height;
+      const clippedTop = Math.max(0, sourceTop);
+      const clippedHeight = Math.min(layer.height - clippedTop, sourceHeight - (clippedTop - sourceTop));
+      if (clippedHeight > 0 && clippedTop < layer.height) {
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(
+          layer,
+          0, clippedTop, layer.width, clippedHeight,
+          drawX, drawY + ((clippedTop / layer.height) * drawHeight),
+          drawWidth, (clippedHeight / layer.height) * drawHeight
+        );
+      }
+      ctx.restore();
+      return true;
+    } catch (_error) {
+      try { ctx.restore(); } catch (_restoreError) {}
       return false;
     }
   }

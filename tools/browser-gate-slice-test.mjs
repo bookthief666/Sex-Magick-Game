@@ -803,11 +803,89 @@ async function main() {
         }
         game.__gateSliceVoidActive = false;
 
+        // --- M40.5: the Void draws, and the Sobel pass does not ------------
+        // The effect is affordable only because the edge layer is built once
+        // per background and composited thereafter. A cache that silently
+        // missed would look identical on screen and cost a frame every frame,
+        // which is exactly the class of regression D-060 was chasing.
+        const edges = window.SexMagickVoidEdgeLayer;
+        let voidDraw = null;
+        if (edges) {
+          edges.clearCache();
+          const buildsBefore = edges.buildCount();
+
+          // Reads back a thumbnail of the frame. The Void's whole complaint was
+          // that it rendered black, so "not black" is the one thing worth
+          // measuring in pixels rather than inferring from call counts.
+          const sample = () => {
+            try {
+              const probe = document.createElement('canvas');
+              probe.width = 60; probe.height = 60;
+              const probeCtx = probe.getContext('2d');
+              probeCtx.drawImage(game.canvas, 0, 0, 60, 60);
+              const data = probeCtx.getImageData(0, 0, 60, 60).data;
+              let sum = 0, max = 0;
+              for (let i = 0; i < data.length; i += 4) {
+                const v = data[i] + data[i + 1] + data[i + 2];
+                sum += v; if (v > max) max = v;
+              }
+              return { mean: Math.round(sum / (60 * 60)), max };
+            } catch (error) { return String(error && error.message); }
+          };
+
+          game.voidMode = true;
+          game.__gateSliceVoidActive = true;
+          // drawHyperspaceTunnel rather than drawScene: occult-field-runtime.js
+          // replaces this method, and its replacement is what owns the artwork
+          // and the M40.5 Void treatment. Calling it directly tests the
+          // installed path with no dependence on the rest of the frame.
+          for (let f = 0; f < 120; f += 1) {
+            game.frames += 1;
+            game.drawHyperspaceTunnel('#00ffff');
+          }
+          // Captured before anything else touches the module, so this counts
+          // only what the 120 drawn frames did. Probing first and subtracting
+          // later confused the two and made the number unreadable.
+          const buildsFromDrawing = edges.buildCount() - buildsBefore;
+          // Is anything at all being painted? A pure-black Void frame means the
+          // artwork branch never ran; non-black means it ran and only the edge
+          // layer is missing. That distinction is what to chase next.
+          const voidPixels = sample();
+          game.__gateSliceVoidActive = false;
+          game.voidMode = false;
+          const lvl = game.gameLevels[game.currentLevelIdx] || {};
+          const resolved = game.levelImage(lvl);
+          voidDraw = {
+            builds: buildsFromDrawing,
+            cached: edges.cacheSize(),
+            maxEdgeDim: edges.MAX_EDGE_DIM,
+            maxCached: edges.MAX_CACHED_LAYERS,
+            // Without these the builds assertion can pass at zero simply
+            // because the background never loaded, which is a green test that
+            // proves nothing.
+            // The copy's own fields are deliberately reported alongside the
+            // resolved image: they are what a shallow snapshot taken at Start
+            // sees, and copyLoaded being false while resolvedImage is true is
+            // the bug this milestone fixed.
+            copyLoaded: Boolean(lvl.loaded),
+            resolvedImage: Boolean(resolved),
+            naturalWidth: resolved ? resolved.naturalWidth : 0,
+            levelIdx: game.currentLevelIdx,
+            levelCount: game.gameLevels.length,
+            poolLoaded: MASTER_POOL.filter(entry => entry && entry.loaded).length,
+            resolvedNaturalWidth: resolved ? resolved.naturalWidth : 0,
+            voidPixels,
+            occultFieldInstalled: Boolean(window.__SEX_MAGICK_OCCULT_FIELD__),
+            backgroundEntryLoaded: Boolean(window.__SEX_MAGICK_GATE_SLICE__?.getBackgroundEntry?.()?.loaded)
+          };
+        }
+
         return {
           modules,
           finite,
           perfect,
           missAccounting,
+          voidDraw,
           wager: { frames: wagerFrames, sawConstellation: sawConstellationDuringWager }
         };
       })();
@@ -855,6 +933,34 @@ async function main() {
     assert.equal(
       constellation.missAccounting.after, constellation.missAccounting.before + 1,
       'a star retired twice - once by the splice, once by the compaction filter - must break the streak only once'
+    );
+
+    assert.ok(constellation.voidDraw, 'tools/void-edge-layer.js must load from index.html');
+    // Guards the two assertions below against passing on a Void that never drew:
+    // the first attempt at this measured zero builds and looked green, because
+    // the background had not loaded and nothing ran at all.
+    assert.ok(
+      constellation.voidDraw.occultFieldInstalled && constellation.voidDraw.backgroundEntryLoaded,
+      'the artwork path must be live before its Void behaviour can be measured'
+    );
+    assert.ok(
+      constellation.voidDraw.builds >= 1,
+      'the Void must build an edge layer at all - zero means it never drew'
+    );
+    // One Sobel pass across 120 drawn Void frames. Anything above a handful
+    // means the cache is missing and the pass has become a per-frame cost.
+    assert.ok(
+      constellation.voidDraw.builds <= 2,
+      `the edge layer must be built once per background, saw ${constellation.voidDraw.builds} builds across 120 frames`
+    );
+    assert.ok(
+      constellation.voidDraw.cached <= constellation.voidDraw.maxCached,
+      `the layer cache must stay bounded, saw ${constellation.voidDraw.cached}`
+    );
+    // The milestone's actual claim, in pixels: the Void is not a black screen.
+    assert.ok(
+      constellation.voidDraw.voidPixels && constellation.voidDraw.voidPixels.max > 0,
+      `the Void must render something, saw ${JSON.stringify(constellation.voidDraw.voidPixels)}`
     );
 
     // Guards against the assertion below passing vacuously on zero sampled frames.

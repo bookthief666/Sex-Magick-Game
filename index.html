@@ -1209,6 +1209,30 @@
                 }, 500);
             }
             
+            /**
+             * The background image for a level entry.
+             *
+             * `prepareLevels` builds `gameLevels` with `{ ...lvl }`, and the
+             * Gate slice copies those again - both shallow, both taken when the
+             * player presses Start. An image that finishes decoding after that
+             * moment sets `img` and `loaded` on the *pool* object, and the
+             * copies never see it, so that background is silently missing for
+             * the whole run. That is not hypothetical: `finishLoading()` has an
+             * eight-second failsafe, so a phone that has not pulled all 75
+             * images by then starts a session whose copies are frozen empty.
+             *
+             * Resolving through the pool by id makes the copies views onto the
+             * live entry rather than snapshots of it, and keeps working however
+             * many times the array is re-copied downstream.
+             */
+            levelImage(level) {
+                if (!level) return null;
+                if (level.loaded && level.img && level.img.complete) return level.img;
+                const source = MASTER_POOL.find(entry => entry.id === level.id);
+                if (source && source.loaded && source.img && source.img.complete) return source.img;
+                return null;
+            }
+
             prepareLevels() {
                 let shuffled = [...MASTER_POOL];
                 for (let i = shuffled.length - 1; i > 0; i--) {
@@ -1552,11 +1576,20 @@
                 optimizedShadow.clear(ctx);
                 ctx.globalAlpha = 1;
                 
+                // NOTE: in the shipped build this branch does not run.
+                // occult-field-runtime.js wraps drawHyperspaceTunnel and calls
+                // the original with the band level's `loaded` forced false, so
+                // that it can redraw the artwork itself at full device
+                // resolution. The live artwork path - including the Void
+                // treatment added in M40.5 - is `drawLevelArtwork()` there.
+                // This remains the fallback for a page where that runtime never
+                // installs.
                 const lvl = this.gameLevels[this.currentLevelIdx];
-                if (!this.voidMode && lvl.loaded && lvl.img && lvl.img.complete) {
+                const levelImage = !this.voidMode ? this.levelImage(lvl) : null;
+                if (levelImage) {
                     ctx.globalAlpha = 0.6;
                     try {
-                        const img = lvl.img;
+                        const img = levelImage;
                         const canvasRatio = this.canvas.width / this.canvas.height;
                         const imgRatio = img.width / img.height;
                         let drawWidth, drawHeight, drawX, drawY;
@@ -2441,6 +2474,7 @@
     -->
     <script src="tools/polygram.js"></script>
     <script src="tools/void-constellation.js"></script>
+    <script src="tools/void-edge-layer.js"></script>
     <!-- SEX MAGICK 2.0 FIXED-STEP RUNTIME -->
     <script src="tools/fixed-step-clock.js"></script>
     <script src="tools/fixed-step-prototype.js"></script>

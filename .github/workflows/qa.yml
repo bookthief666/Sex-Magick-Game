@@ -108,6 +108,8 @@ jobs:
           node --check tools/test-polygram.js
           node --check tools/void-constellation.js
           node --check tools/test-void-constellation.js
+          node --check tools/void-edge-layer.js
+          node --check tools/test-void-edge-layer.js
           node --check tools/test-gallery-source.mjs
           node --check tools/gallery-source.mjs
           node --check tools/fetch-gallery.mjs
@@ -171,6 +173,7 @@ jobs:
           node tools/test-notice-slot.js
           node tools/test-polygram.js
           node tools/test-void-constellation.js
+          node tools/test-void-edge-layer.js
           node tools/test-gallery-source.mjs
 
       - name: Run fixed-step Chrome integration
