@@ -160,7 +160,10 @@ try {
   assert.notEqual(hex.state, 'START');
   assert.equal(hex.gateState, true, 'ordinary HEX start must now create Gate/Gnosis state');
   assert.equal(hex.missions, 3, 'three persistent missions must be active on the ordinary product path');
-  assert.ok(hex.powerups >= 2, 'power-up ladder must be installed on the ordinary product path');
+  // D-062 retired DISSOLUTION, so the ladder is AEGIS alone. This assertion
+  // still said ">= 2" and had simply not been run since; it is the presence of
+  // the ladder on the ordinary product path that matters here, not its length.
+  assert.ok(hex.powerups >= 1, 'power-up ladder must be installed on the ordinary product path');
   assert.equal(hex.missionHudHidden, false, 'mission HUD must surface during normal HEX play');
 
   await open.page.evaluate(() => game.returnToMenu());

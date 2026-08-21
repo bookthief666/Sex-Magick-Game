@@ -490,13 +490,13 @@
       #gate-slice-telegraph {
         position: fixed;
         left: 50%;
-        /* D-064: was 230px (D-062: 6px). D-062 moved this off the corridor but
-           never checked it against the *persistent* #sex-magick-missions list
-           (bottom:46px, up to ~70px tall for three rows) sitting right beneath
-           it - on the owner's device the two visibly overlapped the moment a
-           gate transition and an active mission list coincided, which is most
-           of ordinary play. 128px clears missions' worst-case top with a 12px
-           margin. See D-064 for the full five-element stack this belongs to. */
+        /* D-065: the shared transient-notice band. Every transient message in
+           the game sits at exactly this offset and notice-slot.js guarantees
+           only one is visible at a time, so a single line of text at a small
+           fixed offset can never migrate into the corridor - which is what
+           D-064's "stack them upward" approach did (304px from the bottom of a
+           643px viewport is 47% up: the middle). Clears the persistent
+           #sex-magick-missions list (bottom:46px, up to ~70px tall). */
         bottom: max(128px, calc(env(safe-area-inset-bottom) + 122px));
         transform: translateX(-50%);
         z-index: 33;
@@ -580,10 +580,23 @@
     danger: '#ff2f6d'
   };
 
+
+  /**
+   * D-065: hand the shared transient-notice slot to this element before showing
+   * it, so no two notices are ever on screen at once. Optional by design - the
+   * module is a plain script and a page that somehow loads without it still
+   * announces, it just loses the mutual exclusion.
+   */
+  function claimNoticeSlot(id) {
+    try { root.SexMagickNoticeSlot?.register(id); root.SexMagickNoticeSlot?.claim(id); }
+    catch (_error) { /* never let slot arbitration break an announce */ }
+  }
+
   function setTelegraph(text, durationMs = 1100, kind = 'info') {
     const element = document.getElementById('gate-slice-telegraph');
     if (!element) return;
     element.textContent = text;
+    claimNoticeSlot('gate-slice-telegraph');
     element.hidden = false;
     element.style.setProperty('--gate-slice-telegraph-flash', TELEGRAPH_FLASH_COLORS[kind] || TELEGRAPH_FLASH_COLORS.info);
     // Restart the flash animation even if a telegraph of the same kind is already

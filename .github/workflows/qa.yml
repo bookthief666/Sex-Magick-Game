@@ -102,6 +102,8 @@ jobs:
           node --check tools/test-player-reachability.js
           node --check tools/test-compositional-reachability.js
           node --check tools/test-m7-review-diagnostics.js
+          node --check tools/notice-slot.js
+          node --check tools/test-notice-slot.js
           node --check tools/test-gallery-source.mjs
           node --check tools/gallery-source.mjs
           node --check tools/fetch-gallery.mjs
@@ -162,6 +164,7 @@ jobs:
           node tools/test-leaderboard-runtime.js
           node tools/test-occult-art-runtime.js
           node tools/test-m7-review-diagnostics.js
+          node tools/test-notice-slot.js
           node tools/test-gallery-source.mjs
 
       - name: Run fixed-step Chrome integration

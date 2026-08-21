@@ -184,21 +184,28 @@
          See D-060. */
       #sex-magick-ascent-banner {
         position: fixed;
-        /* D-064 (D-062 was 74px, itself down from D-060's 206px): 74px cleared
-           the telegraph alone but not the full stack beneath it once missions,
-           the two toast rows, and the telegraph's own D-064 move are accounted
-           for - measured overlap on the owner's device was a real ~21px between
-           this banner and #sex-magick-missions. 304px clears
-           #sex-magick-powerups-announce's worst-case top (~292px) with a 12px
-           margin. This is the tallest, rarest (Sephirah-change only) element in
-           the stack, so it sits highest by design. */
-        bottom: max(304px, calc(env(safe-area-inset-bottom) + 296px));
+        /* D-065: the shared transient-notice band. Every transient message in
+           the game sits at exactly this offset and notice-slot.js guarantees
+           only one is visible at a time, so a single line of text at a small
+           fixed offset can never migrate into the corridor - which is what
+           D-064's "stack them upward" approach did (304px from the bottom of a
+           643px viewport is 47% up: the middle). Clears the persistent
+           #sex-magick-missions list (bottom:46px, up to ~70px tall). */
+        bottom: max(128px, calc(env(safe-area-inset-bottom) + 122px));
         left: 50%;
         z-index: 34;
         min-width: min(430px, calc(100vw - 44px));
         max-width: calc(100vw - 32px);
         transform: translateX(-50%);
-        padding: 10px 18px 12px;
+        /* D-065: one inline row, not three stacked lines. This was the largest
+           thing on screen at a moment the player is mid-corridor; the ceremony
+           now lives in the type and the accent rather than in the footprint. */
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 10px;
+        white-space: nowrap;
+        padding: 7px 16px;
         border-top: 1px solid var(--sm-ascent-accent, #00e5ff);
         border-bottom: 1px solid var(--sm-ascent-accent, #00e5ff);
         background: linear-gradient(90deg, transparent, rgba(0,0,0,.78) 16%, rgba(0,0,0,.78) 84%, transparent);
@@ -218,15 +225,13 @@
         opacity: .68;
       }
       #sex-magick-ascent-name {
-        margin-top: 3px;
-        font: 18px/1.2 'Orbitron', monospace;
-        letter-spacing: 4px;
+        font: 14px/1.2 'Orbitron', monospace;
+        letter-spacing: 3px;
         color: var(--sm-ascent-accent, #00e5ff);
       }
       #sex-magick-ascent-subtitle {
-        margin-top: 2px;
-        font: 9px/1.2 'Orbitron', monospace;
-        letter-spacing: 3px;
+        font: 8px/1.2 'Orbitron', monospace;
+        letter-spacing: 2px;
         opacity: .78;
       }
       @keyframes sm-ascent-arrive {
@@ -247,10 +252,19 @@
       }
       @media (max-width: 430px) {
         #sex-magick-ascent-banner {
-          top: max(100px, calc(env(safe-area-inset-top) + 84px));
+          /* D-065: this rule used to also set  top: max(100px, ...)  , left over
+             from D-060's original top-anchored design. Once D-060 switched the
+             base rule to bottom, a narrow screen got *both* - and an element
+             with a top and a bottom and no height stretches between them. On
+             the owner's Fold cover screen (368px) that produced a 284px-tall
+             empty box spanning 14%-55% of the display: the giant rectangle in
+             the 2026-08-21 screenshot. Four fixes missed it because every audit
+             grepped for bottom:, and this one said top:. Narrow screens get
+             tighter padding here and nothing else - vertical position belongs
+             to the base rule alone. */
           padding-inline: 10px;
         }
-        #sex-magick-ascent-name { font-size: 15px; letter-spacing: 3px; }
+        #sex-magick-ascent-name { font-size: 12px; letter-spacing: 2px; }
         #sex-magick-ascent-subtitle { font-size: 8px; letter-spacing: 2px; }
       }
     `;
@@ -355,6 +369,18 @@
     return Object.freeze({ progress, theme });
   }
 
+
+  /**
+   * D-065: hand the shared transient-notice slot to this element before showing
+   * it, so no two notices are ever on screen at once. Optional by design - the
+   * module is a plain script and a page that somehow loads without it still
+   * announces, it just loses the mutual exclusion.
+   */
+  function claimNoticeSlot(id) {
+    try { root.SexMagickNoticeSlot?.register(id); root.SexMagickNoticeSlot?.claim(id); }
+    catch (_error) { /* never let slot arbitration break an announce */ }
+  }
+
   function announceBand(gameInstance, index, options = {}) {
     if (visualQaActive() || lowLevelDiagnosticActive()) return null;
     const { banner } = ensureHud();
@@ -368,6 +394,7 @@
     document.getElementById('sex-magick-ascent-kicker').textContent = options.initial ? 'RITE OF HEXAGRAM' : 'RITUAL ASCENT';
     document.getElementById('sex-magick-ascent-name').textContent = theme.name;
     document.getElementById('sex-magick-ascent-subtitle').textContent = theme.meaning;
+    claimNoticeSlot('sex-magick-ascent-banner');
     banner.hidden = false;
 
     // Alternate between two visually identical keyframes. Reflow while the base

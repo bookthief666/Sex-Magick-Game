@@ -355,10 +355,14 @@
       #sex-magick-powerups-announce {
         position: fixed;
         left: 50%;
-        /* D-064: raised from 120px to clear #sex-magick-missions-announce's
-           new 200px position (worst-case top ~240px) - an AEGIS absorb and a
-           mission completing can land in the same frame. */
-        bottom: max(252px, calc(env(safe-area-inset-bottom) + 242px));
+        /* D-065: the shared transient-notice band. Every transient message in
+           the game sits at exactly this offset and notice-slot.js guarantees
+           only one is visible at a time, so a single line of text at a small
+           fixed offset can never migrate into the corridor - which is what
+           D-064's "stack them upward" approach did (304px from the bottom of a
+           643px viewport is 47% up: the middle). Clears the persistent
+           #sex-magick-missions list (bottom:46px, up to ~70px tall). */
+        bottom: max(128px, calc(env(safe-area-inset-bottom) + 122px));
         transform: translateX(-50%);
         z-index: 29;
         padding: 7px 14px;
@@ -432,10 +436,23 @@
     hud.hidden = !aegis.unlocked;
   }
 
+
+  /**
+   * D-065: hand the shared transient-notice slot to this element before showing
+   * it, so no two notices are ever on screen at once. Optional by design - the
+   * module is a plain script and a page that somehow loads without it still
+   * announces, it just loses the mutual exclusion.
+   */
+  function claimNoticeSlot(id) {
+    try { root.SexMagickNoticeSlot?.register(id); root.SexMagickNoticeSlot?.claim(id); }
+    catch (_error) { /* never let slot arbitration break an announce */ }
+  }
+
   function announce(text) {
     if (visualQaActive()) return;
     const { announce: element } = ensureHud();
     element.textContent = text;
+    claimNoticeSlot('sex-magick-powerups-announce');
     element.hidden = false;
     if (announceTimer) clearTimeout(announceTimer);
     announceTimer = setTimeout(() => {

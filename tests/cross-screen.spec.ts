@@ -261,15 +261,23 @@ test('every centered transient overlay clears every other one, worst case', asyn
       await new Promise(resolve => setTimeout(resolve, 20));
     }
 
-    const telegraph = document.getElementById('gate-slice-telegraph');
-    if (telegraph) {
-      telegraph.textContent = 'GATE OPEN  ·  ENTER → VOID ×10  /  PASS → BANK ×3';
-      telegraph.hidden = false;
-    }
-    const missionsAnnounce = document.getElementById('sex-magick-missions-announce');
-    if (missionsAnnounce) { missionsAnnounce.textContent = 'COURT THE EDGE COMPLETE'; missionsAnnounce.hidden = false; }
-    const powerupsAnnounce = document.getElementById('sex-magick-powerups-announce');
-    if (powerupsAnnounce) { powerupsAnnounce.textContent = 'AEGIS SHATTERS · THE WALL IS REFUSED'; powerupsAnnounce.hidden = false; }
+    // D-065: reveal each notice the way the runtimes do - register with the
+    // shared slot and claim it - rather than writing `.hidden = false` directly.
+    // The D-064 version of this test bypassed the announce path entirely, which
+    // is exactly why it could pass while four notices piled up on the owner's
+    // screen. Going through the slot is what makes this test able to fail.
+    const slot = (window as any).SexMagickNoticeSlot;
+    const show = (id: string, text?: string) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (text !== undefined) el.textContent = text;
+      slot?.register(id);
+      slot?.claim(id);
+      el.hidden = false;
+    };
+    show('gate-slice-telegraph', 'GATE OPEN  ·  ENTER → VOID ×10  /  PASS → BANK ×3');
+    show('sex-magick-missions-announce', 'COURT THE EDGE COMPLETE');
+    show('sex-magick-powerups-announce', 'AEGIS SHATTERS · THE WALL IS REFUSED');
 
     await new Promise(resolve => setTimeout(resolve, 150));
 
@@ -282,7 +290,7 @@ test('every centered transient overlay clears every other one, worst case', asyn
       const el = document.getElementById(id);
       if (!el) continue;
       const r = el.getBoundingClientRect();
-      rects[id] = { hidden: el.hidden, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+      rects[id] = { hidden: el.hidden, top: r.top, bottom: r.bottom, left: r.left, right: r.right, height: r.height };
     }
 
     const visible = Object.keys(rects).filter(id => !rects[id].hidden);
@@ -299,9 +307,31 @@ test('every centered transient overlay clears every other one, worst case', asyn
     return { rects, visible, overlaps, viewport: { width: innerWidth, height: innerHeight } };
   });
 
-  // At minimum the persistent missions list and the telegraph must both be
-  // reachable in this scenario - if neither is visible, the test proves nothing.
-  expect(result.visible.length).toBeGreaterThanOrEqual(2);
+  // D-065 made this structural rather than tuned: notice-slot.js guarantees at
+  // most one *transient* notice is visible, so overlap between them is not
+  // merely absent, it is unreachable. The persistent missions list may also be
+  // up, so the visible set is at most the one notice plus that list.
+  const transientIds = [
+    'gate-slice-telegraph', 'sex-magick-ascent-banner',
+    'sex-magick-missions-announce', 'sex-magick-powerups-announce'
+  ];
+  const visibleTransients = result.visible.filter((id: string) => transientIds.includes(id));
+  expect(
+    visibleTransients.length,
+    `more than one transient notice on screen: ${JSON.stringify(visibleTransients)}`
+  ).toBeLessThanOrEqual(1);
+
+  // And every notice stays in the bottom fifth on every geometry - the property
+  // four previous fixes each believed they had and did not.
+  for (const id of result.visible) {
+    const rect = result.rects[id];
+    expect(rect.height, `${id} is stretched (${rect.height}px) - a top+bottom pair`).toBeLessThan(90);
+    expect(
+      rect.top / result.viewport.height,
+      `${id} sits at ${Math.round(rect.top / result.viewport.height * 100)}% - inside the corridor`
+    ).toBeGreaterThan(0.60);
+  }
+
   expect(result.overlaps, `overlaps found: ${JSON.stringify(result.overlaps)}\nrects: ${JSON.stringify(result.rects)}`).toEqual([]);
   expect(pageErrors).toEqual([]);
 });

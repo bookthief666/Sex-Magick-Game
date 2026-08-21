@@ -237,6 +237,30 @@
 // Waits for the Gate slice before installing, so its gameOver wrapper is the
 // outermost one and still sees __gateSliceVoidActive when the shield decides
 // whether to absorb.
+// D-065: must load before any runtime that raises a transient notice, so the
+// first announce of a session already has the slot arbiter to claim. It is a
+// passive registry with no dependency on Game, so loading it first is free -
+// and every caller treats it as optional anyway, so a failed load degrades to
+// the pre-D-065 behaviour rather than breaking an announce.
+(function bootstrapNoticeSlot() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickNoticeSlot ||
+    document.querySelector('script[data-sex-magick-notice-slot]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./notice-slot.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickNoticeSlot = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Notice slot failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
 (function bootstrapPowerupRuntime() {
   'use strict';
 
