@@ -344,6 +344,117 @@ try {
     assert.ok(band.tighterBy > 0, `a portal on ${band.id} must be tighter than the band it interrupts`);
   }
 
+  // ---------------------------------------------------------------------------
+  // Orbs pay in shields.
+  //
+  // The interesting case is the cap: `awardCharge` has nowhere to put a fourth
+  // charge, and throwing the progress away there would quietly punish a player for
+  // collecting while full. Asserted explicitly, because it is the branch that is
+  // never hit in casual testing and always hit in a good run.
+  // ---------------------------------------------------------------------------
+  const orbs = await evaluate(`(() => {
+    game.gameMode = 'HEX';
+    game.startGame();
+    const powerups = window.__SEX_MAGICK_POWERUPS__;
+    const charges = () => powerups.getSnapshot()?.charges?.aegis ?? null;
+
+    const collectOne = () => {
+      const orb = new Orb(game.player.x, game.player.y, null);
+      game.collectibles.push(orb);
+      const before = game.score;
+      game.updateGameObjects();
+      return { scoreDelta: game.score - before, charges: charges(), progress: game.orbShieldProgress };
+    };
+
+    const start = { charges: charges(), progress: game.orbShieldProgress };
+    const steps = [collectOne(), collectOne(), collectOne()];
+
+    // Fill to the cap, then keep collecting.
+    while ((charges() ?? 0) < 3) powerups.grant('aegis', 1);
+    const atCap = charges();
+    const overflow = [collectOne(), collectOne(), collectOne()];
+    const afterOverflow = { charges: charges(), progress: game.orbShieldProgress };
+
+    return { start, steps, atCap, overflow, afterOverflow, exposed: typeof powerups.awardCharge };
+  })()`);
+
+  console.log('orb shields:', JSON.stringify(orbs));
+  assert.equal(orbs.exposed, 'function', 'the orb award path must be a real API, not a test affordance');
+  assert.equal(orbs.start.charges, 0, 'a fresh run starts with no shields');
+  assert.ok(orbs.steps.every(step => step.scoreDelta === 0),
+    'collecting an orb must no longer move the score - it pays in shields now');
+  assert.equal(orbs.steps[0].charges, 0, 'one orb is not a shield');
+  assert.equal(orbs.steps[1].charges, 0, 'two orbs are not a shield');
+  assert.equal(orbs.steps[2].charges, 1, 'the third orb must grant exactly one AEGIS charge');
+  assert.equal(orbs.steps[2].progress, 0, 'and must consume the three that paid for it');
+
+  assert.equal(orbs.atCap, 3, 'the cap must actually be reached for the overflow case to mean anything');
+  assert.equal(orbs.afterOverflow.charges, 3, 'a full bank must stay full');
+  assert.equal(orbs.afterOverflow.progress, 3,
+    'progress collected at the cap must be held, not discarded - the third orb is deferred, never wasted');
+
+  // ---------------------------------------------------------------------------
+  // The tap melody: in key, fresh per run, and reaching MONAS as well as HEX.
+  // ---------------------------------------------------------------------------
+  const melody = await evaluate(`(() => {
+    game.gameMode = 'HEX';
+    game.startGame();
+    const first = [...SFX.melody];
+    game.startGame();
+    const second = [...SFX.melody];
+
+    const scale = new Set(SFX.MELODY_SCALE);
+    const inScale = first.concat(second).every(note => scale.has(note));
+    const leaps = [];
+    for (let i = 1; i < first.length; i += 1) {
+      leaps.push(Math.abs(SFX.MELODY_SCALE.indexOf(first[i]) - SFX.MELODY_SCALE.indexOf(first[i - 1])));
+    }
+
+    // Advancing must walk the phrase rather than repeat a note.
+    SFX.melodyIndex = 0;
+    const walked = [SFX.melodyIndex];
+    for (let i = 0; i < 4; i += 1) { SFX.playMelodyNote(); walked.push(SFX.melodyIndex); }
+
+    return {
+      length: first.length, inScale, maxLeap: Math.max(...leaps),
+      differs: JSON.stringify(first) !== JSON.stringify(second),
+      walked, gain: SFX.MELODY_GAIN
+    };
+  })()`);
+
+  console.log('tap melody:', JSON.stringify(melody));
+  assert.ok(melody.length >= 8, 'a phrase must be long enough not to read as a loop');
+  assert.equal(melody.inScale, true, 'every note must come from the scale - no walk may land out of key');
+  assert.ok(melody.maxLeap <= 2, `the walk must move by small intervals, not jump (max ${melody.maxLeap})`);
+  assert.equal(melody.differs, true, 'each run must draw its own phrase');
+  assert.deepEqual(melody.walked, [0, 1, 2, 3, 4], 'each tap must advance one step through the phrase');
+  assert.ok(melody.gain < 0.06, `the tap must stay under the music (gain ${melody.gain})`);
+
+  // MONAS is a hold rite whose jump() is a no-op, so the note has to arrive by a
+  // different route or MONAS would be silent on input.
+  const monasNote = await evaluate(`(() => {
+    game.gameMode = 'MONAS';
+    game.startGame();
+    game.state = GameState.PLAYING;
+    let calls = 0;
+    const real = SFX.playMelodyNote;
+    SFX.playMelodyNote = function counted(...args) { calls += 1; return real.apply(this, args); };
+    try {
+      window.dispatchEvent(new PointerEvent('pointerdown'));
+      const afterPress = calls;
+      window.dispatchEvent(new PointerEvent('pointerdown'));
+      const afterRepeat = calls;
+      window.dispatchEvent(new PointerEvent('pointerup'));
+      window.dispatchEvent(new PointerEvent('pointerdown'));
+      return { afterPress, afterRepeat, afterRelease: calls };
+    } finally { SFX.playMelodyNote = real; }
+  })()`);
+
+  console.log('MONAS glide note:', JSON.stringify(monasNote));
+  assert.equal(monasNote.afterPress, 1, 'the press that begins a MONAS glide must sound a note');
+  assert.equal(monasNote.afterRepeat, 1, 'a held finger must not repeat the note - holding is how MONAS is played');
+  assert.equal(monasNote.afterRelease, 2, 'releasing and pressing again must sound the next note');
+
   sock.close();
   console.log('\nAll M43 MONAS rite checks passed.');
 } finally {

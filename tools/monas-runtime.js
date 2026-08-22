@@ -719,7 +719,26 @@
   }
 
   function trackHold() {
-    const press = () => { held = true; };
+    /**
+     * M43: the press that begins a glide sounds a note.
+     *
+     * `Player.prototype.jump` is a no-op in MONAS - it is a hold rite, not a tap
+     * one - so MONAS made no input sound at all, and the tap melody added in M43
+     * would have landed in HEX only. The press is MONAS's equivalent discrete
+     * input, so the note goes there. Only on the *transition* into a hold: a held
+     * finger fires no repeats, and holding is most of how MONAS is played.
+     */
+    const press = () => {
+      const began = !held;
+      held = true;
+      if (!began) return;
+      try {
+        if (typeof game !== 'undefined' && isMonas(game)
+          && game.state === GameState.PLAYING && game.settings?.sfx) {
+          SFX.playMelodyNote();
+        }
+      } catch (_error) {}
+    };
     const release = () => { held = false; };
     root.addEventListener('pointerdown', press, { passive: true });
     root.addEventListener('pointerup', release, { passive: true });

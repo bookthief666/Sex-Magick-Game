@@ -312,6 +312,8 @@
     sessionTotals = {
       earnedFromVoid: 0,
       earnedFromGates: 0,
+      // M43: orbs pay in charges now, three to a charge.
+      earnedFromOrbs: 0,
       absorbs: 0,
       dissolves: 0,
       dissolveAttemptsWithoutCharge: 0,
@@ -885,6 +887,25 @@
       getSessionTotals: () => (sessionTotals ? JSON.parse(JSON.stringify(sessionTotals)) : null),
       getPowerups: () => (liveState ? describe(liveState) : []),
       hudSuppressed: () => visualQaActive(),
+      /**
+       * M43: orbs pay in charges, three to a charge, and index.html owns that
+       * counting because the orbs are its objects.
+       *
+       * A real award path rather than a test affordance - it announces and
+       * re-renders exactly like the Void-survival source above, so a charge earned
+       * from orbs is indistinguishable from one earned any other way. Returns the
+       * granted power-up id, or null when there was no room, which is what lets the
+       * caller hold its progress instead of spending it into a full bank.
+       */
+      awardCharge() {
+        if (!liveState) return null;
+        const earned = awardCharge(liveState);
+        if (!earned) return null;
+        if (sessionTotals) sessionTotals.earnedFromOrbs += 1;
+        announce(`SIGIL GATHERED · ${getPowerup(earned)?.label} +1`);
+        renderHud(typeof game !== 'undefined' ? game : null);
+        return earned;
+      },
       // No public activation: DISSOLUTION fires itself. Exposed only so tests can
       // drive the predictive check directly.
       tryDissolve: () => tryDissolve(typeof game !== 'undefined' ? game : null),
