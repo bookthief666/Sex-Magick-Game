@@ -92,7 +92,7 @@
    * line from the device itself, with no git or server involved.
    */
   function buildMarker() {
-    return 'M44 the ladder stops ending: HEX to 10.0, MONAS to 6.5, descent past the last band, orbs off the line';
+    return 'M45 what was never being run: CI green, eight suites wired in, baselines compared, the menu stops showing an error card';
   }
 
   return Object.freeze({
