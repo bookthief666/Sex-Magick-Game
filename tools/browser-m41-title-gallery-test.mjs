@@ -95,6 +95,29 @@ try {
   assert.ok(pixels.maxLuma > 90, `the silhouettes must be bright somewhere (max ${pixels.maxLuma})`);
   assert.ok(pixels.meanLuma < 170, `the picture must stay darkened (mean ${pixels.meanLuma})`);
 
+  // The backdrop must stop when a run starts. The first version re-queued an
+  // empty frame instead of stopping, which left a second requestAnimationFrame
+  // pending for the whole run - `browser-fixed-step-test` asserts exactly one and
+  // failed 6/6 on it. An idle rAF that draws nothing still wakes the compositor
+  // every frame and competes for the budget D-060 measured, so this is pinned
+  // here rather than left to the other suite to catch by accident.
+  const rafDiscipline = await evaluate(`(() => new Promise(resolve => {
+    let duringRun = 0;
+    const originalRaf = window.requestAnimationFrame;
+    game.gameMode = 'HEX';
+    game.startGame();
+    window.requestAnimationFrame = function counted(cb) { duringRun += 1; return originalRaf.call(window, cb); };
+    setTimeout(() => {
+      const hidden = document.getElementById('startScreen').classList.contains('hidden');
+      window.requestAnimationFrame = originalRaf;
+      resolve({ hidden, duringRun, backdropRunning: !!(window.__sexMagickTitleRunning) });
+    }, 600);
+  }))()`);
+  console.log('raf discipline during a run:', JSON.stringify(rafDiscipline));
+  assert.equal(rafDiscipline.hidden, true, 'the menu must be hidden once a run starts');
+  assert.equal(rafDiscipline.backdropRunning, false,
+    'the backdrop loop must stop during a run, not idle-queue frames through it');
+
   // The edges are the point, so prove the Sobel layer was really built and that
   // it is the same cached layer the Void will use.
   const edgeLayer = await evaluate(`(() => {

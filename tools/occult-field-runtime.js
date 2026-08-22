@@ -882,11 +882,22 @@
     const draw = () => {
       state.raf = 0;
       // The menu is the only thing this paints for. A hidden start screen means a
-      // run is in progress, and the loop must not compete with it for frames.
+      // run is in progress, and the loop **stops** rather than re-queueing an
+      // empty frame: the first version did re-queue, and that left a second
+      // requestAnimationFrame pending for the whole run. `browser-fixed-step-test`
+      // caught it immediately - it asserts exactly one pending RAF, and got two -
+      // which is the correct reading of a real defect, not a test artifact. An
+      // idle rAF that never draws still wakes the compositor every frame of every
+      // run, and it competes with the fixed-step clock for exactly the budget
+      // D-060 measured.
       if (screen.classList.contains('hidden')) {
-        state.raf = root.requestAnimationFrame(draw);
+        state.running = false;
+        // A readable marker for the browser suite, which otherwise has no way to
+        // tell a stopped loop from a running one that happens to draw nothing.
+        try { root.__sexMagickTitleRunning = false; } catch (_error) {}
         return;
       }
+      try { root.__sexMagickTitleRunning = true; } catch (_error) {}
       resize();
       const { width, height } = state;
       try {
@@ -898,9 +909,26 @@
       state.raf = root.requestAnimationFrame(draw);
     };
 
+    const resume = () => {
+      if (state.running || screen.classList.contains('hidden')) return;
+      state.running = true;
+      state.raf = root.requestAnimationFrame(draw);
+    };
+
+    // Watching the class rather than wrapping `returnToMenu` keeps this
+    // independent of which runtimes are installed and in what order - every path
+    // back to the menu goes through the same class change, including the ones
+    // this module knows nothing about.
+    try {
+      const observer = new MutationObserver(resume);
+      observer.observe(screen, { attributes: true, attributeFilter: ['class'] });
+      state.observer = observer;
+    } catch (_error) { /* without an observer the backdrop is simply static */ }
+
     titleGallery = state;
+    state.running = false;
     resize();
-    state.raf = root.requestAnimationFrame(draw);
+    resume();
     return true;
   }
 
