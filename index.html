@@ -441,7 +441,11 @@
 
         <button id="pauseBtn" class="pause-btn hidden">||</button>
         
-        <div id="statsPanel" class="stats-panel">
+        <!-- Starts hidden. `CONFIG.DEBUG` (the `#debug` hash) is what reveals it,
+             via the `classList.remove('hidden')` calls in startGame/restartGame.
+             Without `hidden` here those calls were no-ops and the panel showed on
+             the menu and through the first run of every ordinary session. -->
+        <div id="statsPanel" class="stats-panel hidden">
             <div style="color: var(--primary); font-weight: bold; margin-bottom: 5px;">:: GNOSIS ::</div>
             FPS: <span id="fpsCounter" style="color: #fff;">0</span><br>
             AUDIO: <span id="audioStatus" style="color: #fff;">STANDBY</span>

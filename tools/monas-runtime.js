@@ -629,9 +629,29 @@
         renderHud(this);
       } else {
         this.monasState = null;
+        // Also render on the way out. `renderHud` computes `active` as false
+        // without a MONAS state and hides the meter, and nothing else will do it:
+        // `updateGameObjects` returns early for non-MONAS, so the only other
+        // caller never runs again once the rite changes. Without this line the
+        // coherence meter stayed on screen through an entire HEX run, pinned over
+        // the top of the play field, for anyone who played MONAS first.
+        renderHud(this);
       }
       return result;
     };
+
+    // The meter hides only through `renderHud`, and `updateGameObjects` - its only
+    // other caller - returns early once the rite is not MONAS. So every exit from a
+    // MONAS run has to say so explicitly, or the meter outlives the run it belongs
+    // to. `startGame` covers switching rites; this covers going back to the menu.
+    const originalReturnToMenu = Game.prototype.returnToMenu;
+    if (typeof originalReturnToMenu === 'function') {
+      Game.prototype.returnToMenu = function monasReturnToMenu(...args) {
+        const result = originalReturnToMenu.apply(this, args);
+        renderHud(this);
+        return result;
+      };
+    }
 
     /**
      * Glide replaces the flap, and only in MONAS. The original update still runs for

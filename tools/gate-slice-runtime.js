@@ -566,7 +566,7 @@
       hud.id = 'gate-slice-hud';
       hud.hidden = true;
       hud.innerHTML = `
-        <div class="gate-slice-row"><span id="gate-slice-band">MALKUTH</span><span id="gate-slice-streak">STREAK 0</span></div>
+        <div class="gate-slice-row"><span id="gate-slice-band">MALKUTH</span><span id="gate-slice-streak"></span></div>
         <div class="gate-slice-row"><span>GNOSIS</span><span id="gate-slice-value">0 / ${GNOSIS_CAPACITY}</span></div>
         <div class="gate-slice-meter"><div id="gate-slice-meter-fill"></div></div>
         <div class="gate-slice-row" style="margin-top:5px"><span id="gate-slice-status">SEEK THE EDGE</span><span id="gate-slice-void"></span></div>
@@ -635,7 +635,17 @@
     const band = BANDS[state.bandIndex] || BANDS[0];
     const fill = clamp(state.gnosis / state.gnosisCapacity, 0, 1) * 100;
     document.getElementById('gate-slice-band').textContent = band.name;
-    document.getElementById('gate-slice-streak').textContent = `STREAK ${state.riskStreak}`;
+
+    // `riskStreak` counts consecutive clears taken through the risk zone, and it
+    // resets on any centred clear - so on a readout that is always on screen it
+    // reads zero for most of a run, and the owner reasonably asked what it was
+    // for. It is shown now only while it is actually paying, which is where
+    // `streakBonus` starts (3), and it names the bonus rather than the count, so
+    // the number on screen is one the player can act on. The mechanic itself is
+    // unchanged: the bonus is scored either way, it simply stops being silent.
+    const streakPay = streakBonus(state.riskStreak);
+    document.getElementById('gate-slice-streak').textContent =
+      streakPay > 0 ? `EDGE ${state.riskStreak} · +${streakPay}` : '';
     document.getElementById('gate-slice-value').textContent = `${state.gnosis.toFixed(1).replace('.0', '')} / ${state.gnosisCapacity}`;
     document.getElementById('gate-slice-meter-fill').style.width = `${fill}%`;
 
