@@ -325,7 +325,12 @@ async function main() {
           return { active: GlitchFX.active, type: GlitchFX.type, tint: GlitchFX.tint };
         }
 
-        game.__gateSliceVoidStartedAt = game.frames - 480;
+        // Survive exactly this Void's own length. M44 made the duration scale with
+        // the band, so the old hardcoded 480 became a *partial* survival on any
+        // band past the first - and the duration fraction duly paid a smaller
+        // reward, which is the new behaviour working rather than a regression.
+        const plannedVoidSteps = game.__gateSliceVoidPlannedSteps;
+        game.__gateSliceVoidStartedAt = game.frames - plannedVoidSteps;
         game.endVoidMode();
         const afterSurvival = __SEX_MAGICK_GATE_SLICE__.getSnapshot();
         const scoreAfterSurvival = game.score;
@@ -400,6 +405,7 @@ async function main() {
           telegraphOnWager,
           afterSurvival,
           scoreAfterSurvival,
+          plannedVoidSteps,
           telegraphOnSurvival,
           glitchOnSurvival,
           afterDeath,
@@ -459,6 +465,10 @@ async function main() {
     assert.equal(result.afterSurvival.state.voidSurvivals, 1);
     assert.equal(result.afterSurvival.state.currentWager, 0);
     assert.equal(result.scoreAfterSurvival, 133);
+    // The Void's length is the band's now, not a constant. Asserted so a change to
+    // the ladder that silently stopped scaling it would be caught here.
+    assert.ok(result.plannedVoidSteps >= 480,
+      `a Void must run at least the opening band's 480 steps (got ${result.plannedVoidSteps})`);
 
     // The telegraph used to sit centred at top:42%, opaque enough to obscure the
     // artwork behind it. It is bottom-anchored now (no top offset, an explicit

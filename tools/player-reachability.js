@@ -402,15 +402,37 @@
     const patternResolver = typeof options.patternResolver === 'function'
       ? options.patternResolver
       : pattern => pattern;
+
+    /**
+     * M44: the scenarios a given rite is audited against.
+     *
+     * `options.scenariosByRite` audits each rite on the ladder it actually runs.
+     * Before this, every pattern in both rites was audited against one scenario
+     * list, and that list was HEX's - which is what blocked D-072's speed raise:
+     * seven MONAS patterns cannot hold KETHER, at a speed MONAS never reaches,
+     * because the Gate slice returns early unless `gameMode === 'HEX'` and MONAS
+     * runs its own ladder. The old shape audited a condition the game cannot
+     * produce, and left MONAS's own top band uncovered.
+     *
+     * This is a narrowing of what each rite is asked, not a removal: a rite with
+     * no scenarios of its own still falls back to the shared list, so an audit
+     * that forgets to describe a rite over-constrains it rather than skipping it.
+     */
+    function scenariosFor(rite) {
+      const perRite = options.scenariosByRite?.[rite];
+      return Array.isArray(perRite) && perRite.length > 0 ? perRite : scenarios;
+    }
+
     const cases = [];
 
     for (const rite of ['HEX', 'MONAS']) {
+      const riteScenarios = scenariosFor(rite);
       for (const pattern of grammar.PATTERN_LIBRARY[rite]) {
         const auditedPattern = patternResolver(pattern, rite) || pattern;
         for (const direction of listPatternVariants(auditedPattern)) {
           for (const anchor of anchors) {
             const ratios = grammar.materializePattern(auditedPattern, anchor, direction);
-            for (const scenario of scenarios) {
+            for (const scenario of riteScenarios) {
               const scenarioPhases = scenario.breathPhases || breathPhases;
               for (const breathPhase of scenarioPhases) {
                 const classification = classifyGateSequence({
@@ -421,6 +443,14 @@
                   mobile: scenario.mobile,
                   speed: scenario.speed,
                   gap: scenario.gap,
+                  // M44: the spacing between pillars, which this function never
+                  // passed on. `classifyGateSequence` has always accepted it and
+                  // `buildGateWindows` has always used it, but nothing here handed
+                  // it over - so every case ever audited used the default 140 while
+                  // the report recorded a `spawnRate` field that made it look
+                  // otherwise. M42's spacing frontier caught it on its own negative
+                  // control: walls at base 12, almost touching, came back clean.
+                  pillarSpawnBase: scenario.pillarSpawnBase ?? options.pillarSpawnBase,
                   breathPhase,
                   beamWidth: options.beamWidth || 2500
                 });

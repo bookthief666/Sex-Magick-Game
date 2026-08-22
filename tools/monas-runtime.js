@@ -996,12 +996,39 @@
   // envelope by the same monotonicity argument D-058 used.
   const PORTAL_SPEED_MULTIPLIER = 1.5;
   const PORTAL_GAP_REDUCTION = 20;
-  const MONAS_MAX_VERIFIED_SPEED = 5.7;
-  const MONAS_MIN_VERIFIED_GAP = 190;
+  // M44: re-searched and raised from 5.7/190. See the BANDS comment in
+  // `monas-progression-runtime.js` for why the old ceiling was never a
+  // reachability limit. The live ladder stops at 6.5/170 so the portal always has
+  // somewhere to escalate to.
+  const MONAS_MAX_VERIFIED_SPEED = 7.0;
+  const MONAS_MIN_VERIFIED_GAP = 160;
 
   // The ring the player flies into, and how long it waits before drifting off.
   const PORTAL_OUTER_RADIUS = 58;
   const PORTAL_ENTRY_RADIUS = 34;
+
+  // How long the current holds you, by band.
+  //
+  // M44: the owner reported the portal "not long lasting at all once the player
+  // enters", and asked for sections that start short and lengthen. The first band's
+  // 300 frames is the length M43 shipped and is deliberately unchanged - a five
+  // second wager is the right size for the first one a player ever meets. The top
+  // band's 660 is a little over eleven seconds.
+  //
+  // Length is the escalation the Undertow can carry without new evidence: it is
+  // more frames of a condition already clamped to the audited 5.7/190, not a harder
+  // one. And it bites specifically: `settleUndertow` scales the return by
+  // smoothness, so a longer current is more time to stay smooth, which is the thing
+  // the section actually asks for.
+  const PORTAL_FRAMES_FIRST = 300;
+  const PORTAL_FRAMES_LAST = 660;
+
+  function portalFramesForBand(bandIndex, bandCount) {
+    const bands = Math.max(1, whole(bandCount, 7));
+    const index = Math.min(Math.max(0, whole(bandIndex, 0)), bands - 1);
+    const ratio = bands <= 1 ? 0 : index / (bands - 1);
+    return Math.round(PORTAL_FRAMES_FIRST + ((PORTAL_FRAMES_LAST - PORTAL_FRAMES_FIRST) * ratio));
+  }
 
   function portalSpeedFor(bandSpeed) {
     const base = Math.max(0, finite(bandSpeed, 0));
@@ -1172,16 +1199,17 @@
     if (!api || !state || gameInstance.__monasPortal || gameInstance.__monasCaduceus) return false;
     if (!state.portalReady || state.gnosis <= 0) return false;
 
-    const portal = api.createUndertow(state.gnosis);
+    const bandCount = root.__SEX_MAGICK_MONAS_PROGRESSION__?.getFingerprint?.().bands?.length;
+    const portal = api.createUndertow(
+      state.gnosis,
+      portalFramesForBand(state.progressionBandIndex, bandCount)
+    );
     if (portal.stake <= 0) return false;
 
     state.gnosis = Math.max(0, Math.round((state.gnosis - portal.stake) * 10) / 10);
     state.portalReady = false;
     state.portalsEntered = whole(state.portalsEntered, 0) + 1;
     gameInstance.__monasPortal = portal;
-    // The section's total length, held so the vignette can read how far through
-    // the wager the run is. `framesRemaining` alone cannot say that.
-    portal.totalFrames = Math.max(1, whole(portal.framesRemaining, 1));
 
     // The Warp Surge is suppressed for the duration. Two escalations at once is
     // unreadable, and it keeps the portal's clamped speed from being multiplied by

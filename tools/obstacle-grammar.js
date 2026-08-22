@@ -640,21 +640,37 @@
       gameInstance.obstacles.push(pillar);
 
       if (spec.orb) {
-        const orb = Object.create(Orb.prototype);
-        orb.x = pillar.x + pillar.w / 2;
-        orb.y = pillar.top + pillar.gap / 2;
-        orb.r = 9;
-        orb.collected = false;
-        orb.float = spec.orbFloat;
-        orb.pulse = 0;
-        orb.rotation = 0;
-        // M42: the sweep needs the pillar it belongs to. Built by hand rather
-        // than through the constructor because the phase comes from the seeded
-        // stream (`spec.orbFloat`) and must stay reproducible - so every field the
-        // constructor would set has to be set here too, and a new one is easy to
-        // forget. The orb suite asserts this one is present.
-        orb.pillar = pillar;
-        gameInstance.collectibles.push(orb);
+        // M44: placement and scarcity come from the game rather than from here.
+        //
+        // The seeded decision above (`spec.orb`) still chooses which patterns may
+        // carry an orb, so the stream is untouched; `orbPlacementFor` then applies
+        // the progression scarcity and the off-corridor offset on top. Declining
+        // here consumes nothing, so a skipped orb cannot shift any later draw.
+        //
+        // The comment this replaces warned that building the orb by hand means
+        // "every field the constructor would set has to be set here too, and a new
+        // one is easy to forget". M44 forgot `offset` and every orb in this path -
+        // the shipped one - got a NaN height, while the index.html fallback looked
+        // correct. Asking the game for the placement is what stops the two paths
+        // from drifting again; only the seeded phase stays local.
+        const placement = typeof gameInstance.orbPlacementFor === 'function'
+          ? gameInstance.orbPlacementFor(pillar, computeSpawnRate(gameInstance.gameSpeed, CONFIG.PILLAR_SPAWN_BASE))
+          : { x: pillar.x + pillar.w / 2, y: pillar.top + pillar.gap / 2, offset: 0 };
+        if (placement) {
+          const orb = Object.create(Orb.prototype);
+          orb.x = placement.x;
+          orb.y = placement.y;
+          orb.r = 9;
+          orb.collected = false;
+          orb.float = spec.orbFloat;
+          orb.pulse = 0;
+          orb.rotation = 0;
+          // The sweep needs the pillar it belongs to (M42), and the offset that
+          // holds it off the corridor line (M44).
+          orb.pillar = pillar;
+          orb.offset = placement.offset;
+          gameInstance.collectibles.push(orb);
+        }
       }
 
       ledger.recordSpawn(spec, gameInstance);

@@ -147,10 +147,23 @@
     return Math.round(bank * UNDERTOW_STAKE_RATIO * 10) / 10;
   }
 
-  function createUndertow(gnosis = 0) {
+  /**
+   * @param {number} gnosis  the bank to stake half of.
+   * @param {number} [frames] how long the current runs. M44: the owner asked for
+   *   sections that start short and lengthen as a run goes on, so the duration is
+   *   the caller's to decide. Defaults to the shipped length, which keeps every
+   *   existing caller and unit test on exactly the behaviour they were written
+   *   against.
+   */
+  function createUndertow(gnosis = 0, frames = UNDERTOW_FRAMES) {
     const stake = undertowStake(gnosis);
+    const length = Math.max(1, Math.floor(Number.isFinite(frames) ? frames : UNDERTOW_FRAMES));
     return {
-      framesRemaining: UNDERTOW_FRAMES,
+      framesRemaining: length,
+      // Held so a caller - and the closing-in vignette - can ask how far through
+      // the wager the run is. `framesRemaining` alone cannot say that once the
+      // length stopped being a constant.
+      totalFrames: length,
       framesElapsed: 0,
       reversals: 0,
       stake,

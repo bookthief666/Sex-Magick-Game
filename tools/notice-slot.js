@@ -92,7 +92,7 @@
    * line from the device itself, with no git or server involved.
    */
   function buildMarker() {
-    return 'M43 MONAS rite: ladder governs speed, visible edge, portal you fly into, tap melody, orb shields';
+    return 'M44 the ladder stops ending: HEX to 10.0, MONAS to 6.5, descent past the last band, orbs off the line';
   }
 
   return Object.freeze({

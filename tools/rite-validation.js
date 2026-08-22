@@ -44,7 +44,7 @@
   // separation is enforced.
   const DEFAULT_RITE = 'HEX';
 
-  // MONAS's own ladder (`monas-progression-runtime.js`), which is seven bands
+  // MONAS's own ladder (`monas-progression-runtime.js`), which is nine bands
   // rather than eight and spaced differently. M42 gives MONAS the edge meter and a portal, so it
   // records runs now, and validating a MONAS run against HEX's thresholds would
   // reject every honest one. Selected here **by rite** rather than accepted from the
@@ -58,9 +58,10 @@
   // module system. M43 added ASCENT; leaving it out here would have rejected every
   // honest run past gate 110 as a band mismatch.
   const MONAS_BANDS = Object.freeze([
-    'STILL', 'CURRENT-I', 'CURRENT-II', 'AXIS', 'ORBIT', 'CROWN', 'ASCENT'
+    'STILL', 'CURRENT-I', 'CURRENT-II', 'AXIS', 'ORBIT', 'CROWN', 'ASCENT',
+    'TORRENT', 'MAELSTROM'
   ]);
-  const MONAS_THRESHOLDS = Object.freeze([0, 8, 20, 36, 56, 80, 110]);
+  const MONAS_THRESHOLDS = Object.freeze([0, 8, 20, 36, 56, 80, 110, 145, 185]);
 
   const RITE_LADDERS = Object.freeze({
     HEX: { bands: FALLBACK_BANDS, thresholds: FALLBACK_THRESHOLDS },

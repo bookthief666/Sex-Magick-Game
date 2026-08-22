@@ -19,7 +19,55 @@
   const STORAGE_KEY = 'sex_magick_gate_slice_v1';
   const HISTORY_LIMIT = 20;
   const GNOSIS_CAPACITY = 10;
+  // The shipped Void length, and the first band's.
+  //
+  // M44: the owner asked for challenge sections that start short and lengthen as a
+  // run goes on, in both rites. This constant stays the *first* band's duration and
+  // the default everywhere a caller does not say otherwise, so nothing that already
+  // depended on 480 frames changes meaning. `voidDurationForBand` is the ladder.
+  //
+  // Length is an escalation that needs no new solver evidence: it is more frames of
+  // a wager already clamped to MAX_VALIDATED_SPEED and MIN_VALIDATED_GAP, not a
+  // harder configuration. What it does change is the reward maths - see
+  // `completeVoidState`, which can no longer divide by this constant.
   const VOID_DURATION_STEPS = 8 * 60;
+  const VOID_DURATION_STEPS_LAST = 15 * 60;
+
+  // --- the descent ----------------------------------------------------------
+  //
+  // What happens after KETHER, which until M44 was: nothing. `getBandIndex`
+  // saturates at the last band, so speed, gap, and the spawn rate derived from
+  // speed all froze there for the rest of the run - the owner's report that the
+  // game stops building, and why a late run could continue indefinitely.
+  //
+  // The corridor is the lever with headroom left. Speed is at the raised ceiling,
+  // and M44's repaired spacing frontier showed wall spacing has essentially none:
+  // even a 6% tightening at the hardest coordinate came back invalid. D-072's grid
+  // verified gap 110 at speed 10.0, so the descent closes KETHER's 122 toward that
+  // floor, two pixels every thirty gates. Bounded, not endless - the game still
+  // plateaus, just far later and 12px tighter.
+  const DESCENT_GATES_PER_STEP = 30;
+  const DESCENT_GAP_PER_STEP = 2;
+
+  function descentStepsAt(gatesCleared) {
+    const last = BANDS[BANDS.length - 1];
+    const beyond = Math.max(0, Math.floor(finiteNumber(Number(gatesCleared), 0)) - last.gateThreshold);
+    return Math.floor(beyond / DESCENT_GATES_PER_STEP);
+  }
+
+  /** The nominal corridor at this gate count, band and descent included. */
+  function nominalGapFor(gatesCleared) {
+    const band = BANDS[getBandIndex(gatesCleared)] || BANDS[0];
+    const narrowed = band.gap - (descentStepsAt(gatesCleared) * DESCENT_GAP_PER_STEP);
+    return Math.max(MIN_VALIDATED_GAP, narrowed);
+  }
+
+  function voidDurationForBand(bandIndex) {
+    const total = BANDS.length;
+    const index = Math.min(Math.max(0, Math.floor(finiteNumber(Number(bandIndex), 0))), total - 1);
+    const ratio = total <= 1 ? 0 : index / (total - 1);
+    return Math.round(VOID_DURATION_STEPS + ((VOID_DURATION_STEPS_LAST - VOID_DURATION_STEPS) * ratio));
+  }
   const VOID_SPEED_MULTIPLIER = 1.5;
   const VOID_GAP_REDUCTION = 20;
   const BANK_MULTIPLIER = 3;
@@ -55,10 +103,26 @@
   const GATE_VERTICAL_PX_PER_FRAME = 2.2;
   const GATE_MIN_REACH_PX = 60;
 
-  // The hardest configuration the reachability solver proves clearable is speed
-  // 8.5 against a 110 px gap (see DEFAULT_SCENARIOS in player-reachability.js).
-  // No band, and no Void applied on top of a band, may exceed it.
-  const MAX_VALIDATED_SPEED = 8.5;
+  // The hardest configuration the reachability solver proves clearable.
+  //
+  // M44 raises this from 8.5 to 10.0 on evidence D-072 already gathered and could
+  // not use. 8.5 was never a discovered maximum - every hard scenario in
+  // `DEFAULT_SCENARIOS` is pinned to `speed: 8.5, gap: 110`, so 8.5 was simply the
+  // fastest the solver had ever been *asked* about. Asked properly it verified
+  // 9.0, 9.5 and 10.0 across gaps 110/118/126/134, 450 of 450 clean at each, and
+  // located its actual boundary at gap 122 between 12.0 (verified) and 14.0
+  // (rejected). Each ladder coordinate below was proven at its own value rather
+  // than interpolated from a neighbour.
+  //
+  // What blocked the raise was not HEX. The shipped band audit required every
+  // pattern in *both* rites to clear every post-GEBURAH band, and this is HEX's
+  // ladder - seven MONAS patterns cannot hold KETHER. But the Gate slice is
+  // HEX-only (`updateGameObjects` returns early unless `gameMode === 'HEX'`) and
+  // MONAS runs its own ladder, so that check constrained the ceiling with a
+  // condition the game cannot produce. D-072 left the call to the owner; M44's
+  // per-rite audit is that call, and it covers MONAS's own top band, which the
+  // old shared audit never did.
+  const MAX_VALIDATED_SPEED = 10.0;
   const MIN_VALIDATED_GAP = 110;
 
   // The 2026-08-12 pilot cleared 507 gates and 196 of them - 38.7 percent of all
@@ -88,9 +152,12 @@
     Object.freeze({ name: 'YESOD', gateThreshold: 9, speed: 3.8, gap: 190, riskActive: true }),
     Object.freeze({ name: 'TIPHARETH', gateThreshold: 22, speed: 5.0, gap: 165, riskActive: true }),
     Object.freeze({ name: 'GEBURAH', gateThreshold: 40, speed: 6.2, gap: 145, riskActive: true }),
-    Object.freeze({ name: 'CHESED', gateThreshold: 62, speed: 6.9, gap: 138, riskActive: true }),
-    Object.freeze({ name: 'BINAH', gateThreshold: 88, speed: 7.5, gap: 132, riskActive: true }),
-    Object.freeze({ name: 'CHOKMAH', gateThreshold: 118, speed: 8.0, gap: 127, riskActive: true }),
+    // M44: the four post-GEBURAH speeds take D-072's proven coordinates. Gaps are
+    // unchanged - the raise is in speed alone, so the corridor a player has
+    // learned stays the width they learned it at while the run keeps accelerating.
+    Object.freeze({ name: 'CHESED', gateThreshold: 62, speed: 7.3, gap: 138, riskActive: true }),
+    Object.freeze({ name: 'BINAH', gateThreshold: 88, speed: 8.2, gap: 132, riskActive: true }),
+    Object.freeze({ name: 'CHOKMAH', gateThreshold: 118, speed: 9.1, gap: 127, riskActive: true }),
     Object.freeze({ name: 'KETHER', gateThreshold: 152, speed: MAX_VALIDATED_SPEED, gap: 122, riskActive: true })
   ]);
 
@@ -408,11 +475,23 @@
     return { state: next, result: { wager } };
   }
 
-  function completeVoidState(state, survivedSteps = VOID_DURATION_STEPS) {
+  /**
+   * @param {number} [survivedSteps] frames actually survived.
+   * @param {number} [plannedSteps]  how long *this* Void was meant to run.
+   *
+   * M44: the third argument is not decoration. `durationFraction` used to divide by
+   * the `VOID_DURATION_STEPS` constant, which was correct only while every Void was
+   * that length. Now that duration scales with the band, dividing by the constant
+   * would pay a short early Void a fraction under 1 for surviving all of it, and
+   * would let a long late Void reach 1 before it ended. It defaults to the constant
+   * so every existing caller keeps its exact behaviour.
+   */
+  function completeVoidState(state, survivedSteps = VOID_DURATION_STEPS, plannedSteps = VOID_DURATION_STEPS) {
     const next = cloneState(state);
     const wager = roundHalf(next.currentWager);
+    const planned = Math.max(1, finiteNumber(Number(plannedSteps), VOID_DURATION_STEPS));
     const durationFraction = clamp(
-      finiteNumber(Number(survivedSteps), 0) / VOID_DURATION_STEPS,
+      finiteNumber(Number(survivedSteps), 0) / planned,
       0,
       1
     );
@@ -831,7 +910,9 @@
     gameInstance.gameSpeed = gameInstance.__gateSliceVoidActive
       ? voidSpeedFor(band.speed)
       : band.speed;
-    gameInstance.currentBaseGap = band.gap;
+    // The descent's corridor, not the band's, so the run keeps closing in past
+    // KETHER instead of freezing at 122 for the rest of the session.
+    gameInstance.currentBaseGap = nominalGapFor(state.gatesCleared);
     if (announce) {
       setTelegraph(`${band.name}  ·  ${band.riskActive ? 'THE EDGE AWAKENS' : 'LEARN THE CURRENT'}`, 950, 'progress');
       try { if (gameInstance.settings.sfx) SFX.levelUp(); } catch (_error) {}
@@ -1267,7 +1348,11 @@
       this.__gateSliceVoidActive = true;
       this.__gateSliceVoidStartedAt = this.frames;
       this.voidMode = true;
-      this.voidTimer = VOID_DURATION_STEPS;
+      // M44: this Void's own length, held on the instance because `endVoidMode`
+      // has to divide the reward by the duration *this* wager was set, not by the
+      // constant that used to be every wager's length.
+      this.__gateSliceVoidPlannedSteps = voidDurationForBand(this.gateSliceState.bandIndex);
+      this.voidTimer = this.__gateSliceVoidPlannedSteps;
       this.preVoidSpeed = (BANDS[this.gateSliceState.bandIndex] || BANDS[0]).speed;
       this.gameSpeed = voidSpeedFor(this.preVoidSpeed);
       this.gateSliceState.currentWager = roundHalf(wager);
@@ -1286,7 +1371,8 @@
     Game.prototype.endVoidMode = function endWageredVoid() {
       if (!this.gateSliceState || !this.__gateSliceVoidActive) return;
       const elapsed = Math.max(0, this.frames - this.__gateSliceVoidStartedAt);
-      const completed = completeVoidState(this.gateSliceState, elapsed);
+      const planned = finiteNumber(this.__gateSliceVoidPlannedSteps, VOID_DURATION_STEPS);
+      const completed = completeVoidState(this.gateSliceState, elapsed, planned);
       this.gateSliceState = completed.state;
       this.score += completed.result.reward;
       const scoreUi = document.getElementById('scoreUi');
@@ -1511,6 +1597,8 @@
       query: 'gateSlice=1',
       gnosisCapacity: GNOSIS_CAPACITY,
       voidDurationSteps: VOID_DURATION_STEPS,
+      voidDurationStepsLast: VOID_DURATION_STEPS_LAST,
+      voidDurationByBand: BANDS.map((band, index) => voidDurationForBand(index)),
       storageKey: STORAGE_KEY
     });
 
@@ -1541,8 +1629,20 @@
     HISTORY_LIMIT,
     GNOSIS_CAPACITY,
     VOID_DURATION_STEPS,
+    VOID_DURATION_STEPS_LAST,
+    voidDurationForBand,
+    DESCENT_GATES_PER_STEP,
+    DESCENT_GAP_PER_STEP,
+    descentStepsAt,
+    nominalGapFor,
     VOID_SPEED_MULTIPLIER,
     VOID_GAP_REDUCTION,
+    // M44: exported so the shipped band audit asserts each band against the
+    // envelope constant rather than against a literal that has to be remembered
+    // and updated in two places - which is how 8.5 came to be hardcoded in the
+    // audit's own assertion.
+    MAX_VALIDATED_SPEED,
+    MIN_VALIDATED_GAP,
     BANK_MULTIPLIER,
     VOID_MULTIPLIER,
     NEAR_MISS_PX,

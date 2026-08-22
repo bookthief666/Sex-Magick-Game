@@ -24,6 +24,16 @@
   'use strict';
 
   const PROGRESSION_VERSION = 1;
+
+  // MONAS's own proven envelope, separate from HEX's.
+  //
+  // M44: the two rites are audited against their own ladders now, so each needs
+  // its own ceiling to be asserted against. MONAS's was never written down as a
+  // constant - it lived in D-051's prose as "the search ceiling" - which is part
+  // of why the shipped audit ended up checking MONAS's patterns against HEX's
+  // numbers instead.
+  const MAX_VALIDATED_SPEED = 7.0;
+  const MIN_VALIDATED_GAP = 160;
   const INSTALL_TIMEOUT_MS = 12_000;
   const SURGE_GAP_MULTIPLIER = 1.18;
 
@@ -62,7 +72,22 @@
     Object.freeze({ id: 'axis', gateThreshold: 36, speed: 4.1, gap: 230 }),
     Object.freeze({ id: 'orbit', gateThreshold: 56, speed: 4.5, gap: 220 }),
     Object.freeze({ id: 'crown', gateThreshold: 80, speed: 4.9, gap: 210 }),
-    Object.freeze({ id: 'ascent', gateThreshold: 110, speed: 5.3, gap: 200 })
+    Object.freeze({ id: 'ascent', gateThreshold: 110, speed: 5.3, gap: 200 }),
+    // M44: three coordinates past D-051's old search ceiling.
+    //
+    // That ceiling was never a reachability limit. D-051 fixed it at 5.7/190
+    // because 5.7 x 1.45 surge reached 8.265, "already close to the base game's
+    // existing 8.5 maximum-speed scale" - a comparison against HEX's cap, which
+    // M44 has since raised to 10.0 on D-072's evidence. With the comparison gone
+    // the ceiling was re-searched, and MONAS verified clean at 6.1/180, 6.5/170
+    // and 7.0/160 in both ordinary and Warp Surge flight, with 14/120 rejecting so
+    // the instrument is known to be able to say no.
+    //
+    // 7.0/160 is deliberately absent, for the reason M43 learned the hard way: it
+    // is the portal's clamp, and promoting the ceiling to a live band makes a
+    // top-band portal identical to ordinary play.
+    Object.freeze({ id: 'torrent', gateThreshold: 145, speed: 6.1, gap: 180 }),
+    Object.freeze({ id: 'maelstrom', gateThreshold: 185, speed: 6.5, gap: 170 })
   ]);
 
   let installed = false;
@@ -90,10 +115,44 @@
     return BANDS[getBandIndex(gatesPassed)];
   }
 
-  function gapFor(gatesPassed, frames = 0, surgeActive = false) {
+  // --- the descent ----------------------------------------------------------
+  //
+  // What happens after the last band, which until M44 was: nothing.
+  //
+  // `getBandIndex` saturates at the final band, so every quantity derived from it
+  // froze there - speed, gap, and the spawn rate that derives from speed. A player
+  // who reached the top had reached the end of the game's difficulty and could stay
+  // there indefinitely. That is the whole of the owner's report that the run "stops
+  // building" and that late runs go on forever.
+  //
+  // The corridor is the one lever with proven headroom left. Speed is at the
+  // re-searched ceiling and the ceiling belongs to the portal; wall spacing turned
+  // out to have none at all (M44's repaired frontier rejected even a 6% tightening
+  // at the hardest coordinate). So the descent closes the corridor from the final
+  // band's gap toward `MIN_VALIDATED_GAP`, which is audited at the top speed, in
+  // steps that never reach it faster than a player can adapt.
+  //
+  // It is bounded, not endless: the game still plateaus, but at 160 rather than 170
+  // and after a much longer climb.
+  const DESCENT_GATES_PER_STEP = 30;
+  const DESCENT_GAP_PER_STEP = 2;
+
+  function descentStepsAt(gatesPassed) {
+    const last = BANDS[BANDS.length - 1];
+    const beyond = Math.max(0, Math.floor(finite(gatesPassed, 0)) - last.gateThreshold);
+    return Math.floor(beyond / DESCENT_GATES_PER_STEP);
+  }
+
+  /** The nominal corridor at this gate count, final band and descent included. */
+  function nominalGapFor(gatesPassed) {
     const band = getBand(gatesPassed);
+    const narrowed = band.gap - (descentStepsAt(gatesPassed) * DESCENT_GAP_PER_STEP);
+    return Math.max(MIN_VALIDATED_GAP, narrowed);
+  }
+
+  function gapFor(gatesPassed, frames = 0, surgeActive = false) {
     const breathing = Math.sin(finite(frames, 0) * 0.05) * 10;
-    const base = band.gap + breathing;
+    const base = nominalGapFor(gatesPassed) + breathing;
     return surgeActive ? base * SURGE_GAP_MULTIPLIER : base;
   }
 
@@ -176,7 +235,9 @@
     state.progressionBandIndex = nextIndex;
     state.progressionGateThreshold = band.gateThreshold;
     state.progressionSpeed = speed;
-    state.progressionGap = band.gap;
+    // The descent's corridor, not the band's, so anything reading
+    // `progressionGap` - the portal's clamp above all - narrows with it.
+    state.progressionGap = nominalGapFor(state.gatesPassed);
     if (!Number.isFinite(state.progressionChanges)) state.progressionChanges = 0;
     if (changed && options.countChange !== false) state.progressionChanges += 1;
 
@@ -368,6 +429,12 @@
     PROGRESSION_VERSION,
     SURGE_GAP_MULTIPLIER,
     BANDS,
+    MAX_VALIDATED_SPEED,
+    MIN_VALIDATED_GAP,
+    DESCENT_GATES_PER_STEP,
+    DESCENT_GAP_PER_STEP,
+    descentStepsAt,
+    nominalGapFor,
     finite,
     getBandIndex,
     getBand,

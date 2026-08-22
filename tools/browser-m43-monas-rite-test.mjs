@@ -218,11 +218,14 @@ try {
   const inside = await evaluate(`(() => {
     game.gameMode = 'MONAS';
     game.startGame();
-    // The top live band, so the clamp is actually exercised: 5.3 * 1.5 = 7.95 raw,
-    // which must come back as the audited 5.7.
-    window.__SEX_MAGICK_MONAS_PROGRESSION__.forceGatesForTest(110);
+    // The top live band, so the clamp is actually exercised: the band speed times
+    // 1.5 overshoots the ceiling and must come back clamped to it.
+    const bands = window.__SEX_MAGICK_MONAS_PROGRESSION__.getFingerprint().bands;
+    window.__SEX_MAGICK_MONAS_PROGRESSION__.forceGatesForTest(bands[bands.length - 1].gateThreshold);
     const bandSpeed = game.gameSpeed;
     const bandGap = game.monasState.progressionGap;
+    const maxSpeed = window.SexMagickMonas.MONAS_MAX_VERIFIED_SPEED;
+    const minGap = window.SexMagickMonas.MONAS_MIN_VERIFIED_GAP;
     game.monasState.gnosis = game.monasState.gnosisCapacity;
     game.monasState.portalReady = true;
     // A surge running as the ring is reached, so suppression is tested rather
@@ -279,7 +282,7 @@ try {
     }
     Pillar.prototype.update = realPillarUpdate;
     return {
-      entered: true, bandSpeed, bandGap, classWhileInside, surgeWhileInside,
+      entered: true, bandSpeed, bandGap, maxSpeed, minGap, classWhileInside, surgeWhileInside,
       gaps, speeds, sectionGaps, frames: guard,
       speedAfter: game.gameSpeed,
       classAfter: document.getElementById('game-container')?.className || ''
@@ -296,15 +299,21 @@ try {
   assert.ok(inside.gaps.length > 0, 'pillars must keep coming inside the portal - it is a wager on a corridor');
   assert.ok(inside.sectionGaps.length > 0, 'the section must have owned the corridor every frame');
   const nominal = [...new Set(inside.sectionGaps)];
-  assert.deepEqual(nominal, [190],
-    `the portal corridor must be the audited 190 nominal on every frame (saw ${JSON.stringify(nominal)})`);
+  const expectedNominal = Math.max(inside.minGap, inside.bandGap - 20);
+  assert.deepEqual(nominal, [expectedNominal],
+    `the portal corridor must be the clamped nominal on every frame (wanted ${expectedNominal}, saw ${JSON.stringify(nominal)})`);
+  assert.ok(nominal[0] >= inside.minGap,
+    `the portal corridor must never go below the audited floor ${inside.minGap}`);
   assert.ok(nominal[0] < inside.bandGap,
     `the portal must actually tighten the corridor (band ${inside.bandGap}, portal ${nominal[0]})`);
 
   assert.ok(inside.speeds.length > 0, 'the section must have been measured');
   const observed = [...new Set(inside.speeds)];
-  assert.deepEqual(observed, [5.7],
-    `every wall inside the portal must move at the clamped 5.7 and nothing else (saw ${JSON.stringify(observed)})`);
+  // Derived from the envelope constant rather than written as a literal: M43 wrote
+  // 5.7 here and M44's re-search moved the ceiling, leaving a test that failed
+  // while the behaviour it guards was still correct.
+  assert.deepEqual(observed, [inside.maxSpeed],
+    `every wall inside the portal must move at the clamped ${inside.maxSpeed} and nothing else (saw ${JSON.stringify(observed)})`);
   assert.ok(observed[0] > inside.bandSpeed,
     `the portal must be faster than the band it interrupted (band ${inside.bandSpeed}, portal ${observed[0]})`);
 
@@ -320,8 +329,9 @@ try {
     const bands = window.__SEX_MAGICK_MONAS_PROGRESSION__.getFingerprint().bands;
     return {
       has: typeof m.portalSpeedFor === 'function',
-      top: m.portalSpeedFor(5.3), mid: m.portalSpeedFor(2.9),
-      gapTop: m.portalGapFor(200), gapMid: m.portalGapFor(260),
+      top: m.portalSpeedFor(bands[bands.length - 1].speed), mid: m.portalSpeedFor(2.9),
+      gapTop: m.portalGapFor(bands[bands.length - 1].gap), gapMid: m.portalGapFor(260),
+      maxSpeed: m.MONAS_MAX_VERIFIED_SPEED, minGap: m.MONAS_MIN_VERIFIED_GAP,
       escalates: bands.map(b => ({
         id: b.id,
         fasterBy: m.portalSpeedFor(b.speed) - b.speed,
@@ -331,10 +341,10 @@ try {
   })()`);
   console.log('portal clamps:', JSON.stringify(clamps));
   assert.equal(clamps.has, true, 'the clamp must be exported so its ceiling is assertable');
-  assert.equal(clamps.top, 5.7, 'the hardest portal must saturate at the audited ceiling, not run past it');
-  assert.equal(clamps.gapTop, 190, 'the tightest portal corridor must saturate at the audited 190');
-  assert.ok(clamps.mid > 2.9 && clamps.mid < 5.7, 'a low-band portal must escalate without reaching the ceiling');
-  assert.ok(clamps.gapMid < 260 && clamps.gapMid > 190, 'a low-band portal must tighten without reaching the floor');
+  assert.equal(clamps.top, clamps.maxSpeed, 'the hardest portal must saturate at the audited ceiling, not run past it');
+  assert.equal(clamps.gapTop, clamps.minGap, 'the tightest portal corridor must saturate at the audited floor');
+  assert.ok(clamps.mid > 2.9 && clamps.mid < clamps.maxSpeed, 'a low-band portal must escalate without reaching the ceiling');
+  assert.ok(clamps.gapMid < 260 && clamps.gapMid > clamps.minGap, 'a low-band portal must tighten without reaching the floor');
 
   // The reason 5.7 / 190 is not a live band: if it were, a portal opening on the
   // top band would be identical to ordinary play - a stake and a dark field with no
@@ -367,15 +377,21 @@ try {
     };
 
     const start = { charges: charges(), progress: game.orbShieldProgress };
-    const steps = [collectOne(), collectOne(), collectOne()];
+    // Derived from the constant: M43 wrote three collections here and M44 raised
+    // the price to five, so a literal would fail while the mechanic was correct.
+    const perShield = CONFIG.ORBS_PER_SHIELD;
+    const steps = [];
+    for (let i = 0; i < perShield; i += 1) steps.push(collectOne());
 
     // Fill to the cap, then keep collecting.
     while ((charges() ?? 0) < 3) powerups.grant('aegis', 1);
     const atCap = charges();
-    const overflow = [collectOne(), collectOne(), collectOne()];
+    const overflow = [];
+    for (let i = 0; i < perShield; i += 1) overflow.push(collectOne());
     const afterOverflow = { charges: charges(), progress: game.orbShieldProgress };
 
-    return { start, steps, atCap, overflow, afterOverflow, exposed: typeof powerups.awardCharge };
+    return { start, steps, atCap, overflow, afterOverflow, perShield,
+             exposed: typeof powerups.awardCharge };
   })()`);
 
   console.log('orb shields:', JSON.stringify(orbs));
@@ -383,15 +399,20 @@ try {
   assert.equal(orbs.start.charges, 0, 'a fresh run starts with no shields');
   assert.ok(orbs.steps.every(step => step.scoreDelta === 0),
     'collecting an orb must no longer move the score - it pays in shields now');
-  assert.equal(orbs.steps[0].charges, 0, 'one orb is not a shield');
-  assert.equal(orbs.steps[1].charges, 0, 'two orbs are not a shield');
-  assert.equal(orbs.steps[2].charges, 1, 'the third orb must grant exactly one AEGIS charge');
-  assert.equal(orbs.steps[2].progress, 0, 'and must consume the three that paid for it');
+  assert.ok(orbs.perShield >= 2, 'a shield must cost more than one orb to be a price at all');
+  orbs.steps.slice(0, -1).forEach((step, index) => {
+    assert.equal(step.charges, 0, `orb ${index + 1} of ${orbs.perShield} must not yet be a shield`);
+    assert.equal(step.progress, index + 1, `orb ${index + 1} must bank toward the next shield`);
+  });
+  assert.equal(orbs.steps.at(-1).charges, 1,
+    `orb ${orbs.perShield} must grant exactly one AEGIS charge`);
+  assert.equal(orbs.steps.at(-1).progress, 0,
+    `and must consume the ${orbs.perShield} that paid for it`);
 
   assert.equal(orbs.atCap, 3, 'the cap must actually be reached for the overflow case to mean anything');
   assert.equal(orbs.afterOverflow.charges, 3, 'a full bank must stay full');
-  assert.equal(orbs.afterOverflow.progress, 3,
-    'progress collected at the cap must be held, not discarded - the third orb is deferred, never wasted');
+  assert.equal(orbs.afterOverflow.progress, orbs.perShield,
+    'progress collected at the cap must be held, not discarded - the last orb is deferred, never wasted');
 
   // ---------------------------------------------------------------------------
   // The tap melody: in key, fresh per run, and reaching MONAS as well as HEX.

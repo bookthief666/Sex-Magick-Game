@@ -502,8 +502,14 @@
             PILLAR_GAP_DECREASE_PER_5_LEVELS: 10, 
             MIN_PILLAR_GAP: 110, 
             ORB_SPAWN_CHANCE: 0.5,
-            // M43: orbs pay in AEGIS charges rather than points.
-            ORBS_PER_SHIELD: 3,
+            // M44: orbs thin out as a run goes on. Half the walls carry one at the
+            // start; by the final band it is closer to one in six, so the shield
+            // economy stops keeping a late run alive indefinitely.
+            ORB_SPAWN_CHANCE_FLOOR: 0.17,
+            // M43: orbs pay in AEGIS charges rather than points. M44 raises the
+            // price from three to five - at three, a late run recovered a shield
+            // faster than it could ever spend one.
+            ORBS_PER_SHIELD: 5,
             PLAYER_JUMP_FORCE: -7.5,
             GRAVITY: 0.45,
             MAX_FALL_SPEED: 11,
@@ -1467,7 +1473,88 @@
             }
             
             /**
-             * Three orbs, one AEGIS charge (M43).
+             * How far through its own rite's ladder this run is, 0..1.
+             *
+             * M44: the orb economy needs a progression signal and each rite keeps
+             * its own. Read from whichever state exists rather than from score or
+             * `currentLevelIdx`, both of which D-053 removed from MONAS difficulty.
+             * Saturates at 1 on the final band, which is exactly the plateau the
+             * depth tier is built to continue past.
+             */
+            riteProgress() {
+                const monas = this.monasState;
+                if (monas && this.gameMode === 'MONAS') {
+                    const bands = window.__SEX_MAGICK_MONAS_PROGRESSION__?.getFingerprint?.().bands;
+                    const total = Array.isArray(bands) ? bands.length : 7;
+                    return Math.min(1, (monas.progressionBandIndex || 0) / Math.max(1, total - 1));
+                }
+                const slice = this.gateSliceState;
+                if (slice) {
+                    const names = window.__SEX_MAGICK_GATE_SLICE__?.getFingerprint?.().bandNames;
+                    const total = Array.isArray(names) ? names.length : 8;
+                    return Math.min(1, (slice.bandIndex || 0) / Math.max(1, total - 1));
+                }
+                return 0;
+            }
+
+            /**
+             * Spawn an orb for this wall - or, later in a run, decide not to.
+             *
+             * Two things change with progression, and both exist because the shield
+             * economy stopped working late. Orbs sat at the gap centre, so a
+             * narrowing corridor walked them onto the line the player already flies:
+             * by the top band every orb was free, five of them bought a shield, and
+             * a run could go on indefinitely. They are rarer now, and they sit off
+             * the line, so taking one is a decision to leave safety and come back.
+             *
+             * Placed roughly midway to the next wall rather than on this one, so the
+             * dip happens in open space instead of inside the gap the player is
+             * already threading.
+             */
+            /**
+             * Where an orb for this wall goes, and how likely it is to exist.
+             *
+             * The single owner of orb placement, because there are two spawn paths
+             * and they diverged the moment this changed. `obstacle-grammar.js`
+             * builds orbs by hand with `Object.create(Orb.prototype)` so the sweep
+             * phase can come from its seeded stream, and its own comment warned
+             * that "every field the constructor would set has to be set here too,
+             * and a new one is easy to forget" - which is exactly what happened to
+             * `offset` on the first attempt, producing a NaN height on every orb in
+             * the shipped path while the fallback path looked fine.
+             *
+             * Returns null when this wall carries no orb.
+             */
+            orbPlacementFor(pillar, spawnRate) {
+                if (!pillar) return null;
+                const progress = this.riteProgress();
+                const chance = CONFIG.ORB_SPAWN_CHANCE
+                    + ((CONFIG.ORB_SPAWN_CHANCE_FLOOR - CONFIG.ORB_SPAWN_CHANCE) * progress);
+                if (Math.random() >= chance) return null;
+
+                const centre = pillar.top + (pillar.gap / 2);
+                const reach = ORB_MAX_OFFSET_PX * progress;
+                // Offered toward the middle of the field: an orb hanging off a
+                // corridor that already sits near the top of the screen would be
+                // pushed off-screen and read as absent rather than as demanding.
+                const height = this.canvas.height || 1;
+                const offset = reach * (centre < height / 2 ? 1 : -1);
+                // Half a spawn interval ahead of the wall - the open space between
+                // this one and the next, which is where a dip is survivable.
+                const ahead = (Math.max(1, spawnRate) * this.gameSpeed) / 2;
+                return { x: pillar.x + (pillar.w / 2) + ahead, y: centre + offset, offset };
+            }
+
+            maybeSpawnOrb(pillar, spawnRate) {
+                const placement = this.orbPlacementFor(pillar, spawnRate);
+                if (!placement) return null;
+                const orb = new Orb(placement.x, placement.y, pillar, placement.offset);
+                this.collectibles.push(orb);
+                return orb;
+            }
+
+            /**
+             * Five orbs, one AEGIS charge (M43, retuned M44).
              *
              * The counter is only spent when a charge is actually granted. At the
              * three-charge cap `awardCharge` has nowhere to put one and returns
@@ -1922,9 +2009,7 @@
                 if (!this.voidMode && this.frames % Math.max(20, spawnRate) === 0) {
                     const p = new Pillar(this.currentLevelIdx, currentGap);
                     this.obstacles.push(p);
-                    if (Math.random() > (1 - CONFIG.ORB_SPAWN_CHANCE)) {
-                        this.collectibles.push(new Orb(p.x + p.w / 2, p.top + p.gap / 2, p));
-                    }
+                    this.maybeSpawnOrb(p, Math.max(20, spawnRate));
                 }
                 
                 this.tickConstellation();
@@ -2366,8 +2451,28 @@
         const ORB_REACH_MARGIN = 12;
         const ORB_SWEEP_PERIOD_FRAMES = 140;
 
+        // M44: how far off the corridor's centre line a late-run orb sits.
+        //
+        // M42 gave the orb a full-gap sweep so that taking it cost the edge. That
+        // worked early and inverted late: the sweep is bounded by the gap, so as
+        // the corridor narrows the orb converges onto exactly the line the player
+        // already has to fly. By the top band it is not a choice at all - it is a
+        // free shield handed to the player every time, which is why late runs stop
+        // ending. The offset decouples the orb from the corridor, so a *narrower*
+        // corridor makes it harder rather than easier.
+        //
+        // Bounded at 96px because the orb is optional: missing one costs a shield,
+        // never a life, so this does not need a reachability proof. What it does
+        // need is to stay takeable, and to leave the screen edges clear.
+        const ORB_MAX_OFFSET_PX = 96;
+        const ORB_EDGE_MARGIN_PX = 46;
+
         class Orb {
-            constructor(x, y, pillar) {
+            /**
+             * @param {number} offset  vertical distance from the corridor centre,
+             *   signed. Zero reproduces M42's behaviour exactly.
+             */
+            constructor(x, y, pillar, offset = 0) {
                 this.x = x;
                 this.y = y; 
                 this.r = 9;
@@ -2380,6 +2485,7 @@
                 // moved after the orb was placed. Both leave the field together,
                 // so this does not keep a dead pillar alive.
                 this.pillar = pillar || null;
+                this.offset = Number.isFinite(offset) ? offset : 0;
             }
             
             update(speed) {
@@ -2395,7 +2501,21 @@
                     // 0..1 from a sine, so the orb slows at each wall and crosses
                     // the middle fastest - the reverse of a linear sweep, and the
                     // shape that gives the player a moment to commit at the edges.
-                    this.y = top + (((Math.sin(this.float) + 1) / 2) * travel);
+                    //
+                    // The sweep narrows as the offset grows: an orb held 90px off
+                    // the line that also swept the full gap would cross back over
+                    // the line twice a cycle and undo its own point. At full offset
+                    // it barely moves, which is what makes it a fixed target the
+                    // player has to leave the corridor for.
+                    const damping = 1 - Math.min(1, Math.abs(this.offset) / ORB_MAX_OFFSET_PX);
+                    const swept = top + (((Math.sin(this.float) + 1) / 2) * travel);
+                    const centre = this.pillar.top + (this.pillar.gap / 2);
+                    const y = centre + ((swept - centre) * damping) + this.offset;
+                    // Never off-screen: an orb the player cannot reach at all reads
+                    // as a broken pickup rather than a hard one.
+                    const height = typeof game !== 'undefined' && game?.canvas?.height
+                        ? game.canvas.height : (y + ORB_EDGE_MARGIN_PX);
+                    this.y = Math.min(height - ORB_EDGE_MARGIN_PX, Math.max(ORB_EDGE_MARGIN_PX, y));
                 } else {
                     // No pillar (a legacy or hand-built orb): the old gentle hover.
                     this.y += Math.sin(this.float) * 0.8;

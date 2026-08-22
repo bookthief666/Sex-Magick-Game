@@ -136,25 +136,55 @@ function testReachabilityMatrix() {
     'the four post-GEBURAH bands'
   );
 
-  const bandScenarios = extendedBands.flatMap(band => {
-    const gap = band.gap - 10;
-    assert.ok(
-      gap >= variety.VERIFIED_STATIC_GAP,
-      `${band.name} breathes below the verified corridor floor at ${gap}px`
-    );
-    assert.ok(
-      band.speed <= 8.5,
-      `${band.name} exceeds the audited speed envelope at ${band.speed}`
-    );
-    return [
-      { id: `${band.name}-phone`, width: 390, height: 844, mobile: true, speed: band.speed, gap, breathPhases: [0] },
-      { id: `${band.name}-fold`, width: 884, height: 1104, mobile: false, speed: band.speed, gap, breathPhases: [0, 31] }
-    ];
-  });
+  // M44: each rite is audited against the ladder it actually runs.
+  //
+  // This used to build scenarios from HEX's bands alone and hand them to both
+  // rites. That is what pinned the speed ceiling at 8.5: D-072 proved HEX clean at
+  // 9.0, 9.5 and 10.0, but the raise failed this assertion because seven MONAS
+  // patterns cannot hold KETHER - at a speed MONAS never reaches, since the Gate
+  // slice returns early unless `gameMode === 'HEX'` and MONAS has its own ladder in
+  // `monas-progression-runtime.js`. The audit was constraining the ceiling with a
+  // condition the game cannot produce.
+  //
+  // The replacement is stricter, not looser. MONAS's own bands were never
+  // specifically covered here - they were only ever incidentally cleared by being
+  // easier than HEX's - so this adds coverage the audit did not have while
+  // removing coverage of a state that cannot exist.
+  const monasProgression = require('./monas-progression-runtime.js');
+
+  function bandScenariosFor(bands, label, speedCeiling) {
+    return bands.flatMap(band => {
+      const gap = band.gap - 10;
+      const name = band.name || band.id;
+      assert.ok(
+        gap >= variety.VERIFIED_STATIC_GAP,
+        `${label} ${name} breathes below the verified corridor floor at ${gap}px`
+      );
+      assert.ok(
+        band.speed <= speedCeiling,
+        `${label} ${name} exceeds its audited speed envelope at ${band.speed}`
+      );
+      return [
+        { id: `${name}-phone`, width: 390, height: 844, mobile: true, speed: band.speed, gap, breathPhases: [0] },
+        { id: `${name}-fold`, width: 884, height: 1104, mobile: false, speed: band.speed, gap, breathPhases: [0, 31] }
+      ];
+    });
+  }
+
+  const hexBandScenarios = bandScenariosFor(extendedBands, 'HEX', gate.MAX_VALIDATED_SPEED);
+  // MONAS's whole ladder, not a tail of it: it is short enough that auditing all of
+  // it costs little, and picking a slice would reintroduce exactly the positional
+  // fragility the `extendedBands` comment above warns about.
+  const monasBandScenarios = bandScenariosFor(
+    monasProgression.BANDS, 'MONAS', monasProgression.MAX_VALIDATED_SPEED
+  );
 
   const bandAudit = reachability.auditPatternLibrary(grammar, {
     patternResolver: policy.applyPatternOverride,
-    scenarios: bandScenarios,
+    scenariosByRite: { HEX: hexBandScenarios, MONAS: monasBandScenarios },
+    // Kept as the fallback so a rite this forgets to describe is over-constrained
+    // rather than silently skipped.
+    scenarios: hexBandScenarios,
     beamWidth: 1000
   });
   // Derived for the same reason as the library audit above: the case count
