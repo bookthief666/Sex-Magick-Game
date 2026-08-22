@@ -109,6 +109,8 @@ jobs:
           node --check tools/void-constellation.js
           node --check tools/test-void-constellation.js
           node --check tools/void-edge-layer.js
+          node --check tools/gnosis-edge.js
+          node --check tools/test-gnosis-edge.js
           node --check tools/monas-currents.js
           node --check tools/test-monas-currents.js
           node --check tools/test-void-edge-layer.js
@@ -141,6 +143,7 @@ jobs:
           node --check tools/browser-m41-monas-powerups-test.mjs
           node --check tools/browser-m41-caduceus-test.mjs
           node --check tools/browser-m42-orb-sweep-test.mjs
+          node --check tools/browser-m42-monas-edge-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -183,6 +186,7 @@ jobs:
           node tools/test-polygram.js
           node tools/test-void-constellation.js
           node tools/test-void-edge-layer.js
+          node tools/test-gnosis-edge.js
           node tools/test-monas-currents.js
           node tools/test-gallery-source.mjs
 
@@ -212,6 +216,9 @@ jobs:
 
       - name: Run M42 orb sweep Chrome integration
         run: node tools/browser-m42-orb-sweep-test.mjs
+
+      - name: Run M42 MONAS edge and portal Chrome integration
+        run: node tools/browser-m42-monas-edge-test.mjs
 
       - name: Run M9 runtime hardening Chrome integration
         run: node tools/browser-m9-runtime-hardening-test.mjs

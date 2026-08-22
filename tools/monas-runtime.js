@@ -335,6 +335,41 @@
     };
   }
 
+  // Smaller than HEX's 10: MONAS's walls come at a wider gap and a slower speed,
+  // so an edge is cheaper to take, and matching HEX's capacity would have the
+  // portal arriving constantly. Tuned so a portal lands roughly as often as the
+  // Caduceus does rather than on top of it.
+  const MONAS_GNOSIS_CAPACITY = 8;
+
+  // The band index at which MONAS's risk zones open. MALKUTH's equivalent - the
+  // first band - stays teachable: no Gnosis for edging and no decay for the
+  // middle, so a new player learns the glide before being asked to gamble on it.
+  const MONAS_RISK_FROM_BAND = 1;
+
+  // The same 12px the Gate slice uses (`EFFECTIVE_PLAYER_HALF`): the avatar is the
+  // same size in both rites, so the safe band is the same band. Named separately
+  // rather than imported so a MONAS-only change here would not silently move
+  // HEX's collision reasoning with it.
+  const MONAS_PLAYER_HALF = 12;
+
+  // Wider than HEX's graze window, because MONAS's corridors are wider and a
+  // proportionally equal graze is a larger number of pixels.
+  const MONAS_NEAR_MISS_PX = 16;
+
+  function gnosisEdgeApi() {
+    if (root.SexMagickGnosisEdge) return root.SexMagickGnosisEdge;
+    try {
+      if (typeof module === 'object' && module.exports && typeof require === 'function') {
+        return require('./gnosis-edge.js');
+      }
+    } catch (_error) {}
+    return null;
+  }
+
+  function gateSliceApi() {
+    return root.SexMagickGateSlice || null;
+  }
+
   function createMonasState() {
     return {
       version: MONAS_VERSION,
@@ -346,7 +381,19 @@
       bestCentred: 0,
       surges: 0,
       surgeFramesRemaining: 0,
-      surgeActive: false
+      surgeActive: false,
+      // M42: MONAS banks Gnosis by edging, exactly as HEX does. Coherence stays
+      // its own layer - it measures how *smoothly* you fly and buys the Warp
+      // Surge; Gnosis measures how *close* you fly and buys the portal. Two
+      // meters that reward different things is the point: a run can be smooth and
+      // timid, or ragged and brave, and they pay for different rewards.
+      gnosis: 0,
+      gnosisCapacity: MONAS_GNOSIS_CAPACITY,
+      riskStreak: 0,
+      timidGates: 0,
+      portalReady: false,
+      portalsEntered: 0,
+      portalsSurvived: 0
     };
   }
 
@@ -500,13 +547,30 @@
         background: linear-gradient(90deg, #ffd700, #fff6c9);
       }
       html.sex-magick-reduced-motion #monas-meter-fill { transition: none; }
+      /* M42: the edge bank, beneath the coherence meter. Cyan-free by
+         necessity - cyan is HEX's reserved colour (M7) - so Gnosis reads in a
+         paler gold than coherence's, close enough to belong to the same rite and
+         separate enough to be a second quantity at a glance. */
+      #monas-gnosis { margin-top: 6px; opacity: .92; font-size: 10px; }
+      #monas-gnosis-meter {
+        height: 3px; margin-top: 4px; background: rgba(255, 246, 201, .16);
+        border: 1px solid rgba(255, 246, 201, .38);
+      }
+      #monas-gnosis-fill {
+        height: 100%; width: 0%;
+        background: linear-gradient(90deg, #fff6c9, #ffffff);
+      }
+      #monas-hud.is-portal-ready #monas-gnosis-fill { background: #ffffff; }
     `;
     document.head.appendChild(style);
 
     const hud = document.createElement('div');
     hud.id = 'monas-hud';
     hud.hidden = true;
-    hud.innerHTML = '<div id="monas-status">COHERENCE</div><div id="monas-meter"><div id="monas-meter-fill"></div></div>';
+    hud.innerHTML = '<div id="monas-status">COHERENCE</div>'
+      + '<div id="monas-meter"><div id="monas-meter-fill"></div></div>'
+      + '<div id="monas-gnosis">GNOSIS</div>'
+      + '<div id="monas-gnosis-meter"><div id="monas-gnosis-fill"></div></div>';
     document.body.appendChild(hud);
     return hud;
   }
@@ -524,10 +588,34 @@
       const seconds = Math.ceil(state.surgeFramesRemaining / 60);
       if (status) status.textContent = `WARP SURGE · ${seconds}s`;
       if (fill) fill.style.width = `${clamp(state.surgeFramesRemaining / SURGE_FRAMES, 0, 1) * 100}%`;
+      renderGnosisRow(hud, state);
       return;
     }
     if (status) status.textContent = `COHERENCE ${state.coherence.toFixed(1).replace('.0', '')} / ${state.coherenceCapacity}`;
     if (fill) fill.style.width = `${clamp(state.coherence / state.coherenceCapacity, 0, 1) * 100}%`;
+    renderGnosisRow(hud, state);
+  }
+
+  /**
+   * The edge bank's own row.
+   *
+   * Split out rather than folded into `renderHud` because the surge branch above
+   * returns early, and Gnosis must keep reading through a surge - a player edging
+   * during a Warp Surge is still banking, and a meter that froze for the duration
+   * would look broken at exactly the loudest moment.
+   */
+  function renderGnosisRow(hud, state) {
+    const label = document.getElementById('monas-gnosis');
+    const fill = document.getElementById('monas-gnosis-fill');
+    const capacity = Math.max(1, finite(state.gnosisCapacity, 1));
+    const gnosis = Math.max(0, finite(state.gnosis, 0));
+    if (label) {
+      label.textContent = state.portalReady
+        ? 'THE PORTAL OPENS'
+        : `GNOSIS ${gnosis.toFixed(1).replace('.0', '')} / ${capacity}`;
+    }
+    if (fill) fill.style.width = `${clamp(gnosis / capacity, 0, 1) * 100}%`;
+    if (hud) hud.classList.toggle('is-portal-ready', Boolean(state.portalReady));
   }
 
   function trackHold() {
@@ -709,6 +797,127 @@
     }
   }
 
+  /**
+   * Bank Gnosis for one cleared MONAS wall.
+   *
+   * The classification and the economy are both the Gate slice's - `classifyGateClear`
+   * needs nothing but a height and a corridor, and `gnosis-edge.js` needs nothing
+   * but a bank. What is MONAS's alone is *which* band opens the risk zones, since
+   * MONAS runs its own six-band ladder and inheriting HEX's thresholds here is
+   * precisely the error D-072 recorded.
+   *
+   * Silent on every failure: a missing module or a malformed pillar costs the
+   * player a half-point of Gnosis, where a thrown error inside the update loop
+   * costs them the run.
+   */
+  function bankMonasEdge(gameInstance, pillar) {
+    const state = gameInstance?.monasState;
+    const slice = gateSliceApi();
+    const economy = gnosisEdgeApi();
+    if (!state || !slice?.classifyGateClear || !economy) return null;
+
+    try {
+      const approach = pillar.__gateSliceApproach;
+      const classification = slice.classifyGateClear({
+        playerY: approach ? approach.playerY : gameInstance.player?.y,
+        gapTop: approach ? approach.gapTop : pillar.top,
+        gapSize: approach ? approach.gapSize : pillar.gap,
+        playerHalf: MONAS_PLAYER_HALF
+      });
+      const bandIndex = whole(state.progressionBandIndex, 0);
+      const applied = economy.applyEdgeClear(
+        { gnosis: state.gnosis, gnosisCapacity: state.gnosisCapacity,
+          riskStreak: state.riskStreak, timidGates: state.timidGates },
+        {
+          classification,
+          family: pillar.patternFamily || 'safe',
+          riskActive: bandIndex >= MONAS_RISK_FROM_BAND,
+          nearMissThreshold: MONAS_NEAR_MISS_PX
+        }
+      );
+
+      state.gnosis = applied.edge.gnosis;
+      state.gnosisCapacity = applied.edge.gnosisCapacity;
+      state.riskStreak = applied.edge.riskStreak;
+      state.timidGates = applied.edge.timidGates;
+      if (applied.full) state.portalReady = true;
+      if (applied.bonusScore > 0) {
+        gameInstance.score = whole(gameInstance.score, 0) + applied.bonusScore;
+        const scoreUi = document.getElementById('scoreUi');
+        if (scoreUi) scoreUi.textContent = String(gameInstance.score);
+      }
+      return applied;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  // --- the portal ---------------------------------------------------------------
+  //
+  // MONAS's answer to HEX's wagered Void. The wager is the same currency in both
+  // rites now (Gnosis, banked by edging), but what survives it is not: HEX's Void
+  // is survived by not dying at speed, and the Undertow is survived by *gliding* -
+  // `settleUndertow` scales the return by smoothness, so a player who thrashes
+  // through it loses the stake without ever touching a wall.
+
+  function resetPortal(gameInstance) {
+    gameInstance.__monasPortal = null;
+  }
+
+  /**
+   * Open a portal when the meter is full, and only outside the Caduceus.
+   *
+   * Two sections at once would be unreadable, and the Caduceus already suppresses
+   * pillars - a portal inside it would be a wager on a corridor with nothing in
+   * it, which is not a wager.
+   */
+  function maybeOpenPortal(gameInstance) {
+    const api = currentsApi();
+    const state = gameInstance?.monasState;
+    if (!api || !state || gameInstance.__monasPortal || gameInstance.__monasCaduceus) return false;
+    if (!state.portalReady || state.gnosis <= 0) return false;
+
+    const portal = api.createUndertow(state.gnosis);
+    if (portal.stake <= 0) return false;
+
+    state.gnosis = Math.max(0, Math.round((state.gnosis - portal.stake) * 10) / 10);
+    state.portalReady = false;
+    state.portalsEntered = whole(state.portalsEntered, 0) + 1;
+    gameInstance.__monasPortal = portal;
+
+    try { root.GlitchFX?.trigger?.(180, 'sweepBeam', '#fff6c9'); } catch (_error) {}
+    try { if (gameInstance.settings?.sfx) SFX.levelUp(); } catch (_error) {}
+    return true;
+  }
+
+  /**
+   * Advance a live portal and settle it once its clock runs out.
+   *
+   * `settleUndertow` is once-only by construction, which matters because the
+   * closing frame can be observed twice - by the tick that ended it and by the
+   * teardown that clears it - and a caller-side guard has to be right in both.
+   */
+  function tickPortal(gameInstance, reversed) {
+    const api = currentsApi();
+    const portal = gameInstance?.__monasPortal;
+    const state = gameInstance?.monasState;
+    if (!api || !portal || !state) return;
+
+    api.tickUndertow(portal, Boolean(reversed));
+    if (!api.isUndertowOver(portal)) return;
+
+    const settled = api.settleUndertow(portal);
+    if (settled.settled && settled.returned > 0) {
+      state.gnosis = Math.min(
+        finite(state.gnosisCapacity, 0),
+        Math.round((finite(state.gnosis, 0) + settled.returned) * 10) / 10
+      );
+      state.portalsSurvived = whole(state.portalsSurvived, 0) + 1;
+      try { root.GlitchFX?.trigger?.(220, 'sweepBeam', '#ffffff'); } catch (_error) {}
+    }
+    gameInstance.__monasPortal = null;
+  }
+
   function install() {
     if (installed || Game.prototype.__monasRuntimeInstalled) return root.__SEX_MAGICK_MONAS__ || null;
     if (!dependenciesReady()) return null;
@@ -786,6 +995,7 @@
           : this.gameLevels;
         monasGallery = shuffled(pool);
         resetCaduceus(this);
+        resetPortal(this);
         renderHud(this);
       } else {
         this.monasState = null;
@@ -796,6 +1006,7 @@
         // caught exactly that, which is the second time in this milestone a
         // MONAS teardown has turned out to be one-sided.
         resetCaduceus(this);
+        resetPortal(this);
         // Also render on the way out. `renderHud` computes `active` as false
         // without a MONAS state and hides the meter, and nothing else will do it:
         // `updateGameObjects` returns early for non-MONAS, so the only other
@@ -908,6 +1119,7 @@
       // across the call and read the flags afterwards. Same technique the Gate
       // slice uses for its own corridor, and for the same reason.
       maybeOpenCaduceus(this);
+      maybeOpenPortal(this);
       const caduceus = this.__monasCaduceus;
       const nodesBefore = caduceus && this.pentagrams?.length ? [...this.pentagrams] : null;
       if (caduceus) spawnCaduceusNodes(this);
@@ -959,10 +1171,20 @@
 
       if (surgeSpeed !== 1) this.gameSpeed = baseSpeed;
 
+      // Borrowed wholesale from the Gate slice, which is safe because it is
+      // entirely state-free: it reads the player and the pillars and records, per
+      // pillar, the player's height at the frame of closest horizontal approach.
+      // M16.3 established why that matters and it is no less true here - at MONAS
+      // fall speeds, reading `player.y` once the pillar is already marked samples
+      // the player well below where they actually threaded the gap, which would
+      // misattribute the risk zone of every single clear.
+      try { gateSliceApi()?.samplePillarApproaches?.(this); } catch (_error) {}
+
       for (const record of before) {
         if (!record.marked && record.pillar.marked) {
           const gap = finite(record.pillar.gap, 200);
           const centre = finite(record.pillar.top, 0) + (gap / 2);
+          bankMonasEdge(this, record.pillar);
           const galleryStepBefore = Math.floor(Math.max(0, finite(this.monasState.gatesPassed, 0)) / GALLERY_ADVANCE_GATES);
           const applied = applyCoherence(this.monasState, {
             gap,
@@ -1042,6 +1264,7 @@
         CONFIG.PILLAR_SPAWN_BASE = previousSpawnBase;
       }
       if (caduceus) settleCaduceusFrame(this, caduceus, nodesBefore, reversedThisFrame);
+      tickPortal(this, reversedThisFrame);
 
       renderHud(this);
       return result;

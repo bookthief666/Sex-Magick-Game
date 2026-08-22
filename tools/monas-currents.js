@@ -55,11 +55,17 @@
   const UNDERTOW_FRAMES = 300;
 
   /**
-   * How much coherence a wager costs, as a fraction of what is banked.
+   * How much of the bank a wager costs, as a fraction.
    *
-   * Deliberately a fraction rather than the whole bank. MONAS's coherence is also
-   * what buys the Warp Surge, so an all-or-nothing wager would mean every entry
-   * cost the player their next surge, and nobody would take it twice.
+   * M42 restakes this on **Gnosis** rather than coherence. Both rites now bank
+   * Gnosis by edging (`gnosis-edge.js`), and wagering the same currency in both
+   * keeps one economy rather than two - the alternative had MONAS's portal
+   * spending the meter that also buys the Warp Surge, so every entry cost a surge
+   * and nobody would take it twice.
+   *
+   * Still a fraction rather than the whole bank: an emptied meter means the next
+   * portal is a long way off, and a section the player cannot afford to fail is a
+   * section they stop entering.
    */
   const UNDERTOW_STAKE_RATIO = 0.5;
 
@@ -136,13 +142,13 @@
 
   // --- Undertow ---------------------------------------------------------------
 
-  function undertowStake(coherence) {
-    const banked = Math.max(0, finite(coherence, 0));
-    return Math.round(banked * UNDERTOW_STAKE_RATIO * 10) / 10;
+  function undertowStake(banked) {
+    const bank = Math.max(0, finite(banked, 0));
+    return Math.round(bank * UNDERTOW_STAKE_RATIO * 10) / 10;
   }
 
-  function createUndertow(coherence = 0) {
-    const stake = undertowStake(coherence);
+  function createUndertow(gnosis = 0) {
+    const stake = undertowStake(gnosis);
     return {
       framesRemaining: UNDERTOW_FRAMES,
       framesElapsed: 0,

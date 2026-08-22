@@ -141,6 +141,24 @@
     return BANDS[getBandIndex(gatesCleared)];
   }
 
+  /**
+   * The shared edge economy, from the page or from Node.
+   *
+   * The browser gets it from a script tag; the unit suites `require` this file
+   * directly with no page around it, so `root` is empty and a bare global read
+   * throws. Resolved lazily rather than at load so the script-tag order stays
+   * free, and cached by the module's own attach on first require.
+   */
+  function gnosisEdge() {
+    if (root.SexMagickGnosisEdge) return root.SexMagickGnosisEdge;
+    try {
+      if (typeof module === 'object' && module.exports && typeof require === 'function') {
+        return require('./gnosis-edge.js');
+      }
+    } catch (_error) { /* fall through to the throw below */ }
+    throw new Error('SexMagickGnosisEdge is required for the Gate slice edge economy');
+  }
+
   function familyWeight(family) {
     switch (String(family || '').toLowerCase()) {
       case 'climax': return 2;
@@ -297,43 +315,35 @@
     const family = String(options.family || 'safe').toLowerCase();
     const riskActive = options.riskActive !== false;
     const nearMissThreshold = Math.max(0, finiteNumber(Number(options.nearMissThreshold), NEAR_MISS_PX));
-    const isRisk = riskActive && (classification.zone === 'risk-top' || classification.zone === 'risk-bottom');
-    const isNearMiss = classification.minimumClearance >= 0 && classification.minimumClearance < nearMissThreshold;
-    let gnosisGained = 0;
-    let gnosisDecayed = 0;
-    let bonusScore = 0;
-    let precisionBonus = 0;
+    // M42: the edge economy itself now lives in `gnosis-edge.js`, because MONAS
+    // banks Gnosis the same way and a second copy of these rules would drift.
+    // What stays here is the part that is HEX's alone - the gate count and the
+    // band index off HEX's own ladder, which is exactly what MONAS must not
+    // inherit.
+    const applied = gnosisEdge().applyEdgeClear(
+      { gnosis: next.gnosis, gnosisCapacity: next.gnosisCapacity,
+        riskStreak: next.riskStreak, timidGates: next.timidGates },
+      { classification, family, riskActive, nearMissThreshold }
+    );
+    const isRisk = applied.isRisk;
+    const isNearMiss = applied.nearMiss;
+    const gnosisGained = applied.gnosisGained;
+    const gnosisDecayed = applied.gnosisDecayed;
+    const precisionBonus = applied.precisionBonus;
+    const bonusScore = applied.bonusScore;
 
     next.gatesCleared += 1;
     next.scoreBreakdown.gate += 1;
     next.bandIndex = getBandIndex(next.gatesCleared);
 
+    next.gnosis = applied.edge.gnosis;
+    next.riskStreak = applied.edge.riskStreak;
+    next.timidGates = applied.edge.timidGates;
     if (isRisk) {
-      gnosisGained = familyWeight(family);
-      next.gnosis = roundHalf(Math.min(next.gnosisCapacity, next.gnosis + gnosisGained));
-      next.riskStreak += 1;
-      next.timidGates = 0;
       next.scoreBreakdown.risk += 2;
-      bonusScore += 2;
-      precisionBonus = streakBonus(next.riskStreak);
       next.scoreBreakdown.streak += precisionBonus;
-      bonusScore += precisionBonus;
-    } else {
-      next.riskStreak = 0;
-      if (riskActive) {
-        next.timidGates += 1;
-        if (next.timidGates >= 3 && next.gnosis > 0) {
-          gnosisDecayed = Math.min(1, next.gnosis);
-          next.gnosis = roundHalf(Math.max(0, next.gnosis - gnosisDecayed));
-          next.timidGates = 0;
-        }
-      }
     }
-
-    if (isNearMiss) {
-      next.scoreBreakdown.nearMiss += 1;
-      bonusScore += 1;
-    }
+    if (isNearMiss) next.scoreBreakdown.nearMiss += 1;
 
     if (next.gnosis >= next.gnosisCapacity) next.gateReady = true;
 
