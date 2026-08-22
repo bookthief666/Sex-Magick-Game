@@ -73,14 +73,21 @@ try {
     // Guarantee orbs rather than waiting on a 0.5 roll, so the *scarcity* measured
     // below is the progression decay alone and not the base chance.
     CONFIG.ORB_SPAWN_CHANCE = 1;
-    if (${gates} > 0 && game.gateSliceState) {
+    const pinnedBandIndex = ${gates} > 0
+      ? window.__SEX_MAGICK_GATE_SLICE__.getFingerprint().bandNames.length - 1
+      : 0;
+    if (game.gateSliceState) {
       game.gateSliceState.gatesCleared = ${gates};
-      game.gateSliceState.bandIndex = window.__SEX_MAGICK_GATE_SLICE__.getFingerprint().bandNames.length - 1;
+      game.gateSliceState.bandIndex = pinnedBandIndex;
+      game.applyLevel();
     }
+    const sampledSpeed = game.gameSpeed;
+    const sampledGap = game.getCurrentGap();
 
     const PLAYER_HALF = 12;
     let sampled = 0, orbsSeen = 0, withoutPillar = 0;
     let offScreen = 0, maxAbsOffset = 0, walls = 0, orbsSpawned = 0;
+    let maxObservedGatesAfterUpdate = 0;
     const counted = new Set();
     let minOffsetFromTop = Infinity;   // how close to the top wall the orb gets
     let minOffsetFromBottom = Infinity;
@@ -93,10 +100,19 @@ try {
       const ahead = game.obstacles.filter(o => o.x + o.w > game.player.x).sort((a, b) => a.x - b.x)[0];
       game.player.y = ahead ? ahead.top + (ahead.gap / 2) : game.canvas.height / 2;
       game.player.vy = 0;
+      // This sampler claims an exact progression coordinate. Keep it there before
+      // the spawn path reads riteProgress(); merely setting it once lets ordinary
+      // gate clears turn the "opening" sample into a progressively offset run.
+      if (game.gateSliceState) {
+        game.gateSliceState.gatesCleared = ${gates};
+        game.gateSliceState.bandIndex = pinnedBandIndex;
+      }
       const wallsBefore = game.obstacles.length;
       game.updateGameObjects();
       if (game.obstacles.length > wallsBefore) walls += 1;
-      if (${gates} > 0 && game.gateSliceState) game.gateSliceState.gatesCleared = ${gates};
+      if (game.gateSliceState) {
+        maxObservedGatesAfterUpdate = Math.max(maxObservedGatesAfterUpdate, game.gateSliceState.gatesCleared);
+      }
 
       for (const orb of game.collectibles) {
         if (!counted.has(orb)) { counted.add(orb); orbsSpawned += 1; }
@@ -123,7 +139,8 @@ try {
     }
     return { sampled, orbsSeen, withoutPillar, minOffsetFromTop, minOffsetFromBottom,
              outsideSafeBand, distinctY: distinctYs.size, offScreen, maxAbsOffset,
-             walls, orbsSpawned,
+             walls, orbsSpawned, maxObservedGatesAfterUpdate,
+             pinnedBandIndex, sampledSpeed, sampledGap,
              spawnRatio: walls > 0 ? Math.round((orbsSpawned / walls) * 100) / 100 : null };
   })()`;
 
@@ -145,6 +162,10 @@ try {
 
   // The opening band is unchanged from M42: no offset, so the orb still sweeps the
   // whole corridor and still reaches both risk edges.
+  assert.ok(report.maxObservedGatesAfterUpdate > 0,
+    'negative control: the unattended run must clear a gate, or pinning progression proves nothing');
+  assert.equal(report.maxAbsOffset, 0,
+    `the opening-band sample must stay at zero progression offset (largest ${report.maxAbsOffset}px)`);
   assert.equal(report.outsideSafeBand, 0,
     `on the opening band the orb must stay inside the band the player can occupy (${report.outsideSafeBand} frames outside)`);
   assert.ok(report.distinctY > 40,
@@ -158,6 +179,10 @@ try {
   console.log('orb at depth:', JSON.stringify(deep));
   assert.ok(deep.walls >= 20, `needed enough late-run walls to measure a rate, got ${deep.walls}`);
   assert.ok(deep.orbsSpawned >= 2, `needed at least a couple of late-run orbs to inspect, got ${deep.orbsSpawned}`);
+  assert.ok(deep.sampledSpeed > report.sampledSpeed,
+    `deep sampler must apply a faster shipped band (${report.sampledSpeed} -> ${deep.sampledSpeed})`);
+  assert.ok(deep.sampledGap < report.sampledGap,
+    `deep sampler must apply a narrower shipped corridor (${report.sampledGap} -> ${deep.sampledGap})`);
   assert.ok(deep.maxAbsOffset > 40,
     `a late-run orb must sit well off the corridor centre (largest offset ${deep.maxAbsOffset}px)`);
   assert.equal(deep.offScreen, 0,

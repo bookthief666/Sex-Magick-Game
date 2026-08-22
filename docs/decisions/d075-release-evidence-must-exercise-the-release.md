@@ -147,6 +147,20 @@ runtime sources. A resumed local run may reuse only an exact fingerprint match;
 CI deliberately starts without a checkpoint directory and recomputes the whole
 artifact. This changes audit durability, not the release gate or its coverage.
 
+Running the full gate found one more test that had stopped measuring its named
+subject. `browser-m42-orb-sweep-test.mjs` called its first arm “opening band” but
+let 1,600 real frames clear enough gates to advance the HEX band. Its own failed
+report exposed the drift: `maxAbsOffset` was 13.714px, while the opening coordinate
+can only produce exactly zero. One frame then left the opening safe-band assertion,
+correctly for the later coordinate the test had accidentally reached. The sampler
+now pins both `gatesCleared` and `bandIndex` immediately before every spawned frame,
+asserts zero opening offset, and records a post-frame gate clear as a negative
+control proving that the unattended run really would advance. The safety assertion
+is unchanged. The deep arm now applies the selected band through the shipped
+`applyLevel()` path and asserts that it is faster and narrower than the opening
+arm; previously it changed progression metadata without proving the corresponding
+speed and corridor were live.
+
 Automated reachability remains a mathematical claim about replayable routes under
 the modeled state law. It does not answer whether HEX 10.0 or MONAS 6.5 feels
 right. Styling parity does not make the remaining jsDelivr audio origin offline;
