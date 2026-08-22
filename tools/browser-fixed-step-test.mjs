@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
+import { startStaticServer } from './qa-static-server.mjs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +12,7 @@ const DEBUG_PORT = Number(process.env.QA_DEBUG_PORT || 9222);
 const BASE_URL = `http://127.0.0.1:${HTTP_PORT}`;
 const STEP_MS = 1000 / 60;
 const childProcesses = [];
+const servers = [];
 const EXTERNAL_BLOCKED_URLS = Object.freeze([
   'https://cdn.tailwindcss.com/*',
   'https://fonts.googleapis.com/*',
@@ -473,14 +475,15 @@ async function main() {
   assert.ok(chromeBinary, 'Chrome/Chromium executable not found');
 
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'sex-magick-chrome-'));
-  const pythonBinary = findCommand(['python3', 'python']);
-  assert.ok(pythonBinary, 'Python executable not found for local HTTP server');
 
-  const server = spawn(pythonBinary, ['-m', 'http.server', String(HTTP_PORT), '--bind', '127.0.0.1'], {
-    cwd: ROOT,
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  childProcesses.push(server);
+  // In-process rather than a spawned `python3 -m http.server`: this suite
+  // navigates nine times and each navigation abandons whatever the previous page
+  // still had in flight - with the in-repo gallery that is up to 75 images. The
+  // Python handler blocks in `wfile.write()` on a client that left and never
+  // serves again, which is what made this suite red for 16 runs. See
+  // tools/qa-static-server.mjs.
+  const server = await startStaticServer({ root: ROOT, port: HTTP_PORT });
+  servers.push(server);
   await waitForHttp(`${BASE_URL}/index.html`);
 
   const chrome = spawn(chromeBinary, [
@@ -534,6 +537,7 @@ async function main() {
     for (const child of childProcesses.reverse()) {
       if (!child.killed) child.kill('SIGTERM');
     }
+    for (const instance of servers.reverse()) await instance.close();
     await removeChromeProfile(userDataDir);
   }
 }
@@ -543,5 +547,6 @@ main().catch(error => {
   for (const child of childProcesses.reverse()) {
     if (!child.killed) child.kill('SIGTERM');
   }
+  for (const instance of servers.reverse()) instance.close();
   process.exitCode = 1;
 });
