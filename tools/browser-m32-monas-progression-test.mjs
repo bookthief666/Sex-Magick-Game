@@ -86,7 +86,7 @@ try {
 
       const initial = snapshot();
       const ladder = [];
-      for (const gates of [8, 20, 36, 56, 80]) {
+      for (const gates of [8, 20, 36, 56, 80, 110, 150]) {
         progression.forceGatesForTest(gates);
         ladder.push(snapshot());
       }
@@ -105,6 +105,36 @@ try {
       const surge = snapshot();
       game.monasState.surgeActive = false;
 
+      // M43: the assertion whose absence hid a live defect for two milestones.
+      //
+      // Everything above reads `getSnapshot()` immediately after
+      // `forceGatesForTest`, which calls `applyProgression` directly. That measures
+      // what progression *writes* and never what survives a frame - so when
+      // `monas-runtime.js` overwrote `gameSpeed` from a flat ramp on every
+      // `updateGameObjects`, this suite stayed green while the shipped game ran the
+      // whole ladder at 2.61 -> 3.17. D-058 was written to fix that shortfall and
+      // its fix was silently undone one call-frame further out.
+      //
+      // So: force the band, then actually run frames, then look. The player only
+      // ever experiences the post-frame value.
+      const afterFrames = [];
+      for (const gates of [8, 36, 80, 110, 150]) {
+        progression.forceGatesForTest(gates);
+        const written = game.gameSpeed;
+        game.state = GameState.PLAYING;
+        for (let i = 0; i < 4; i += 1) {
+          try { game.updateGameObjects(); } catch (_error) {}
+        }
+        game.state = GameState.PAUSED;
+        afterFrames.push({
+          gates,
+          band: game.monasState.progressionBandIndex,
+          written,
+          live: game.gameSpeed,
+          surgeActive: Boolean(game.monasState.surgeActive)
+        });
+      }
+
       // Gate's restart wrapper creates HEX state underneath MONAS when Gate exists;
       // M32 must erase it and rebuild a clean MONAS run before returning control.
       progression.forceGatesForTest(80);
@@ -122,6 +152,7 @@ try {
         levelBeforeScoreCheck,
         levelAfterScoreCheck,
         surge,
+        afterFrames,
         afterRetry,
         gateSliceModule: Boolean(window.SexMagickGateSlice),
         effectiveSearch: location.search,
@@ -138,7 +169,9 @@ try {
       { gatesPassed: 20, band: 2, speed: 3.33, nominalGap: 240 },
       { gatesPassed: 36, band: 3, speed: 3.69, nominalGap: 230 },
       { gatesPassed: 56, band: 4, speed: 4.05, nominalGap: 220 },
-      { gatesPassed: 80, band: 5, speed: 4.41, nominalGap: 210 }
+      { gatesPassed: 80, band: 5, speed: 4.41, nominalGap: 210 },
+      { gatesPassed: 110, band: 6, speed: 4.77, nominalGap: 200 },
+      { gatesPassed: 150, band: 7, speed: 5.13, nominalGap: 190 }
     ];
 
     assert.equal(result.initial.gatesPassed, 0, `${label}: fresh run must begin at gate 0`);
@@ -166,6 +199,24 @@ try {
     assert.equal(rounded(result.surge.speed), 4.41, `${label}: Warp Surge must not mutate canonical base speed`);
     assert.equal(rounded(result.surge.nominalGap), 210, `${label}: Warp Surge nominal gap`);
     assert.equal(rounded(result.surge.liveGap), 247.8, `${label}: Warp Surge must widen 210 by 1.18`);
+
+    // M43: the ladder must still be the live speed after frames have run. A
+    // regression here means something is writing `gameSpeed` per frame again, and
+    // the ladder above has quietly become decoration.
+    const liveExpected = { 8: 2.97, 36: 3.69, 80: 4.41, 110: 4.77, 150: 5.13 };
+    result.afterFrames.forEach(entry => {
+      const wanted = liveExpected[entry.gates];
+      assert.equal(entry.surgeActive, false, `${label}: surge must be off for the live-speed check at ${entry.gates}`);
+      assert.equal(
+        rounded(entry.written), wanted,
+        `${label}: applyProgression must write ${wanted} at gate ${entry.gates}`
+      );
+      assert.equal(
+        rounded(entry.live), wanted,
+        `${label}: gameSpeed must still be ${wanted} at gate ${entry.gates} after frames run - ` +
+        'a mismatch means the band ladder is being overwritten per frame again (D-058, M43)'
+      );
+    });
 
     assert.equal(result.afterRetry.gatesPassed, 0, `${label}: retry resets semantic gate progression`);
     assert.equal(result.afterRetry.band, 0, `${label}: retry resets band`);
@@ -199,6 +250,7 @@ try {
     beforeScoreCheck: result.beforeScoreCheck,
     afterScoreCheck: result.afterScoreCheck,
     surge: result.surge,
+    afterFrames: result.afterFrames,
     afterRetry: result.afterRetry
   });
   assert.deepEqual(semantic(gate), semantic(product), 'product-default and explicit-Gate MONAS semantics must be identical');

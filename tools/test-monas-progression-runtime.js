@@ -11,25 +11,29 @@ function approximately(actual, expected, epsilon = 1e-9) {
 
 assert.equal(progression.validateBands(), true);
 
-const expectedThresholds = [0, 8, 20, 36, 56, 80];
+const expectedThresholds = [0, 8, 20, 36, 56, 80, 110, 150];
 assert.deepEqual(progression.BANDS.map(band => band.gateThreshold), expectedThresholds);
 
-// The live M32 curve is deliberately the conservative first six coordinates from
-// M31's exact frontier. A future tuning change must either remain on proven M31
-// coordinates or carry new reachability evidence with it.
-const provenLowerFrontier = frontier.CANDIDATES.slice(0, 6);
-assert.equal(progression.BANDS.length, provenLowerFrontier.length);
+// M43: the live curve is now every coordinate of M31's exact frontier, in order.
+// The contract this replaces held the top two back as headroom; it is superseded,
+// not weakened - the invariant that matters is unchanged and asserted here. Every
+// live band must be an exact frontier coordinate, so a future tuning change still
+// has to either stay on a proven pair or carry new reachability evidence.
+assert.equal(progression.BANDS.length, frontier.CANDIDATES.length);
 for (let index = 0; index < progression.BANDS.length; index += 1) {
   const live = progression.BANDS[index];
-  const proven = provenLowerFrontier[index];
+  const proven = frontier.CANDIDATES[index];
   approximately(live.speed, proven.baseSpeed);
   approximately(live.gap, proven.nominalGap);
 }
 
-// The two harder proven coordinates remain headroom, not live bands.
-const livePairs = new Set(progression.BANDS.map(band => `${band.speed}/${band.gap}`));
-assert.equal(livePairs.has('5.3/200'), false, 'p6 must remain tuning headroom');
-assert.equal(livePairs.has('5.7/190'), false, 'p7 is a search ceiling, not a live band');
+// The top band is the search ceiling itself, which is the whole point of the
+// extension and the reason it needs no new evidence: D-051's boundary job audited
+// 5.7 / 190 across the complete scheduler-legal pattern-variant pair cross-product,
+// in ordinary flight and in Warp Surge.
+const ceiling = progression.BANDS.at(-1);
+approximately(ceiling.speed, 5.7);
+approximately(ceiling.gap, 190);
 
 // Threshold boundaries are gate-count driven and saturate at the last live band.
 for (let index = 0; index < progression.BANDS.length; index += 1) {
@@ -50,14 +54,16 @@ const troughFrame = (3 * Math.PI / 2) / 0.05;
 const lastBand = progression.BANDS.at(-1);
 approximately(progression.gapFor(lastBand.gateThreshold, troughFrame, false), lastBand.gap - 10, 1e-8);
 
-// M32's hardest reward state remains materially below the M31 search ceiling and
-// below the game's pre-existing 8.5 maximum-speed scale.
+// M43: the hardest reward state is now the surge at the search ceiling itself -
+// exactly the condition D-051's boundary job audited in `mode: 'surge'`, and named
+// in its own text as 8.265. It stays below the game's pre-existing 8.5 maximum-speed
+// scale, which is the constraint that was ever load-bearing here.
 const liveSurgeMax = lastBand.speed * monas.SURGE_SPEED_MULTIPLIER;
 const searchCeiling = frontier.CANDIDATES.at(-1);
 const searchCeilingSurge = searchCeiling.baseSpeed * monas.SURGE_SPEED_MULTIPLIER;
-approximately(liveSurgeMax, 7.105);
+approximately(liveSurgeMax, 8.265);
 approximately(searchCeilingSurge, 8.265);
-assert.ok(liveSurgeMax < searchCeilingSurge);
+assert.ok(liveSurgeMax <= searchCeilingSurge, 'live surge must never exceed the audited ceiling');
 assert.ok(liveSurgeMax < 8.5);
 
 console.log('monas-progression-runtime: all deterministic contracts passed');

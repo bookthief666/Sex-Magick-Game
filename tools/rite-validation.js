@@ -44,14 +44,23 @@
   // separation is enforced.
   const DEFAULT_RITE = 'HEX';
 
-  // MONAS's own ladder (`monas-progression-runtime.js`), which is six bands rather
-  // than eight and spaced differently. M42 gives MONAS the edge meter and a portal,
-  // so it records runs now - and validating a MONAS run against HEX's thresholds
-  // would reject every honest one. Selected here **by rite** rather than accepted
-  // from the caller: a client-supplied threshold list would make the band check
-  // meaningless, since a forger would simply send thresholds its lie satisfies.
-  const MONAS_BANDS = Object.freeze(['STILL', 'CURRENT-I', 'CURRENT-II', 'AXIS', 'ORBIT', 'CROWN']);
-  const MONAS_THRESHOLDS = Object.freeze([0, 8, 20, 36, 56, 80]);
+  // MONAS's own ladder (`monas-progression-runtime.js`) - eight bands like HEX's
+  // now, but spaced differently. M42 gives MONAS the edge meter and a portal, so it
+  // records runs now, and validating a MONAS run against HEX's thresholds would
+  // reject every honest one. Selected here **by rite** rather than accepted from the
+  // caller: a client-supplied threshold list would make the band check meaningless,
+  // since a forger would simply send thresholds its lie satisfies.
+  //
+  // These must track `monas-progression-runtime.js`'s BANDS exactly. They are
+  // duplicated rather than imported because this file is shared byte-for-byte with
+  // the Worker (D-044), which has no access to a browser runtime - so the coupling
+  // is asserted by `test-rite-validation`/the parity test instead of enforced by the
+  // module system. M43 added ASCENT and CEILING; leaving them out here would have
+  // rejected every honest run past gate 110 as a band mismatch.
+  const MONAS_BANDS = Object.freeze([
+    'STILL', 'CURRENT-I', 'CURRENT-II', 'AXIS', 'ORBIT', 'CROWN', 'ASCENT', 'CEILING'
+  ]);
+  const MONAS_THRESHOLDS = Object.freeze([0, 8, 20, 36, 56, 80, 110, 150]);
 
   const RITE_LADDERS = Object.freeze({
     HEX: { bands: FALLBACK_BANDS, thresholds: FALLBACK_THRESHOLDS },

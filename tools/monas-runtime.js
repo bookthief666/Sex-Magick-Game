@@ -1036,10 +1036,20 @@
       if (!isMonas(this)) return originalAdjustForScreenSize.apply(this, args);
 
       const live = this.gameSpeed;
+      const previousBase = this.__monasGeometryBaseSpeed;
       this.gameSpeed = typeof CONFIG !== 'undefined' ? CONFIG.INITIAL_GAME_SPEED : live;
       const result = originalAdjustForScreenSize.apply(this, args);
       this.__monasGeometryBaseSpeed = this.gameSpeed;
       this.gameSpeed = live;
+
+      // M43: the ladder is now the only writer of `gameSpeed`, and it writes on
+      // gate changes. A posture change between two gates would otherwise leave the
+      // run at the previous screen's speed until the next gate cleared - visible on
+      // a Fold, where unfolding moves the base from 2.61 to 2.9. Re-applying costs
+      // one assignment and only happens when the captured base actually moved.
+      if (this.monasState && previousBase !== this.__monasGeometryBaseSpeed) {
+        try { root.__SEX_MAGICK_MONAS_PROGRESSION__?.resyncProgression?.(); } catch (_error) {}
+      }
       return result;
     };
 
@@ -1235,21 +1245,27 @@
         CONFIG.PILLAR_SPAWN_BASE = Number.MAX_SAFE_INTEGER;
       }
 
-      // Difficulty escalation: speed increases on a 5-gate rhythm independent from
-      // colour cycling (currentLevelIdx), following `monasSpeedForGatesPassed`. The
-      // base game's `applyLevel()` would set `gameSpeed = INITIAL_GAME_SPEED +
-      // level * SPEED_INCREASE_PER_LEVEL`, clamped to MAX - here `level` is replaced
-      // by a step of the MONAS run's own, since `currentLevelIdx` now belongs to
-      // colour rotation. The surge then multiplies this escalated speed if active.
-      const escalatedSpeed = monasSpeedForGatesPassed(this.monasState.gatesPassed, {
-        // Escalate *from* the screen's own base, not from the desktop constant. On a
-        // portrait phone that base is 2.61, and assigning the 2.9 constant here every
-        // frame is what silently undid the portrait slow-down after every resize.
-        initial: geometryBaseSpeed(this),
-        perStep: typeof CONFIG !== 'undefined' ? CONFIG.SPEED_INCREASE_PER_LEVEL : undefined,
-        max: typeof CONFIG !== 'undefined' ? CONFIG.MAX_GAME_SPEED : undefined
-      });
-      this.gameSpeed = escalatedSpeed;
+      // M43: this frame does *not* assign `gameSpeed`, and that absence is the fix.
+      //
+      // It used to, from `monasSpeedForGatesPassed` - a flat
+      // `base + floor(gates / 5) * 0.035` ramp. `applyProgression` in
+      // `monas-progression-runtime.js` assigns the six-band ladder D-053 designed,
+      // but only on the frames a gate is crossed, and it runs *inside* this wrap.
+      // So the band value survived part of one frame and this line overwrote it on
+      // the next: MONAS ran 2.61 rising to 3.17 across the whole ladder where D-058
+      // specifies 2.61 to 4.41, climbing 0.007 per gate for ever.
+      //
+      // That is the exact shortfall D-057 measured and D-058 was written to remove.
+      // D-058's fix went into `applyProgression` and never took effect, because the
+      // clobber was one call-frame further out. It survived a green suite because
+      // `browser-m32-monas-progression-test.mjs` stops the game loop before calling
+      // `forceGatesForTest`, so it asserted what `applyProgression` writes without
+      // ever letting a frame run. That suite now runs frames and asserts afterwards.
+      //
+      // D-053 already says gate count is the sole MONAS progression clock;
+      // `applyProgression` is therefore the sole writer of `gameSpeed`, and
+      // `monasSpeedForGatesPassed` survives as an exported pure function for the
+      // unit tests that cover it rather than as a live input.
 
       // An earlier version of the surge set `this.voidMode = true` to reach the warp
       // starfield's existing fast-streak branch in drawScene(), which reads that flag
@@ -1262,8 +1278,11 @@
       // the Hexagram's reserved cyan - inviolable per M7 - over a MONAS event that
       // has nothing to do with HEX. `WarpStar.prototype.update` is wrapped below
       // instead, so the streak speeds up without touching `voidMode` at all.
+      // Read from `gameSpeed` rather than from a locally recomputed value, so the
+      // bracket multiplies whatever the ladder last decided and restores exactly
+      // that. This is what keeps `applyProgression` the only writer.
       const surgeSpeed = this.monasState.surgeActive ? SURGE_SPEED_MULTIPLIER : 1;
-      const baseSpeed = escalatedSpeed;
+      const baseSpeed = finite(this.gameSpeed, 0);
       if (surgeSpeed !== 1) this.gameSpeed = baseSpeed * surgeSpeed;
 
       const result = originalUpdateGameObjects.apply(this, args);

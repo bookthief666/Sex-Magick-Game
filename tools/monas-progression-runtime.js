@@ -28,16 +28,32 @@
   const SURGE_GAP_MULTIPLIER = 1.18;
 
   // Every speed/gap pair below is one of the exact M31 frontier coordinates.
-  // We intentionally stop at p5 (4.9 / 210). M31 also verified 5.3 / 200 and the
-  // 5.7 / 190 search ceiling, but mathematical reachability is not permission to
-  // ship those harder values before Fold 6 feel/readability evidence exists.
+  //
+  // M43 extends the ladder to the two coordinates D-053 held back as "validated
+  // tuning headroom, not live bands": 5.3 / 200 and the 5.7 / 190 search ceiling.
+  // The reason for holding them was never missing evidence - D-050's frontier
+  // verified every coordinate from 2.9 / 260 through 5.7 / 190, and D-051's
+  // boundary job fully verified 5.7 / 190 across the complete scheduler-legal
+  // pattern-variant pair cross-product. It was that shipping a harder number needs
+  // a reason, and until M43 there was none.
+  //
+  // Now there is. The ladder had never actually governed play: `monas-runtime.js`
+  // overwrote `gameSpeed` every frame from a flat ramp, so a run climbed 0.007 per
+  // gate and levelled off long before the crown band. With that clobber removed the
+  // top of the ladder is reached for the first time, and the owner's report - that
+  // MONAS stops speeding up - is about the ceiling as much as the climb.
+  //
+  // The Fold 6 feel/readability gate D-053 named is still owed, and is still owed
+  // for the bands below these two. It gates the release, not the tuning.
   const BANDS = Object.freeze([
     Object.freeze({ id: 'still', gateThreshold: 0,  speed: 2.9, gap: 260 }),
     Object.freeze({ id: 'current-i', gateThreshold: 8,  speed: 3.3, gap: 250 }),
     Object.freeze({ id: 'current-ii', gateThreshold: 20, speed: 3.7, gap: 240 }),
     Object.freeze({ id: 'axis', gateThreshold: 36, speed: 4.1, gap: 230 }),
     Object.freeze({ id: 'orbit', gateThreshold: 56, speed: 4.5, gap: 220 }),
-    Object.freeze({ id: 'crown', gateThreshold: 80, speed: 4.9, gap: 210 })
+    Object.freeze({ id: 'crown', gateThreshold: 80, speed: 4.9, gap: 210 }),
+    Object.freeze({ id: 'ascent', gateThreshold: 110, speed: 5.3, gap: 200 }),
+    Object.freeze({ id: 'ceiling', gateThreshold: 150, speed: 5.7, gap: 190 })
   ]);
 
   let installed = false;
@@ -271,6 +287,17 @@
           surgeActive: Boolean(game.monasState.surgeActive),
           gateResidue: Boolean(game.gateSliceState || game.gateSliceOffer || game.__gateSliceVoidActive)
         };
+      },
+      /**
+       * Re-assign the current band's speed without counting a progression change.
+       *
+       * M43: `monas-runtime.js` calls this after a resize changes the captured
+       * geometry base, since `applyProgression` is now the sole writer of
+       * `gameSpeed` and otherwise would not run again until the next gate.
+       */
+      resyncProgression() {
+        if (typeof game === 'undefined' || !isMonas(game) || !game.monasState) return null;
+        return applyProgression(game, { countChange: false });
       },
       forceGatesForTest(value) {
         if (typeof game === 'undefined' || !isMonas(game) || !game.monasState) return null;
