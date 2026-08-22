@@ -648,6 +648,12 @@
         orb.float = spec.orbFloat;
         orb.pulse = 0;
         orb.rotation = 0;
+        // M42: the sweep needs the pillar it belongs to. Built by hand rather
+        // than through the constructor because the phase comes from the seeded
+        // stream (`spec.orbFloat`) and must stay reproducible - so every field the
+        // constructor would set has to be set here too, and a new one is easy to
+        // forget. The orb suite asserts this one is present.
+        orb.pillar = pillar;
         gameInstance.collectibles.push(orb);
       }
 
