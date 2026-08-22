@@ -7,8 +7,13 @@ compatibility_date = "2026-08-01"
 # rules are therefore the same file the browser loads - see D-044 for why that
 # matters more than the small awkwardness of mixing module styles.
 
-# Created with: wrangler kv namespace create BOARD
-# Paste the returned id below before the first deploy.
+# Created with:
+#   npx wrangler kv namespace create BOARD --config worker/wrangler.toml
+# Paste the returned id below before the first deploy. Full steps, written to be
+# followed from a phone, are in docs/qa/m42-board-deploy-runbook.md.
+#
+# Until this id is real the Worker will not deploy, which is the correct failure:
+# a board with no storage would accept runs and rank nothing.
 [[kv_namespaces]]
 binding = "BOARD"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"

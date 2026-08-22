@@ -93,6 +93,42 @@ function validSummary(overrides = {}) {
 }
 
 /**
+ * The MONAS equivalent, shaped by `finishMonasRun` in monas-runtime.js.
+ *
+ * The band index is derived from MONAS's own thresholds rather than written down,
+ * so this fixture cannot drift away from the ladder the server validates against -
+ * the failure that would otherwise look like a rejected honest run.
+ *
+ * `gateBanks` is genuinely zero: MONAS's portal opens on a full meter rather than
+ * being offered and declined, so there is no bank decision to make and claiming
+ * one would be a lie the consistency rules should catch.
+ */
+function monasSummary(overrides = {}) {
+  const endedAt = new Date();
+  const startedAt = new Date(endedAt.getTime() - RUN_DURATION_MS);
+  const gates = overrides.gatesCleared ?? 24;
+  return {
+    runId: 'monas-run-1',
+    rite: 'MONAS',
+    gatesCleared: gates,
+    bandIndex: validation.bandIndexFor(gates, validation.MONAS_THRESHOLDS),
+    gateOffers: 2,
+    gateEntries: 2,
+    gateBanks: 0,
+    voidAttempts: 2,
+    voidSurvivals: 1,
+    voidDeaths: 1,
+    gnosis: 3,
+    gnosisCapacity: 8,
+    finalScore: 380,
+    startedAt: startedAt.toISOString(),
+    endedAt: endedAt.toISOString(),
+    endReason: 'death',
+    ...overrides
+  };
+}
+
+/**
  * Issue a token and age it, standing in for a player who actually sat there for
  * the duration the run claims. Backdating the stored record is the honest
  * simulation: the Worker's own bound is what is under test, so the test must not
@@ -131,7 +167,14 @@ async function section(name, fn) {
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
     assert.equal(body.validationVersion, validation.VALIDATION_VERSION);
-    assert.deepEqual(body.rites, ['HEX']);
+    // M42: MONAS records runs now (`finishMonasRun` in monas-runtime.js), so it
+    // is a supported rite. Derived from the Worker's own list rather than copied,
+    // because a hardcoded rite set is the same defect as a hardcoded band
+    // threshold - it fails the next time a rite is added and reports the addition
+    // as a broken health endpoint.
+    assert.deepEqual(body.rites, worker.SUPPORTED_RITES.slice());
+    assert.ok(body.rites.includes('HEX') && body.rites.includes('MONAS'),
+      'both rites must be served once both record runs');
   });
 
   await section('an unknown route is a 404', async () => {
@@ -155,12 +198,74 @@ async function section(name, fn) {
     assert.equal(await response.text(), '', 'a 204 must carry no body');
   });
 
-  await section('a rite with no recorder is refused rather than ranked empty', async () => {
+  await section('an unknown rite is refused rather than ranked empty', async () => {
     const env = createEnv();
-    const start = await worker.handleRequest(post('/run/start', { rite: 'MONAS' }), env);
-    assert.equal(start.status, 400, 'MONAS does not record runs yet, so it cannot be submitted');
-    const read = await worker.handleRequest(get('/board/MONAS'), env);
+    // This used to assert MONAS was refused *because it had no recorder*. M42 built
+    // that recorder, so the assertion had to move to a rite that genuinely has
+    // none - the property being protected was never "MONAS is unsupported", it was
+    // "a rite nothing records cannot be submitted to or read from".
+    const start = await worker.handleRequest(post('/run/start', { rite: 'TIPHARETH' }), env);
+    assert.equal(start.status, 400, 'a rite with no recorder cannot be submitted');
+    const read = await worker.handleRequest(get('/board/TIPHARETH'), env);
     assert.equal(read.status, 404);
+  });
+
+  await section('the two Rites rank on separate boards', async () => {
+    // D-004's requirement, and the reason `board:{rite}` is the key shape: HEX and
+    // MONAS measure different things on different ladders, so one ranking of both
+    // would be meaningless in the way the 1.0 board was.
+    const env = createEnv();
+
+    const hexToken = await issueToken(env, 'HEX');
+    await worker.handleRequest(post('/run/submit',
+      { token: hexToken, summary: validSummary(), name: 'hex-player' }), env);
+
+    // Through `issueToken`, which backdates the stored record - a token minted this
+    // instant is 0s old and the Worker rightly refuses a run claiming 300s against
+    // it. That clock bound is under test elsewhere and must not be quietly widened
+    // here.
+    const monasToken = await issueToken(env, 'MONAS');
+    const monasSubmit = await worker.handleRequest(post('/run/submit',
+      { token: monasToken, summary: monasSummary(), name: 'monas-player' }), env);
+    assert.equal(monasSubmit.status, 200,
+      `an honest MONAS run must be accepted: ${JSON.stringify(await monasSubmit.clone().json())}`);
+
+    const hexBoard = await (await worker.handleRequest(get('/board/HEX'), env)).json();
+    const monasBoard = await (await worker.handleRequest(get('/board/MONAS'), env)).json();
+    assert.equal(hexBoard.entries.length, 1);
+    assert.equal(monasBoard.entries.length, 1);
+    // Names are upper-cased on the way in, which is the board's own presentation
+    // rule and not something this section is testing - compare case-insensitively
+    // so a styling change does not read as a separation failure.
+    assert.equal(hexBoard.entries[0].name.toLowerCase(), 'hex-player');
+    assert.equal(monasBoard.entries[0].name.toLowerCase(), 'monas-player');
+  });
+
+  await section('a MONAS run is judged on the MONAS ladder, not HEX\'s', async () => {
+    // The gate count here is chosen, not arbitrary. The two ladders agree at every
+    // one of MONAS's own thresholds - 8, 20, 36, 56 and 80 all land on the same
+    // index under both - so a test built from a MONAS band boundary passes whether
+    // the server picks the right ladder or not, and proves nothing. 17 gates is
+    // band 1 on MONAS and band 2 on HEX, which is the smallest case where the two
+    // actually disagree.
+    const env = createEnv();
+    const token = await issueToken(env, 'MONAS');
+    const gates = 17;
+    const monasBand = validation.bandIndexFor(gates, validation.MONAS_THRESHOLDS);
+    const hexBand = validation.bandIndexFor(gates, validation.FALLBACK_THRESHOLDS);
+    assert.notEqual(monasBand, hexBand, 'the fixture must sit where the ladders disagree');
+
+    const run = monasSummary({ gatesCleared: gates, bandIndex: monasBand });
+    const accepted = await worker.handleRequest(post('/run/submit', { token, summary: run, name: 'glider' }), env);
+    assert.equal(accepted.status, 200,
+      `a MONAS band index must validate on MONAS thresholds: ${JSON.stringify(await accepted.clone().json())}`);
+
+    // The same numbers, judged as HEX, must be rejected for the band mismatch -
+    // that is what shows the ladder came from the rite rather than from a default.
+    const asHex = validation.validateRun({ ...run, rite: 'HEX' }, { rite: 'HEX' });
+    assert.equal(asHex.valid, false, 'the same band index must not validate against HEX');
+    assert.ok(asHex.reasons.some(reason => reason.includes('band')),
+      `the rejection must be about the band, not something incidental: ${asHex.reasons.join('; ')}`);
   });
 
   // --- the happy path ---------------------------------------------------------

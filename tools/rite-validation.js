@@ -44,6 +44,24 @@
   // separation is enforced.
   const DEFAULT_RITE = 'HEX';
 
+  // MONAS's own ladder (`monas-progression-runtime.js`), which is six bands rather
+  // than eight and spaced differently. M42 gives MONAS the edge meter and a portal,
+  // so it records runs now - and validating a MONAS run against HEX's thresholds
+  // would reject every honest one. Selected here **by rite** rather than accepted
+  // from the caller: a client-supplied threshold list would make the band check
+  // meaningless, since a forger would simply send thresholds its lie satisfies.
+  const MONAS_BANDS = Object.freeze(['STILL', 'CURRENT-I', 'CURRENT-II', 'AXIS', 'ORBIT', 'CROWN']);
+  const MONAS_THRESHOLDS = Object.freeze([0, 8, 20, 36, 56, 80]);
+
+  const RITE_LADDERS = Object.freeze({
+    HEX: { bands: FALLBACK_BANDS, thresholds: FALLBACK_THRESHOLDS },
+    MONAS: { bands: MONAS_BANDS, thresholds: MONAS_THRESHOLDS }
+  });
+
+  function ladderFor(rite) {
+    return RITE_LADDERS[String(rite || '').toUpperCase()] || RITE_LADDERS[DEFAULT_RITE];
+  }
+
   function isFiniteNumber(value) {
     return typeof value === 'number' && Number.isFinite(value);
   }
@@ -70,8 +88,11 @@
    * isolation, because a single number is exactly what is easy to edit.
    */
   function validateRun(summary, options = {}) {
-    const thresholds = options.thresholds || FALLBACK_THRESHOLDS;
     const expectedRite = options.rite ?? DEFAULT_RITE;
+    // Explicit thresholds stay supported for the parity test, which drives both
+    // sides with the same fixtures; in production the Worker passes only the rite
+    // and the ladder is chosen here.
+    const thresholds = options.thresholds || ladderFor(expectedRite).thresholds;
     const reasons = [];
 
     if (!summary || typeof summary !== 'object') {
@@ -184,6 +205,10 @@
     FALLBACK_THRESHOLDS,
     DEFAULT_MIN_MS_PER_GATE,
     DEFAULT_RITE,
+    MONAS_BANDS,
+    MONAS_THRESHOLDS,
+    RITE_LADDERS,
+    ladderFor,
     isFiniteNumber,
     bandIndexFor,
     parseTime,

@@ -57,8 +57,27 @@
     }
   }
 
+  /**
+   * Whether the global board runs.
+   *
+   * M42 turns it on for the live build, but not by flipping a default to `true` -
+   * that would arm it before there was anywhere to send a run, and the failure
+   * would be a silent one. It is on **when a board URL is configured**, which is
+   * the condition that actually matters: `DEFAULT_BOARD_URL` is set once, after
+   * the Worker is deployed (see docs/qa/m42-board-deploy-runbook.md), and the
+   * board cannot precede its own server.
+   *
+   * The flag survives as an override in both directions. `?globalBoard=1` forces
+   * it on, which is how the browser suite drives a local stub through
+   * `?globalBoardUrl=` with nothing deployed; `?globalBoard=0` forces it off,
+   * which is the fastest way to take the board out of a live build without a
+   * redeploy.
+   */
   function queryEnabled() {
-    return queryValue('globalBoard') === REQUIRED_QUERY_VALUE;
+    const flag = queryValue('globalBoard');
+    if (flag === REQUIRED_QUERY_VALUE) return true;
+    if (flag === '0') return false;
+    return Boolean(boardUrl());
   }
 
   function boardUrl() {
@@ -123,14 +142,32 @@
     return runToken;
   }
 
+  /**
+   * The run that just ended, from whichever rite ended it.
+   *
+   * Both recorders unshift, so each history's newest run is first; the later
+   * `endedAt` decides between them. Comparing timestamps rather than trusting the
+   * current `gameMode` matters because this is called from the *menu* render,
+   * after the rite has already been left behind - reading the mode there would
+   * attribute a MONAS run to whatever the player picked next.
+   */
   function newestRun() {
+    const candidates = [];
     try {
-      const history = root.__SEX_MAGICK_GATE_SLICE__?.getHistory?.();
-      // finishRun unshifts, so the most recently completed run is first.
-      return Array.isArray(history) && history.length > 0 ? history[0] : null;
-    } catch (_error) {
-      return null;
-    }
+      const hex = root.__SEX_MAGICK_GATE_SLICE__?.getHistory?.();
+      if (Array.isArray(hex) && hex.length > 0) candidates.push(hex[0]);
+    } catch (_error) { /* a rite that is not installed simply has no runs */ }
+    try {
+      const monas = root.__SEX_MAGICK_MONAS__?.getHistory?.();
+      if (Array.isArray(monas) && monas.length > 0) candidates.push(monas[0]);
+    } catch (_error) {}
+
+    if (candidates.length === 0) return null;
+    return candidates.reduce((newest, entry) => {
+      const a = Date.parse(newest?.endedAt || '') || 0;
+      const b = Date.parse(entry?.endedAt || '') || 0;
+      return b > a ? entry : newest;
+    });
   }
 
   /**

@@ -52,7 +52,12 @@ const CLOCK_GRACE_MS = 10_000;
 // gate-slice-runtime.js is HEX-only today; MONAS gets added here once it records
 // runs of its own, and until then a MONAS submission is rejected rather than
 // silently ranked on an empty board.
-const SUPPORTED_RITES = Object.freeze(['HEX']);
+// M42: MONAS records runs now that it has an edge meter and a portal. The boards
+// stay separate per D-004 - `board:{rite}` is already the key shape and
+// `GET /board/:rite` already routes on it, so this is the only line that gated it.
+// The ladders differ, and `rite-validation.js` picks the right one from the rite
+// rather than from anything the client sends.
+const SUPPORTED_RITES = Object.freeze(['HEX', 'MONAS']);
 
 // The game is served from a different origin to the Worker, so the browser needs
 // these to read a response at all - and needs the preflight below to be willing to

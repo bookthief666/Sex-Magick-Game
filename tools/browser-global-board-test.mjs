@@ -252,6 +252,70 @@ async function openGame(query) {
   await context.close();
 }
 
+// --- MONAS records runs too, on its own board ------------------------------
+//
+// M42 gave MONAS an edge meter and a portal, so it finishes runs and submits them.
+// The property worth proving from the real page is the one D-004 requires and a
+// unit test cannot see: that a MONAS run reaches the MONAS board and not the HEX
+// one. The ladders differ, so a run ranked on the wrong board would also be
+// scored against the wrong thresholds.
+{
+  const { context, page } = await openGame(
+    `assetMode=offline&globalBoard=1&globalBoardUrl=${encodeURIComponent(WORKER_URL)}`
+  );
+  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GLOBAL_BOARD__), null, { timeout: 20000 });
+
+  const monas = await page.evaluate(async () => {
+    const api = window.__SEX_MAGICK_GLOBAL_BOARD__;
+    game.gameMode = 'MONAS';
+    game.startGame();
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    // Same shape of claim as the HEX case above: a pace the spawn rate allows, and
+    // a duration the token's own age can support.
+    const state = game.monasState;
+    state.gatesPassed = 10;
+    state.progressionBandIndex = 1;
+    state.gnosis = 3;
+    state.portalsEntered = 1;
+    state.portalsSurvived = 1;
+    state.startedAt = new Date(Date.now() - 9000).toISOString();
+    game.score = 260;
+
+    const summary = window.__SEX_MAGICK_MONAS__.finishRunForTest('death');
+    const historyLength = window.__SEX_MAGICK_MONAS__.getHistory().length;
+    const result = await api.submitNewestRun();
+    const hexBoard = await api.fetchBoard('HEX');
+    const monasBoard = await api.fetchBoard('MONAS');
+    return { summaryRite: summary?.rite, historyLength, result,
+             hexEntries: hexBoard?.entries?.length ?? null,
+             hexRunIds: (hexBoard?.entries || []).map(entry => entry.runId),
+             monasEntries: monasBoard?.entries?.length ?? null,
+             monasTop: monasBoard?.entries?.[0] ?? null,
+             submittedRunId: summary?.runId ?? null };
+  });
+  report.monas = monas;
+
+  try {
+    assert.equal(monas.summaryRite, 'MONAS', 'the recorder must stamp the rite');
+    assert.equal(monas.historyLength, 1, 'the run must have been recorded');
+    assert.equal(monas.result?.accepted, true,
+      `an honest MONAS run must be accepted: ${JSON.stringify(monas.result)}`);
+    assert.equal(monas.monasEntries, 1, 'the MONAS board must hold exactly this run');
+    // The HEX board is not empty here - an earlier block in this file submitted a
+    // HEX run to the same Worker - so the separation to assert is that *this* run
+    // is absent from it, not that the board has nothing on it. The first draft
+    // asserted the latter and failed for the wrong reason.
+    assert.ok(monas.submittedRunId, 'the MONAS run must have an id to look for');
+    assert.ok(!monas.hexRunIds.includes(monas.submittedRunId),
+      `a MONAS run must never reach the HEX board - D-004 (HEX holds ${JSON.stringify(monas.hexRunIds)})`);
+    assert.equal(monas.monasTop?.gatesCleared, 10);
+  } catch (error) {
+    failures.push(`MONAS board: ${error.message}`);
+  }
+  await context.close();
+}
+
 await browser.close();
 workerServer.close();
 for (const child of children) child.kill();

@@ -918,6 +918,80 @@
     gameInstance.__monasPortal = null;
   }
 
+  // --- the run record -----------------------------------------------------------
+  //
+  // M42: MONAS records runs now. It could not before, and `rite-validation.js`
+  // said so in a comment - "the rite is a parameter rather than a constant so a
+  // MONAS board needs a recorder, not a rewrite of these rules". This is that
+  // recorder. D-004 requires the two Rites rank separately and they do: the board
+  // key is `board:{rite}` and MONAS runs are stamped `MONAS`.
+  //
+  // Kept in memory rather than persisted. HEX's history is its *local* leaderboard
+  // and has to survive a reload; MONAS has no local board of its own yet, and this
+  // exists solely so the newest finished run can be handed to the global board on
+  // the way to the menu. Writing it to storage would imply a durability nothing
+  // reads.
+
+  const MONAS_HISTORY_LIMIT = 20;
+  let monasHistory = [];
+
+  function beginMonasRun(gameInstance) {
+    const state = gameInstance?.monasState;
+    if (!state) return;
+    state.runId = `monas_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    state.startedAt = new Date().toISOString();
+    state.endedAt = null;
+  }
+
+  /**
+   * Close a MONAS run and record it in the shape the shared validator expects.
+   *
+   * The mapping is not cosmetic - each field has to mean the same thing it means
+   * for HEX or the server's consistency checks reject an honest run. MONAS's
+   * portal opens on a full meter rather than being offered and declined, so
+   * `gateBanks` is genuinely zero and `gateOffers` equals the entries; claiming
+   * offers that never happened would fail `entries + banks > offers` the moment
+   * the numbers were anything else.
+   */
+  function finishMonasRun(gameInstance, reason) {
+    const state = gameInstance?.monasState;
+    if (!state || state.endedAt) return null;
+
+    const entered = whole(state.portalsEntered, 0);
+    const survived = Math.min(entered, whole(state.portalsSurvived, 0));
+    const endedAt = new Date().toISOString();
+    state.endedAt = endedAt;
+
+    const summary = {
+      rite: 'MONAS',
+      runId: state.runId || `monas_${Date.now().toString(36)}`,
+      startedAt: state.startedAt || endedAt,
+      endedAt,
+      endReason: reason,
+      finalScore: Number(gameInstance.score || 0),
+      gatesCleared: whole(state.gatesPassed, 0),
+      bandIndex: whole(state.progressionBandIndex, 0),
+      gnosis: Math.max(0, finite(state.gnosis, 0)),
+      gnosisCapacity: Math.max(0, finite(state.gnosisCapacity, 0)),
+      gateOffers: entered,
+      gateEntries: entered,
+      gateBanks: 0,
+      voidAttempts: entered,
+      voidSurvivals: survived,
+      voidDeaths: Math.max(0, entered - survived),
+      coherence: Math.max(0, finite(state.coherence, 0)),
+      surges: whole(state.surges, 0)
+    };
+
+    monasHistory.unshift(summary);
+    monasHistory = monasHistory.slice(0, MONAS_HISTORY_LIMIT);
+    return summary;
+  }
+
+  function getMonasHistory() {
+    return monasHistory.map(entry => ({ ...entry }));
+  }
+
   function install() {
     if (installed || Game.prototype.__monasRuntimeInstalled) return root.__SEX_MAGICK_MONAS__ || null;
     if (!dependenciesReady()) return null;
@@ -996,6 +1070,7 @@
         monasGallery = shuffled(pool);
         resetCaduceus(this);
         resetPortal(this);
+        beginMonasRun(this);
         renderHud(this);
       } else {
         this.monasState = null;
@@ -1025,8 +1100,32 @@
     const originalReturnToMenu = Game.prototype.returnToMenu;
     if (typeof originalReturnToMenu === 'function') {
       Game.prototype.returnToMenu = function monasReturnToMenu(...args) {
+        // Close the run *before* delegating: `returnToMenu` clears the state this
+        // reads, and the global board submits from the menu render that follows.
+        if (isMonas(this)) finishMonasRun(this, 'menu');
         const result = originalReturnToMenu.apply(this, args);
         renderHud(this);
+        return result;
+      };
+    }
+
+    // Every way a MONAS run can end has to record it, for the same reason
+    // `finishRun` is called from three places in the Gate slice: a run that ends
+    // by dying is the common case, and one that ends by retrying still happened.
+    const originalGameOverForMonas = Game.prototype.gameOver;
+    if (typeof originalGameOverForMonas === 'function') {
+      Game.prototype.gameOver = function monasGameOver(...args) {
+        if (isMonas(this)) finishMonasRun(this, 'death');
+        return originalGameOverForMonas.apply(this, args);
+      };
+    }
+
+    const originalRestartForMonas = Game.prototype.restartGame;
+    if (typeof originalRestartForMonas === 'function') {
+      Game.prototype.restartGame = function monasRestart(...args) {
+        if (isMonas(this)) finishMonasRun(this, 'retry');
+        const result = originalRestartForMonas.apply(this, args);
+        if (isMonas(this)) beginMonasRun(this);
         return result;
       };
     }
@@ -1373,6 +1472,18 @@
           size: monasGallery.length,
           advanceEveryGates: GALLERY_ADVANCE_GATES
         };
+      },
+      /**
+       * Finished MONAS runs, newest first - the same contract the Gate slice's
+       * `getHistory()` offers, so `global-board-runtime.js` can read both rites
+       * through one shape rather than special-casing either.
+       */
+      getHistory() {
+        return getMonasHistory();
+      },
+      /** Test seam: end the current run without going through a death. */
+      finishRunForTest(reason = 'test') {
+        return typeof game !== 'undefined' && game ? finishMonasRun(game, reason) : null;
       },
       setHeldForTest(value) { held = Boolean(value); return held; },
       renderHud() { renderHud(typeof game !== 'undefined' ? game : null); }
