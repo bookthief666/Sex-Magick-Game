@@ -595,7 +595,15 @@
       const spec = scheduler.next({
         viewportHeight: gameInstance.canvas?.height || window.innerHeight,
         gap,
-        orbChance: CONFIG.ORB_SPAWN_CHANCE,
+        // M45: the progression-adjusted chance, decided by the scheduler's own
+        // seeded stream. M44 briefly applied the scarcity as a `Math.random()`
+        // veto *after* this decision, inside the orb block below - which broke
+        // replay determinism, because this stream is reproducible from a seed and
+        // that roll was not. The scheduler already took an `orbChance`; giving it
+        // the right number is one seeded decision instead of two rolls.
+        orbChance: typeof gameInstance.orbSpawnChance === 'function'
+          ? gameInstance.orbSpawnChance()
+          : CONFIG.ORB_SPAWN_CHANCE,
         // M40.3: which family the next pattern comes from now depends on how far
         // the run has climbed. Read from the live Gate state rather than stored
         // on the scheduler, because the scheduler is built once per run and the
@@ -640,17 +648,14 @@
       gameInstance.obstacles.push(pillar);
 
       if (spec.orb) {
-        // M44: placement and scarcity come from the game rather than from here.
-        //
-        // The seeded decision above (`spec.orb`) still chooses which patterns may
-        // carry an orb, so the stream is untouched; `orbPlacementFor` then applies
-        // the progression scarcity and the off-corridor offset on top. Declining
-        // here consumes nothing, so a skipped orb cannot shift any later draw.
+        // Whether an orb exists was decided above, by the seeded stream, at the
+        // progression-adjusted chance. Nothing here may decide anything - this
+        // block only asks the game *where* the orb goes.
         //
         // The comment this replaces warned that building the orb by hand means
         // "every field the constructor would set has to be set here too, and a new
         // one is easy to forget". M44 forgot `offset` and every orb in this path -
-        // the shipped one - got a NaN height, while the index.html fallback looked
+        // the shipped one - got a NaN height while the index.html fallback looked
         // correct. Asking the game for the placement is what stops the two paths
         // from drifting again; only the seeded phase stays local.
         const placement = typeof gameInstance.orbPlacementFor === 'function'

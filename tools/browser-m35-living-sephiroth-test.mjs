@@ -183,12 +183,25 @@ try {
     game.checkLevel();
   });
   await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'KETHER');
-  const kether = await page.evaluate(() => ({
-    snapshot: window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot(),
-    scanlineOpacity: document.querySelector('.scanlines')?.style.opacity || '',
-    vignetteOpacity: document.querySelector('.vignette')?.style.opacity || '',
-    particleOpacity: game.backgroundParticles[0].opacity
-  }));
+  const kether = await page.evaluate(() => {
+    // Same race the resume step below already documents, and it belongs here too:
+    // at KETHER the run is at terminal speed in a narrow corridor with nobody
+    // flying it, so the player can die between the band change and this read. A
+    // dead run makes `sync` report inactive, and the suite then fails on
+    // `snapshot.band === null` - a timing loss wearing the costume of M35 failing
+    // to apply its band. Clearing the field and re-centring is what the resume
+    // step does for exactly this reason; nothing under test is weakened, because
+    // the identity is derived from `gateSliceState`, which is untouched.
+    game.obstacles.length = 0;
+    game.player.y = game.canvas.height / 2;
+    game.player.vy = 0;
+    return {
+      snapshot: window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot(),
+      scanlineOpacity: document.querySelector('.scanlines')?.style.opacity || '',
+      vignetteOpacity: document.querySelector('.vignette')?.style.opacity || '',
+      particleOpacity: game.backgroundParticles[0].opacity
+    };
+  });
   assert.equal(kether.snapshot.band, 'KETHER');
   assert.equal(kether.snapshot.audio.rootHz, 110);
   assert.equal(Number(kether.scanlineOpacity), 0.07);
@@ -198,6 +211,11 @@ try {
   // Pausing follows the base game's audio lifecycle: M35 retreats while the game
   // is suspended, then reconstructs KETHER from the unchanged Gate state on resume.
   const paused = await page.evaluate(() => {
+    // And again before the pause: the frames between the read above and this call
+    // are still live, still at KETHER speed, and still unflown.
+    game.obstacles.length = 0;
+    game.player.y = game.canvas.height / 2;
+    game.player.vy = 0;
     game.togglePause();
     return {
       state: game.state,

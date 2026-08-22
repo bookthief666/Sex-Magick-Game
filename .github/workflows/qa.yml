@@ -113,6 +113,11 @@ jobs:
           node --check tools/test-gnosis-edge.js
           node --check tools/monas-currents.js
           node --check tools/test-monas-currents.js
+          node --check tools/monas-progression-runtime.js
+          node --check tools/test-monas-progression-runtime.js
+          node --check tools/test-global-board-worker.js
+          node --check tools/test-monas-compositional-reachability.js
+          node --check tools/test-monas-progression-frontier.js
           node --check tools/test-void-edge-layer.js
           node --check tools/test-gallery-source.mjs
           node --check tools/gallery-source.mjs
@@ -144,6 +149,10 @@ jobs:
           node --check tools/browser-m41-caduceus-test.mjs
           node --check tools/browser-m42-orb-sweep-test.mjs
           node --check tools/browser-m42-monas-edge-test.mjs
+          node --check tools/browser-m43-monas-rite-test.mjs
+          node --check tools/browser-m44-endless-test.mjs
+          node --check tools/browser-m32-monas-progression-test.mjs
+          node --check tools/browser-global-board-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -188,6 +197,14 @@ jobs:
           node tools/test-void-edge-layer.js
           node tools/test-gnosis-edge.js
           node tools/test-monas-currents.js
+          # M45: these four existed and were never run here. The band ladder
+          # contract and the client/Worker parity check (D-044) are both things a
+          # silent drift would ship, and the two MONAS evidence suites are what
+          # make its reachability claims mean anything.
+          node tools/test-monas-progression-runtime.js
+          node tools/test-global-board-worker.js
+          node tools/test-monas-compositional-reachability.js
+          node tools/test-monas-progression-frontier.js
           node tools/test-gallery-source.mjs
 
       - name: Run fixed-step Chrome integration
@@ -219,6 +236,23 @@ jobs:
 
       - name: Run M42 MONAS edge and portal Chrome integration
         run: node tools/browser-m42-monas-edge-test.mjs
+
+      # M45: four suites that existed and were never run here. The first two guard
+      # defects the owner reported twice - a MONAS rite that was bookkeeping without
+      # a body, and a difficulty ladder that stopped escalating - and the third
+      # carries the frame-level speed assertion that caught the M43 clobber. A suite
+      # outside CI is a suite that runs once.
+      - name: Run M43 MONAS rite Chrome integration
+        run: node tools/browser-m43-monas-rite-test.mjs
+
+      - name: Run M44 endless-ladder Chrome integration
+        run: node tools/browser-m44-endless-test.mjs
+
+      - name: Run M32 MONAS progression Chrome integration
+        run: node tools/browser-m32-monas-progression-test.mjs
+
+      - name: Run global board client Chrome integration
+        run: node tools/browser-global-board-test.mjs
 
       - name: Run M9 runtime hardening Chrome integration
         run: node tools/browser-m9-runtime-hardening-test.mjs

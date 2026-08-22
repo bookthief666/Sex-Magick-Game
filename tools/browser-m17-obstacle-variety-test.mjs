@@ -255,6 +255,7 @@ async function main() {
         let corridorViolations = 0;
         let subFloorGaps = 0;
         let motionExceeded = 0;
+        let lastSampledPillar = null;
 
         for (let frame = 0; frame < 20000; frame += 1) {
           if (game.player) { game.player.y = holdY; game.player.vy = 0; }
@@ -262,6 +263,7 @@ async function main() {
           for (const pillar of game.obstacles) {
             if (seenPillars.has(pillar)) continue;
             seenPillars.add(pillar);
+            lastSampledPillar = pillar;
             const amplitude = Number(pillar.motionAmplitude);
             const gap = Number(pillar.gap);
             if (!(gap - (2 * Math.max(0, amplitude)) >= verifiedStaticGap - 1e-6)) corridorViolations += 1;
@@ -278,7 +280,14 @@ async function main() {
         }
 
         // A pillar's rendered top must never leave the swing it was clamped to.
-        const swingProbe = game.obstacles[0] || null;
+        //
+        // Taken from the pillars actually sampled rather than from whatever happens
+        // to be on screen when the loop ends. game.obstacles[0] was empty here
+        // once M44 raised the top speed - walls now leave the field faster, so the
+        // probe was asserting on the tail of the run rather than on a wall. Same
+        // shape of fragility the M35 suite had: a check that depended on incidental
+        // run state instead of on the thing it tests.
+        const swingProbe = game.obstacles[0] || lastSampledPillar;
         let swingExceeded = 0;
         if (swingProbe) {
           const base = swingProbe.baseTop;

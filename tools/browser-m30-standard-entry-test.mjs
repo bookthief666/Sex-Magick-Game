@@ -43,6 +43,13 @@ try {
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_REACHABILITY_POLICY__), null, { timeout: 20000 });
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MONAS__), null, { timeout: 20000 });
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GATE_SLICE__), null, { timeout: 20000 });
+  // And the progression runtime, which the residue assertion below reads through.
+  // It installs on a 50ms poll that waits for the MONAS runtime first, so on a
+  // loaded machine the click can land before the global exists - `getSnapshot()`
+  // is then undefined and the assertion reports a *timing* loss as Gate residue.
+  // Seen failing only when the whole CI suite runs back to back, never alone,
+  // which is the signature worth waiting on rather than retrying.
+  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_MONAS_PROGRESSION__), null, { timeout: 20000 });
 
   const boot = await page.evaluate(() => ({
     search: location.search,

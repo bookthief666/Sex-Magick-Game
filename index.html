@@ -1039,7 +1039,15 @@
             },
             resume() { 
                 if (this.bgm && this.bgm.paused) { 
-                    this.bgm.play(); 
+                    // Through `play()`, which guards the returned promise. Calling
+                    // `bgm.play()` directly left the rejection unhandled, so a pause
+                    // that landed while a play was still settling surfaced
+                    // "The play() request was interrupted by a call to pause()" as a
+                    // console error. Nothing was broken by it, but it is a real
+                    // unhandled rejection and the guard already existed one method
+                    // away. M35's suite only caught it once its own timing was fixed
+                    // and it began reaching a live pause/resume for the first time.
+                    this.play();
                     this.setStatus("RESUMED"); 
                 } 
             },
@@ -1525,13 +1533,26 @@
              *
              * Returns null when this wall carries no orb.
              */
+            /**
+             * How likely a wall is to carry an orb at this point in the run.
+             *
+             * Returns the probability rather than rolling it. M44 rolled here, and
+             * `obstacle-grammar.js` called this from inside the seeded spawn path -
+             * which broke the grammar's replay contract, since its whole design is
+             * that the pattern stream is reproducible from a seed. The scheduler
+             * already decides orbs from its own seeded stream and already accepts
+             * an `orbChance`; handing it this number means one seeded decision
+             * instead of a seeded one plus an unseeded veto.
+             */
+            orbSpawnChance() {
+                const progress = this.riteProgress();
+                return CONFIG.ORB_SPAWN_CHANCE
+                    + ((CONFIG.ORB_SPAWN_CHANCE_FLOOR - CONFIG.ORB_SPAWN_CHANCE) * progress);
+            }
+
             orbPlacementFor(pillar, spawnRate) {
                 if (!pillar) return null;
                 const progress = this.riteProgress();
-                const chance = CONFIG.ORB_SPAWN_CHANCE
-                    + ((CONFIG.ORB_SPAWN_CHANCE_FLOOR - CONFIG.ORB_SPAWN_CHANCE) * progress);
-                if (Math.random() >= chance) return null;
-
                 const centre = pillar.top + (pillar.gap / 2);
                 const reach = ORB_MAX_OFFSET_PX * progress;
                 // Offered toward the middle of the field: an orb hanging off a
@@ -1546,6 +1567,10 @@
             }
 
             maybeSpawnOrb(pillar, spawnRate) {
+                // The legacy path's own roll. Determinism is not claimed here - this
+                // branch only runs when the grammar is absent - so `Math.random()`
+                // stays where it has always been.
+                if (Math.random() >= this.orbSpawnChance()) return null;
                 const placement = this.orbPlacementFor(pillar, spawnRate);
                 if (!placement) return null;
                 const orb = new Orb(placement.x, placement.y, pillar, placement.offset);
