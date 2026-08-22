@@ -49,6 +49,14 @@ async function freezeReleaseShell(page: import('@playwright/test').Page) {
       `;
       document.head.append(style);
     }
+    if (!document.getElementById('release-shell-qa-heading-probe')) {
+      const heading = document.createElement('h1');
+      heading.id = 'release-shell-qa-heading-probe';
+      heading.textContent = 'preflight probe';
+      heading.style.position = 'fixed';
+      heading.style.visibility = 'hidden';
+      document.body.append(heading);
+    }
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   });
 }
@@ -154,7 +162,8 @@ test('release shell styling is identical with every CDN blocked', async ({ page,
   const signature = (target: import('@playwright/test').Page) => target.evaluate(() => {
     const selectors = [
       'html', 'body', '#game-container', '#startScreen', '.title-text',
-      '.mystic-btn', '#gameOverScreen', '.release-final-score'
+      '.mystic-btn', '#gameOverScreen', '.release-final-score',
+      '#release-shell-qa-heading-probe'
     ];
     const properties = [
       'boxSizing', 'borderTopWidth', 'fontFamily', 'fontSize', 'fontWeight',
@@ -180,9 +189,14 @@ test('release shell styling is identical with every CDN blocked', async ({ page,
     boxSizing: 'border-box', borderTopWidth: '0px', marginTop: '0px', marginRight: '0px',
     marginBottom: '0px', marginLeft: '0px', lineHeight: '24px'
   });
-  expect(blockedSignature['.title-text'].styles, 'captured heading/preflight contract').toMatchObject({
+  expect(blockedSignature['#release-shell-qa-heading-probe'].styles,
+    'captured Tailwind preflight heading contract').toMatchObject({
     boxSizing: 'border-box', borderTopWidth: '0px', marginTop: '0px', marginRight: '0px',
     marginBottom: '0px', marginLeft: '0px'
+  });
+  expect(blockedSignature['.title-text'].styles, 'release title cascade contract').toMatchObject({
+    boxSizing: 'border-box', borderTopWidth: '0px', marginTop: '0px', marginRight: '0px',
+    marginBottom: '5px', marginLeft: '0px'
   });
   const localFonts = await blockedPage.evaluate(() => {
     const embeddedFaces = [...document.styleSheets].flatMap(sheet => {
