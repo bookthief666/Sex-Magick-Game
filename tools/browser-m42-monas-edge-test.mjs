@@ -59,14 +59,20 @@ try {
   // seed, same walls, only the line differs - so any difference in the bank is
   // the edge model and nothing else.
   const flown = await evaluate(`(() => {
-    const fly = (mode, bandIndex) => {
+    // M43: pin the *gate count*, not the band index.
+    //
+    // The band is a pure function of gatesPassed and is re-derived on every frame
+    // now, so assigning progressionBandIndex directly is overwritten before it can
+    // mean anything. Seeding the gates the band begins at is the same intent
+    // expressed through the actual input, and it survives the run continuing to
+    // clear walls - which only pushes the band further into the range being tested.
+    const fly = (mode, atGate, frames = 1400) => {
       game.gameMode = 'MONAS';
       game.startGame();
-      game.monasState.progressionBandIndex = bandIndex;
+      window.__SEX_MAGICK_MONAS_PROGRESSION__.forceGatesForTest(atGate);
       let cleared = 0;
-      for (let frame = 0; frame < 1400; frame += 1) {
+      for (let frame = 0; frame < frames; frame += 1) {
         game.frames = (game.frames || 0) + 1;
-        game.monasState.progressionBandIndex = bandIndex;
         const ahead = game.obstacles.filter(o => o.x + o.w > game.player.x).sort((a, b) => a.x - b.x)[0];
         if (ahead) {
           // 12px is the safe-band edge; +14 sits just inside it.
@@ -79,12 +85,18 @@ try {
         cleared = game.monasState.gatesPassed;
       }
       return { gnosis: game.monasState.gnosis, streak: game.monasState.riskStreak,
-               cleared, portalReady: game.monasState.portalReady };
+               cleared, band: game.monasState.progressionBandIndex,
+               portalReady: game.monasState.portalReady };
     };
     return {
-      edgedRisky: fly('edge', 3),
-      centredRisky: fly('centre', 3),
-      edgedEarly: fly('edge', 0)
+      // Gate 36 opens band 3, comfortably inside the risk-active range.
+      edgedRisky: fly('edge', 36),
+      centredRisky: fly('centre', 36),
+      // Gate 0 is band 0, MONAS's teachable band, where the edge pays nothing.
+      // Shorter, because band 1 opens at gate 8 and the full budget clears exactly
+      // that many - the flight has to end while still inside the band it is
+      // testing, or it would be asserting about the wrong one.
+      edgedEarly: fly('edge', 0, 1100)
     };
   })()`);
   console.log('MONAS edge banking:', JSON.stringify(flown));
@@ -93,10 +105,18 @@ try {
   assert.ok(flown.edgedRisky.gnosis > 0, 'edging a risk-active band must bank Gnosis');
   assert.ok(flown.edgedRisky.gnosis > flown.centredRisky.gnosis,
     `edging (${flown.edgedRisky.gnosis}) must out-bank flying the middle (${flown.centredRisky.gnosis})`);
+  assert.ok(flown.edgedRisky.band >= 1, `the risky flight must stay on a risk-active band (${flown.edgedRisky.band})`);
+  assert.equal(flown.edgedEarly.band, 0, `the early flight must stay on band 0 (${flown.edgedEarly.band})`);
   assert.equal(flown.edgedEarly.gnosis, 0,
     'the first band stays teachable: no Gnosis for edging before the risk zones open');
 
-  // The portal: a full meter opens one, it costs the stake, and it settles once.
+  // The portal: a full meter *offers* one, flying into it costs the stake, and it
+  // settles once.
+  //
+  // M43 changed the entry contract from auto-open to an object in the corridor,
+  // because the section was invisible when it opened by itself - the owner never
+  // saw the thing they were entering. The economy assertions below are unchanged;
+  // what moved is that a ring has to be reached first.
   const portal = await evaluate(`(() => {
     game.gameMode = 'MONAS';
     game.startGame();
@@ -104,27 +124,55 @@ try {
     game.monasState.portalReady = true;
     const before = game.monasState.gnosis;
 
-    game.frames = (game.frames || 0) + 1;
-    game.player.y = game.canvas.height / 2; game.player.vy = 0;
-    game.updateGameObjects();
+    // Run until the ring is offered. It arrives on a pillar spawn frame, so this
+    // is the corridor's own cadence rather than an arbitrary wait.
+    let waited = 0;
+    while (!game.__monasPortalOffer && waited++ < 600) {
+      game.frames = (game.frames || 0) + 1;
+      game.player.y = game.canvas.height / 2; game.player.vy = 0;
+      game.updateGameObjects();
+    }
+    const offered = game.__monasPortalOffer
+      ? { x: game.__monasPortalOffer.x, y: game.__monasPortalOffer.y,
+          entryRadius: game.__monasPortalOffer.entryRadius }
+      : null;
+    const openedBeforeContact = !!game.__monasPortal;
+
+    // Fly into it: put the avatar on the ring rather than teleporting the ring,
+    // so the collision test is the one the player's line has to satisfy.
+    let reach = 0;
+    while (game.__monasPortalOffer && !game.__monasPortal && reach++ < 600) {
+      game.frames += 1;
+      game.player.y = game.__monasPortalOffer.y;
+      game.player.x = game.__monasPortalOffer.x;
+      game.player.vy = 0;
+      game.updateGameObjects();
+    }
     const opened = game.__monasPortal ? { stake: game.__monasPortal.stake } : null;
     const afterOpen = game.monasState.gnosis;
 
     // Ride it smoothly to the end.
     let guard = 0;
-    while (game.__monasPortal && guard++ < 600) {
+    while (game.__monasPortal && guard++ < 900) {
       game.frames += 1;
       game.player.y = game.canvas.height / 2; game.player.vy = 2;
       game.updateGameObjects();
     }
-    return { opened, before, afterOpen, afterSettle: game.monasState.gnosis,
+    return { offered, openedBeforeContact, opened, before, afterOpen,
+             afterSettle: game.monasState.gnosis,
              entered: game.monasState.portalsEntered, survived: game.monasState.portalsSurvived,
-             stillOpen: !!game.__monasPortal, portalReady: game.monasState.portalReady };
+             stillOpen: !!game.__monasPortal, portalReady: game.monasState.portalReady,
+             containerClass: document.getElementById('game-container')?.className || '' };
   })()`);
   console.log('MONAS portal:', JSON.stringify(portal));
 
-  assert.ok(portal.opened, 'a full meter must open a portal');
+  assert.ok(portal.offered, 'a full meter must offer a portal ring in the corridor');
+  assert.equal(portal.openedBeforeContact, false,
+    'the section must not begin until the ring is actually reached - M43 exists because it used to');
+  assert.ok(portal.opened, 'flying into the ring must open the portal');
   assert.ok(portal.opened.stake > 0, 'the portal must cost something');
+  assert.ok(!portal.containerClass.includes('monas-portal-active'),
+    'the darkened field must be taken down when the section settles');
   assert.ok(portal.afterOpen < portal.before, 'entering must debit the bank');
   assert.equal(portal.stillOpen, false, 'the portal must close when its clock runs out');
   assert.equal(portal.entered, 1, 'entered exactly once');

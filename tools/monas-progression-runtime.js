@@ -29,9 +29,10 @@
 
   // Every speed/gap pair below is one of the exact M31 frontier coordinates.
   //
-  // M43 extends the ladder to the two coordinates D-053 held back as "validated
-  // tuning headroom, not live bands": 5.3 / 200 and the 5.7 / 190 search ceiling.
-  // The reason for holding them was never missing evidence - D-050's frontier
+  // M43 extends the ladder by one coordinate, to 5.3 / 200 - one of the two D-053
+  // held back as "validated tuning headroom, not live bands".
+  //
+  // The reason for holding them was never missing evidence: D-050's frontier
   // verified every coordinate from 2.9 / 260 through 5.7 / 190, and D-051's
   // boundary job fully verified 5.7 / 190 across the complete scheduler-legal
   // pattern-variant pair cross-product. It was that shipping a harder number needs
@@ -39,12 +40,21 @@
   //
   // Now there is. The ladder had never actually governed play: `monas-runtime.js`
   // overwrote `gameSpeed` every frame from a flat ramp, so a run climbed 0.007 per
-  // gate and levelled off long before the crown band. With that clobber removed the
-  // top of the ladder is reached for the first time, and the owner's report - that
-  // MONAS stops speeding up - is about the ceiling as much as the climb.
+  // gate and levelled off around 3.17. With that clobber removed the top of the
+  // ladder is reached for the first time, and the owner's report - that MONAS stops
+  // speeding up - is about the ceiling as much as the climb.
+  //
+  // 5.7 / 190 deliberately stays off this list, and not out of caution. It is the
+  // hardest coordinate the audit covers, and M43 gives it to the *portal*: the
+  // wager clamps there, so entering one is always faster and tighter than the
+  // corridor it interrupts. Promoting it to a live band would have made the
+  // top-band portal identical to ordinary play - a section with a stake, a dark
+  // field, and no escalation at all, which the M43 browser suite caught the first
+  // time it was tried. The hardest thing in the rite should be the thing you wager
+  // on, not the thing you arrive at.
   //
   // The Fold 6 feel/readability gate D-053 named is still owed, and is still owed
-  // for the bands below these two. It gates the release, not the tuning.
+  // for the bands below this one. It gates the release, not the tuning.
   const BANDS = Object.freeze([
     Object.freeze({ id: 'still', gateThreshold: 0,  speed: 2.9, gap: 260 }),
     Object.freeze({ id: 'current-i', gateThreshold: 8,  speed: 3.3, gap: 250 }),
@@ -52,8 +62,7 @@
     Object.freeze({ id: 'axis', gateThreshold: 36, speed: 4.1, gap: 230 }),
     Object.freeze({ id: 'orbit', gateThreshold: 56, speed: 4.5, gap: 220 }),
     Object.freeze({ id: 'crown', gateThreshold: 80, speed: 4.9, gap: 210 }),
-    Object.freeze({ id: 'ascent', gateThreshold: 110, speed: 5.3, gap: 200 }),
-    Object.freeze({ id: 'ceiling', gateThreshold: 150, speed: 5.7, gap: 190 })
+    Object.freeze({ id: 'ascent', gateThreshold: 110, speed: 5.3, gap: 200 })
   ]);
 
   let installed = false;
@@ -248,15 +257,57 @@
       return originalCheckLevel.apply(this, args);
     };
 
+    /**
+     * `__monasSectionGap`: the corridor a live MONAS section owns, if one does.
+     *
+     * This wrap is the outermost `getCurrentGap` for MONAS - it installs after
+     * `monas-runtime.js` and returns without delegating - so a section that wants a
+     * different corridor cannot simply wrap the method itself; it would end up
+     * underneath this and never be called. Rather than have this module know what
+     * sections exist, it reads one number off the instance and the section writes
+     * it. `monas-runtime.js`'s portal is the first and only writer today.
+     *
+     * The breathing wobble and the surge widening still apply on top, because they
+     * are properties of the rite rather than of the corridor width.
+     */
     Game.prototype.getCurrentGap = function getMonasProgressionGap(...args) {
       if (!isMonas(this) || !this.monasState) return originalGetCurrentGap.apply(this, args);
+      const section = finite(this.__monasSectionGap, NaN);
+      if (Number.isFinite(section) && section > 0) {
+        const breathing = Math.sin(finite(this.frames, 0) * 0.05) * 10;
+        const base = section + breathing;
+        return this.monasState.surgeActive ? base * SURGE_GAP_MULTIPLIER : base;
+      }
       return gapFor(this.monasState.gatesPassed, this.frames, Boolean(this.monasState.surgeActive));
     };
 
     Game.prototype.updateGameObjects = function updateMonasProgression(...args) {
       if (!isMonas(this) || !this.monasState) return originalUpdateGameObjects.apply(this, args);
       const gatesBefore = Math.max(0, Math.floor(finite(this.monasState.gatesPassed, 0)));
+
+      // M43: re-assert the ladder every frame, before the inner update reads
+      // `gameSpeed`.
+      //
+      // Applying only on gate changes made the speed a value written once and then
+      // trusted, which goes stale the moment anything else moves: a posture change
+      // recaptures the geometry base, and a run started before the canvas settled
+      // into portrait kept the desktop base until its next gate. The previous
+      // arrangement hid that because `monas-runtime.js` recomputed the speed from
+      // scratch every frame - the very clobber M43.1 removed. Removing it without
+      // replacing the per-frame guarantee traded one defect for a subtler one.
+      //
+      // This is not a second writer. It is the same call, made unconditionally, so
+      // `gameSpeed` is a function of the run's state rather than a cached result.
+      // `applyProgression` is idempotent and only increments `progressionChanges`
+      // when the band index actually moves, so a frame that changes nothing writes
+      // the same number it already held.
+      applyProgression(this, { countChange: false });
+
       const result = originalUpdateGameObjects.apply(this, args);
+
+      // And again if this frame cleared a gate, so the band advances on the frame
+      // it was earned rather than on the next one - `countChange` is left at its
+      // default here because this is the call that represents a real progression.
       const gatesAfter = Math.max(0, Math.floor(finite(this.monasState?.gatesPassed, 0)));
       if (gatesAfter !== gatesBefore) applyProgression(this);
       return result;
@@ -287,17 +338,6 @@
           surgeActive: Boolean(game.monasState.surgeActive),
           gateResidue: Boolean(game.gateSliceState || game.gateSliceOffer || game.__gateSliceVoidActive)
         };
-      },
-      /**
-       * Re-assign the current band's speed without counting a progression change.
-       *
-       * M43: `monas-runtime.js` calls this after a resize changes the captured
-       * geometry base, since `applyProgression` is now the sole writer of
-       * `gameSpeed` and otherwise would not run again until the next gate.
-       */
-      resyncProgression() {
-        if (typeof game === 'undefined' || !isMonas(game) || !game.monasState) return null;
-        return applyProgression(game, { countChange: false });
       },
       forceGatesForTest(value) {
         if (typeof game === 'undefined' || !isMonas(game) || !game.monasState) return null;

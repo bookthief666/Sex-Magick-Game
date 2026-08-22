@@ -11,15 +11,13 @@ function approximately(actual, expected, epsilon = 1e-9) {
 
 assert.equal(progression.validateBands(), true);
 
-const expectedThresholds = [0, 8, 20, 36, 56, 80, 110, 150];
+const expectedThresholds = [0, 8, 20, 36, 56, 80, 110];
 assert.deepEqual(progression.BANDS.map(band => band.gateThreshold), expectedThresholds);
 
-// M43: the live curve is now every coordinate of M31's exact frontier, in order.
-// The contract this replaces held the top two back as headroom; it is superseded,
-// not weakened - the invariant that matters is unchanged and asserted here. Every
-// live band must be an exact frontier coordinate, so a future tuning change still
-// has to either stay on a proven pair or carry new reachability evidence.
-assert.equal(progression.BANDS.length, frontier.CANDIDATES.length);
+// M43 promotes p6 (5.3 / 200) to a live band. The invariant that matters is
+// unchanged: every live band is an exact M31 frontier coordinate, in order, so a
+// future tuning change must either stay on a proven pair or carry new evidence.
+assert.equal(progression.BANDS.length, frontier.CANDIDATES.length - 1);
 for (let index = 0; index < progression.BANDS.length; index += 1) {
   const live = progression.BANDS[index];
   const proven = frontier.CANDIDATES[index];
@@ -27,13 +25,28 @@ for (let index = 0; index < progression.BANDS.length; index += 1) {
   approximately(live.gap, proven.nominalGap);
 }
 
-// The top band is the search ceiling itself, which is the whole point of the
-// extension and the reason it needs no new evidence: D-051's boundary job audited
-// 5.7 / 190 across the complete scheduler-legal pattern-variant pair cross-product,
-// in ordinary flight and in Warp Surge.
-const ceiling = progression.BANDS.at(-1);
-approximately(ceiling.speed, 5.7);
-approximately(ceiling.gap, 190);
+// p7 (5.7 / 190) stays off the ladder on purpose. It is not headroom held back for
+// safety any more - M43 hands it to the portal, whose clamp saturates there - so
+// the assertion is that it belongs to the wager rather than to ordinary play.
+const livePairs = new Set(progression.BANDS.map(band => `${band.speed}/${band.gap}`));
+assert.equal(livePairs.has('5.7/190'), false,
+  'the search ceiling is the portal clamp, not a live band - promoting it makes the top-band portal a no-op');
+approximately(monas.MONAS_MAX_VERIFIED_SPEED, 5.7);
+approximately(monas.MONAS_MIN_VERIFIED_GAP, 190);
+
+// Every band must actually escalate when a portal opens on it, which is the whole
+// reason the ceiling is reserved. This is the contract the M43 browser suite then
+// checks against real frames.
+for (const band of progression.BANDS) {
+  assert.ok(monas.portalSpeedFor(band.speed) > band.speed,
+    `a portal on band ${band.id} must be faster than the band it interrupts`);
+  assert.ok(monas.portalGapFor(band.gap) < band.gap,
+    `a portal on band ${band.id} must be tighter than the band it interrupts`);
+  assert.ok(monas.portalSpeedFor(band.speed) <= 5.7 + 1e-9,
+    `a portal on band ${band.id} must never exceed the audited ceiling`);
+  assert.ok(monas.portalGapFor(band.gap) >= 190 - 1e-9,
+    `a portal on band ${band.id} must never go below the audited corridor`);
+}
 
 // Threshold boundaries are gate-count driven and saturate at the last live band.
 for (let index = 0; index < progression.BANDS.length; index += 1) {
@@ -54,16 +67,19 @@ const troughFrame = (3 * Math.PI / 2) / 0.05;
 const lastBand = progression.BANDS.at(-1);
 approximately(progression.gapFor(lastBand.gateThreshold, troughFrame, false), lastBand.gap - 10, 1e-8);
 
-// M43: the hardest reward state is now the surge at the search ceiling itself -
-// exactly the condition D-051's boundary job audited in `mode: 'surge'`, and named
-// in its own text as 8.265. It stays below the game's pre-existing 8.5 maximum-speed
-// scale, which is the constraint that was ever load-bearing here.
+// The hardest reward state remains materially below the M31 search ceiling and
+// below the game's pre-existing 8.5 maximum-speed scale.
 const liveSurgeMax = lastBand.speed * monas.SURGE_SPEED_MULTIPLIER;
 const searchCeiling = frontier.CANDIDATES.at(-1);
 const searchCeilingSurge = searchCeiling.baseSpeed * monas.SURGE_SPEED_MULTIPLIER;
-approximately(liveSurgeMax, 8.265);
+approximately(liveSurgeMax, 7.685);
 approximately(searchCeilingSurge, 8.265);
-assert.ok(liveSurgeMax <= searchCeilingSurge, 'live surge must never exceed the audited ceiling');
+assert.ok(liveSurgeMax < searchCeilingSurge);
 assert.ok(liveSurgeMax < 8.5);
+
+// The portal suppresses the surge, so the two escalations can never compound. That
+// is asserted in the browser suite against real frames; here it is enough that the
+// unmultiplied portal ceiling is itself the audited coordinate.
+approximately(monas.portalSpeedFor(lastBand.speed), 5.7);
 
 console.log('monas-progression-runtime: all deterministic contracts passed');

@@ -373,7 +373,14 @@ async function openGame(query = 'assetMode=offline&gateSlice=1') {
     let sawWiderGap = null;
     let baselineGap = null;
 
-    for (let frame = 0; frame < 2400; frame += 1) {
+    // The budget has to outlast the thing being measured, with room to spare.
+    // Measured: centred flight fills coherence at around gate 11, which lands the
+    // surge opening near frame 2070; SURGE_FRAMES is 360, so it closes near 2430.
+    // The previous 2400 sat *under* that by ~30 frames, which made "the surge ends
+    // on its own" a coin toss rather than an assertion - it passed only when the
+    // corridor happened to run slightly ahead. 3000 leaves a clear margin, and the
+    // loop breaks the moment the surge closes, so a healthy run still exits early.
+    for (let frame = 0; frame < 3000; frame += 1) {
       const next = game.obstacles.find(pillar => !pillar.marked);
       if (next) game.player.y = next.top + (next.gap / 2);
       game.player.vy = 0;

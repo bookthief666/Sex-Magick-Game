@@ -86,7 +86,7 @@ try {
 
       const initial = snapshot();
       const ladder = [];
-      for (const gates of [8, 20, 36, 56, 80, 110, 150]) {
+      for (const gates of [8, 20, 36, 56, 80, 110]) {
         progression.forceGatesForTest(gates);
         ladder.push(snapshot());
       }
@@ -118,7 +118,7 @@ try {
       // So: force the band, then actually run frames, then look. The player only
       // ever experiences the post-frame value.
       const afterFrames = [];
-      for (const gates of [8, 36, 80, 110, 150]) {
+      for (const gates of [8, 36, 80, 110]) {
         progression.forceGatesForTest(gates);
         const written = game.gameSpeed;
         game.state = GameState.PLAYING;
@@ -170,8 +170,7 @@ try {
       { gatesPassed: 36, band: 3, speed: 3.69, nominalGap: 230 },
       { gatesPassed: 56, band: 4, speed: 4.05, nominalGap: 220 },
       { gatesPassed: 80, band: 5, speed: 4.41, nominalGap: 210 },
-      { gatesPassed: 110, band: 6, speed: 4.77, nominalGap: 200 },
-      { gatesPassed: 150, band: 7, speed: 5.13, nominalGap: 190 }
+      { gatesPassed: 110, band: 6, speed: 4.77, nominalGap: 200 }
     ];
 
     assert.equal(result.initial.gatesPassed, 0, `${label}: fresh run must begin at gate 0`);
@@ -203,7 +202,7 @@ try {
     // M43: the ladder must still be the live speed after frames have run. A
     // regression here means something is writing `gameSpeed` per frame again, and
     // the ladder above has quietly become decoration.
-    const liveExpected = { 8: 2.97, 36: 3.69, 80: 4.41, 110: 4.77, 150: 5.13 };
+    const liveExpected = { 8: 2.97, 36: 3.69, 80: 4.41, 110: 4.77 };
     result.afterFrames.forEach(entry => {
       const wanted = liveExpected[entry.gates];
       assert.equal(entry.surgeActive, false, `${label}: surge must be off for the live-speed check at ${entry.gates}`);

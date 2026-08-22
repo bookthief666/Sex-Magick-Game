@@ -250,6 +250,15 @@
             text-shadow: 0 0 20px rgba(0,255,255,0.5);
             animation: shake 0.5s infinite;
         }
+        /* M43: MONAS's portal wears the same unsettled score readout as HEX's
+           Void, in gold. It is a separate class rather than a reuse of
+           .void-active because that class is not the only thing voidMode drives -
+           see monas-runtime.js on why MONAS never sets the flag. */
+        .monas-portal-active .score-display {
+            color: rgba(255, 215, 0, 0.35);
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            animation: shake 0.5s infinite;
+        }
         @keyframes shake { 0% { transform: translate(1px, 1px); } 100% { transform: translate(-1px, -1px); } }
 
         .leaderboard-container {

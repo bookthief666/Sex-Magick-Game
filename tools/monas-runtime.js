@@ -960,18 +960,194 @@
   // `settleUndertow` scales the return by smoothness, so a player who thrashes
   // through it loses the stake without ever touching a wall.
 
+  // How hard the portal is, and why those two numbers and not others.
+  //
+  // HEX's Void multiplies band speed by 1.5 and takes 20px off the gap, then
+  // clamps to `MAX_VALIDATED_SPEED` / `MIN_VALIDATED_GAP` - "a sharp escalation at
+  // low bands that saturates at the hardest provably clearable configuration
+  // instead of running off into difficulty nobody has shown is survivable"
+  // (gate-slice-runtime.js). MONAS uses the same shape and the same reasoning, with
+  // its own envelope.
+  //
+  // That envelope is D-050's frontier and D-051's boundary job: every coordinate
+  // from 2.9/260 through 5.7/190 is verified, and 5.7/190 was audited across the
+  // complete scheduler-legal pattern-variant pair cross-product. So the clamp lands
+  // the hardest possible portal exactly on the audited ceiling. Below it, the
+  // portal is slower at a wider corridor than a verified pair, which is inside the
+  // envelope by the same monotonicity argument D-058 used.
+  const PORTAL_SPEED_MULTIPLIER = 1.5;
+  const PORTAL_GAP_REDUCTION = 20;
+  const MONAS_MAX_VERIFIED_SPEED = 5.7;
+  const MONAS_MIN_VERIFIED_GAP = 190;
+
+  // The ring the player flies into, and how long it waits before drifting off.
+  const PORTAL_OUTER_RADIUS = 58;
+  const PORTAL_ENTRY_RADIUS = 34;
+
+  function portalSpeedFor(bandSpeed) {
+    const base = Math.max(0, finite(bandSpeed, 0));
+    return Math.min(MONAS_MAX_VERIFIED_SPEED, base * PORTAL_SPEED_MULTIPLIER);
+  }
+
+  function portalGapFor(baseGap) {
+    const base = finite(baseGap, MONAS_MIN_VERIFIED_GAP);
+    return Math.max(MONAS_MIN_VERIFIED_GAP, base - PORTAL_GAP_REDUCTION);
+  }
+
   function resetPortal(gameInstance) {
-    gameInstance.__monasPortal = null;
+    gameInstance.__monasPortalOffer = null;
+    closePortal(gameInstance);
   }
 
   /**
-   * Open a portal when the meter is full, and only outside the Caduceus.
+   * Offer the portal as an object in the corridor rather than as an event.
+   *
+   * M42 opened the section the instant the meter filled, which meant the player
+   * never saw the thing they were entering - the owner's word for what was missing
+   * was that "the portal appears and the player enters". This spawns a ring at the
+   * right edge on a pillar spawn frame, so it arrives on the corridor's own rhythm
+   * and sits in a gap rather than inside a wall.
+   *
+   * Missing it is not a decision and does not bank: `portalReady` stays true and
+   * the next spawn frame offers again. HEX's Gate is the rite with an accept/decline
+   * choice; MONAS's meter has already been filled by the edging that earned it.
+   */
+  function maybeOfferPortal(gameInstance) {
+    const state = gameInstance?.monasState;
+    if (!state || gameInstance.__monasPortal || gameInstance.__monasPortalOffer) return false;
+    if (gameInstance.__monasCaduceus) return false;
+    if (!state.portalReady || state.gnosis <= 0) return false;
+
+    const grammar = root.SexMagickObstacleGrammar;
+    const spawnFrame = typeof grammar?.isSpawnFrame === 'function'
+      ? grammar.isSpawnFrame(gameInstance, typeof CONFIG !== 'undefined' ? CONFIG : null)
+      // No grammar (a bare diagnostic page): fall back to the raw cadence rather
+      // than never offering at all.
+      : finite(gameInstance.frames, 0) > 0 && finite(gameInstance.frames, 0) % 90 === 0;
+    if (!spawnFrame) return false;
+
+    const height = finite(gameInstance?.canvas?.height, 0);
+    const width = finite(gameInstance?.canvas?.width, 0);
+    if (height <= 0 || width <= 0) return false;
+
+    // Placed against the newest pillar's gap when there is one, so the ring is
+    // reachable by construction rather than by luck. Without a pillar - the first
+    // frames of a run - the centre line is the only defensible guess.
+    const newest = Array.isArray(gameInstance.obstacles) && gameInstance.obstacles.length
+      ? gameInstance.obstacles[gameInstance.obstacles.length - 1]
+      : null;
+    const y = newest && finite(newest.gap, 0) > 0
+      ? finite(newest.top, 0) + (finite(newest.gap, 0) / 2)
+      : height / 2;
+
+    gameInstance.__monasPortalOffer = {
+      x: width + PORTAL_OUTER_RADIUS,
+      y: clamp(y, PORTAL_OUTER_RADIUS, height - PORTAL_OUTER_RADIUS),
+      outerRadius: PORTAL_OUTER_RADIUS,
+      entryRadius: PORTAL_ENTRY_RADIUS,
+      offeredAtFrame: finite(gameInstance.frames, 0),
+      resolved: false
+    };
+    setMonasTelegraph('THE PORTAL OPENS  ·  FLY INTO IT', 1400);
+    try {
+      if (gameInstance.settings?.sfx && typeof SFX?.playTone === 'function') {
+        SFX.playTone(196, 'sine', 0.2, 0.05);
+        setTimeout(() => SFX.playTone(294, 'sine', 0.18, 0.045), 120);
+      }
+    } catch (_error) {}
+    return true;
+  }
+
+  /**
+   * Drift the offered ring left and resolve it on contact.
+   *
+   * Runs before the delegated update so entry and the section's first frame land
+   * together - a one-frame gap here would show the corridor at ordinary speed
+   * inside a portal that had already been entered.
+   */
+  function updatePortalOffer(gameInstance) {
+    const offer = gameInstance?.__monasPortalOffer;
+    if (!offer || offer.resolved) return;
+    offer.x -= finite(gameInstance.gameSpeed, 0);
+
+    const player = gameInstance.player;
+    if (player) {
+      const distance = Math.hypot(finite(player.x, 0) - offer.x, finite(player.y, 0) - offer.y);
+      if (distance <= finite(offer.entryRadius, PORTAL_ENTRY_RADIUS)) {
+        offer.resolved = true;
+        gameInstance.__monasPortalOffer = null;
+        openPortal(gameInstance);
+        return;
+      }
+      // Passed without touching it. The meter is untouched, so the next spawn
+      // frame offers again.
+      if (offer.x + finite(offer.outerRadius, PORTAL_OUTER_RADIUS) < finite(player.x, 0) - finite(player.r, 0)) {
+        offer.resolved = true;
+        gameInstance.__monasPortalOffer = null;
+      }
+    }
+  }
+
+  /**
+   * The ring itself: gold, counter-rotating, brightening as it closes.
+   *
+   * Drawn from the frame counter rather than `Math.random()` so a visual baseline
+   * capture lands on the same ring for the same frame.
+   */
+  function drawPortalOffer(ctx, gameInstance) {
+    const offer = gameInstance?.__monasPortalOffer;
+    if (!ctx || !offer) return;
+    const player = gameInstance.player;
+    const span = Math.max(1, finite(gameInstance?.canvas?.width, 1));
+    const closeness = player
+      ? clamp(1 - ((offer.x - finite(player.x, 0)) / span), 0, 1)
+      : 0;
+    const frames = finite(gameInstance.frames, 0);
+    const outer = finite(offer.outerRadius, PORTAL_OUTER_RADIUS);
+    const entry = finite(offer.entryRadius, PORTAL_ENTRY_RADIUS);
+
+    ctx.save();
+    ctx.translate(offer.x, offer.y);
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Two rings turning against each other, so it reads as an aperture being held
+    // open rather than a decal.
+    for (const direction of [1, -1]) {
+      ctx.save();
+      ctx.rotate(frames * 0.02 * direction);
+      ctx.strokeStyle = 'rgba(255, 215, 0, ' + (0.3 + closeness * 0.5).toFixed(3) + ')';
+      ctx.lineWidth = direction > 0 ? 3 : 1.5;
+      ctx.beginPath();
+      const radius = direction > 0 ? outer : outer * 0.78;
+      for (let i = 0; i <= 6; i += 1) {
+        const angle = (i / 6) * Math.PI * 2;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // The aperture proper - the circle the collision test actually uses, so what
+    // the player aims at is what the code measures.
+    ctx.strokeStyle = 'rgba(255, 246, 201, ' + (0.5 + closeness * 0.45).toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, entry + (Math.sin(frames * 0.12) * 2), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Enter the portal. Called only from `updatePortalOffer`, on contact.
    *
    * Two sections at once would be unreadable, and the Caduceus already suppresses
    * pillars - a portal inside it would be a wager on a corridor with nothing in
-   * it, which is not a wager.
+   * it, which is not a wager. The offer is not made inside one, so this is a guard
+   * against a Caduceus opening while a ring was already in flight.
    */
-  function maybeOpenPortal(gameInstance) {
+  function openPortal(gameInstance) {
     const api = currentsApi();
     const state = gameInstance?.monasState;
     if (!api || !state || gameInstance.__monasPortal || gameInstance.__monasCaduceus) return false;
@@ -984,10 +1160,50 @@
     state.portalReady = false;
     state.portalsEntered = whole(state.portalsEntered, 0) + 1;
     gameInstance.__monasPortal = portal;
+    // The section's total length, held so the vignette can read how far through
+    // the wager the run is. `framesRemaining` alone cannot say that.
+    portal.totalFrames = Math.max(1, whole(portal.framesRemaining, 1));
+
+    // The Warp Surge is suppressed for the duration. Two escalations at once is
+    // unreadable, and it keeps the portal's clamped speed from being multiplied by
+    // 1.45 on top - the compounding case nothing has audited.
+    gameInstance.__monasPortalSuppressedSurge = Boolean(state.surgeActive);
+    state.surgeActive = false;
+
+    gameInstance.screenFlash = { active: true, duration: 18, color: '#ffd700', intensity: 0.34 };
+    gameInstance.shake = 10;
+    document.getElementById('game-container')?.classList.add('monas-portal-active');
+    setMonasTelegraph(`THE CURRENT TAKES YOU  ·  STAKED ${portal.stake}`, 1400);
 
     try { root.GlitchFX?.trigger?.(180, 'sweepBeam', '#fff6c9'); } catch (_error) {}
-    try { if (gameInstance.settings?.sfx) SFX.levelUp(); } catch (_error) {}
+    try { if (gameInstance.settings?.sfx) SFX.voidEnter(); } catch (_error) {}
+    try { Haptics.levelUp(); } catch (_error) {}
     return true;
+  }
+
+  /**
+   * The portal's own speed and corridor, applied per frame.
+   *
+   * Written as a bracket around the delegated update - multiply before, restore
+   * after - for the same reason the surge is: `applyProgression` is the sole writer
+   * of `gameSpeed` since M43, and a section that assigned it outright would be the
+   * exact defect M43.1 removed, one milestone later.
+   */
+  function portalSpeedBracket(gameInstance) {
+    if (!gameInstance?.__monasPortal) {
+      gameInstance.__monasSectionGap = null;
+      return null;
+    }
+    const base = finite(gameInstance.gameSpeed, 0);
+    gameInstance.gameSpeed = portalSpeedFor(base);
+    // The corridor the section owns, read by `monas-progression-runtime.js`'s
+    // `getCurrentGap` wrap - see its `__monasSectionGap` note for why it is a
+    // number on the instance rather than another wrapper.
+    const bandGap = finite(gameInstance.monasState?.progressionGap, NaN);
+    gameInstance.__monasSectionGap = Number.isFinite(bandGap)
+      ? portalGapFor(bandGap)
+      : null;
+    return base;
   }
 
   /**
@@ -1014,8 +1230,32 @@
       );
       state.portalsSurvived = whole(state.portalsSurvived, 0) + 1;
       try { root.GlitchFX?.trigger?.(220, 'sweepBeam', '#ffffff'); } catch (_error) {}
+      setMonasTelegraph(`THE CURRENT RETURNS  +${settled.returned}`, 1300);
+    } else {
+      setMonasTelegraph('THE CURRENT SCATTERS YOU', 1300);
     }
+    closePortal(gameInstance);
+  }
+
+  /**
+   * Put the field back exactly as it was.
+   *
+   * Separate from `tickPortal` because death, retry and a rite change all have to
+   * take this path too. A section left half-open would keep the container class -
+   * and therefore the darkened field - through the whole of the next run, which is
+   * the shape of teardown bug MONAS has now produced twice.
+   */
+  function closePortal(gameInstance) {
+    if (!gameInstance) return;
     gameInstance.__monasPortal = null;
+    gameInstance.__monasPortalBaseSpeed = null;
+    gameInstance.__monasSectionGap = null;
+    document.getElementById('game-container')?.classList.remove('monas-portal-active');
+    // The surge is not resumed. It was mid-flight when the portal took it and its
+    // clock kept running down while suppressed; handing back a surge with an
+    // unknown remainder is worse than ending it, and `surgeFramesRemaining` is the
+    // authority either way.
+    gameInstance.__monasPortalSuppressedSurge = false;
   }
 
   // --- the run record -----------------------------------------------------------
@@ -1136,20 +1376,16 @@
       if (!isMonas(this)) return originalAdjustForScreenSize.apply(this, args);
 
       const live = this.gameSpeed;
-      const previousBase = this.__monasGeometryBaseSpeed;
       this.gameSpeed = typeof CONFIG !== 'undefined' ? CONFIG.INITIAL_GAME_SPEED : live;
       const result = originalAdjustForScreenSize.apply(this, args);
       this.__monasGeometryBaseSpeed = this.gameSpeed;
       this.gameSpeed = live;
-
-      // M43: the ladder is now the only writer of `gameSpeed`, and it writes on
-      // gate changes. A posture change between two gates would otherwise leave the
-      // run at the previous screen's speed until the next gate cleared - visible on
-      // a Fold, where unfolding moves the base from 2.61 to 2.9. Re-applying costs
-      // one assignment and only happens when the captured base actually moved.
-      if (this.monasState && previousBase !== this.__monasGeometryBaseSpeed) {
-        try { root.__SEX_MAGICK_MONAS_PROGRESSION__?.resyncProgression?.(); } catch (_error) {}
-      }
+      // Nothing needs telling that this changed: `monas-progression-runtime.js`
+      // re-applies the ladder on every frame and reads this capture when it does,
+      // so a posture change is picked up by the next frame without a notification
+      // that could be missed. An earlier M43 draft used an explicit resync hook
+      // here and it went stale exactly where it mattered - on a run that started
+      // before the canvas had settled into portrait.
       return result;
     };
 
@@ -1217,6 +1453,13 @@
         // Close the run *before* delegating: `returnToMenu` clears the state this
         // reads, and the global board submits from the menu render that follows.
         if (isMonas(this)) finishMonasRun(this, 'menu');
+        // Every exit from a run has to take the portal down with it. The section
+        // holds a container class and a corridor override, and a run that ended
+        // inside one would leave the menu - and then the next run - wearing a
+        // darkened field and a narrowed gap it never entered. This is the third
+        // one-sided MONAS teardown found in as many milestones, so all three exits
+        // are covered explicitly rather than by whichever one was noticed.
+        resetPortal(this);
         const result = originalReturnToMenu.apply(this, args);
         renderHud(this);
         return result;
@@ -1229,7 +1472,13 @@
     const originalGameOverForMonas = Game.prototype.gameOver;
     if (typeof originalGameOverForMonas === 'function') {
       Game.prototype.gameOver = function monasGameOver(...args) {
-        if (isMonas(this)) finishMonasRun(this, 'death');
+        if (isMonas(this)) {
+          finishMonasRun(this, 'death');
+          // Dying inside the portal forfeits the stake, which is what a wager
+          // means. `settleUndertow` is never reached, so the banked Gnosis simply
+          // stays spent.
+          resetPortal(this);
+        }
         return originalGameOverForMonas.apply(this, args);
       };
     }
@@ -1239,7 +1488,11 @@
       Game.prototype.restartGame = function monasRestart(...args) {
         if (isMonas(this)) finishMonasRun(this, 'retry');
         const result = originalRestartForMonas.apply(this, args);
-        if (isMonas(this)) beginMonasRun(this);
+        if (isMonas(this)) {
+          resetPortal(this);
+          this.__monasLastBandIndex = whole(this.monasState?.progressionBandIndex, 0);
+          beginMonasRun(this);
+        }
         return result;
       };
     }
@@ -1332,7 +1585,12 @@
       // across the call and read the flags afterwards. Same technique the Gate
       // slice uses for its own corridor, and for the same reason.
       maybeOpenCaduceus(this);
-      maybeOpenPortal(this);
+      // Offer, then advance the offer. Entry happens inside `updatePortalOffer`, so
+      // the section's first frame is the frame the ring was touched - a one-frame
+      // gap here would show the corridor at ordinary speed inside a portal that
+      // had already been entered.
+      maybeOfferPortal(this);
+      updatePortalOffer(this);
       const caduceus = this.__monasCaduceus;
       const nodesBefore = caduceus && this.pentagrams?.length ? [...this.pentagrams] : null;
       if (caduceus) spawnCaduceusNodes(this);
@@ -1388,9 +1646,13 @@
       const surgeSpeed = this.monasState.surgeActive ? SURGE_SPEED_MULTIPLIER : 1;
       const baseSpeed = finite(this.gameSpeed, 0);
       if (surgeSpeed !== 1) this.gameSpeed = baseSpeed * surgeSpeed;
+      // The portal brackets on top of the surge bracket, but the two can never
+      // both be live: `openPortal` clears `surgeActive` for the duration.
+      const portalBase = portalSpeedBracket(this);
 
       const result = originalUpdateGameObjects.apply(this, args);
 
+      if (portalBase !== null) this.gameSpeed = portalBase;
       if (surgeSpeed !== 1) this.gameSpeed = baseSpeed;
 
       // Borrowed wholesale from the Gate slice, which is safe because it is
@@ -1507,6 +1769,9 @@
       if (isMonas(this) && this.monasState) {
         drawSurgeBloom(this.ctx, this);
         if (!this.monasState.surgeActive) tickAmbientGlyph(this.ctx, this);
+        // Behind the pillars, like the Gate's summoning ring - the player flies
+        // *into* it, so it must not be painted over the walls they are dodging.
+        drawPortalOffer(this.ctx, this);
       }
       return result;
     };
@@ -1639,6 +1904,13 @@
     // the ones `classifyGateClear` actually scores against, rather than a second
     // copy of the same numbers that could drift away from them.
     MONAS_PLAYER_HALF, MONAS_RISK_FROM_BAND, MONAS_NEAR_MISS_PX,
+    // M43: the portal's difficulty claim. Exported because a ceiling is worth
+    // asserting directly against the function that enforces it, rather than
+    // inferring it from a frame - and because the progression contract test needs
+    // to check every live band still escalates when a portal opens on it.
+    PORTAL_SPEED_MULTIPLIER, PORTAL_GAP_REDUCTION,
+    MONAS_MAX_VERIFIED_SPEED, MONAS_MIN_VERIFIED_GAP,
+    portalSpeedFor, portalGapFor,
     GALLERY_ADVANCE_GATES, COLOR_ADVANCE_GATES, DIFFICULTY_ADVANCE_GATES,
     AMBIENT_GLYPH_MIN_FRAMES, AMBIENT_GLYPH_JITTER_FRAMES, AMBIENT_GLYPH_DURATION_FRAMES,
     clamp,

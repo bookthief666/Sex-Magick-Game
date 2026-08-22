@@ -244,6 +244,30 @@
    * game, and until now it was a cyan tint. Descending script, a vignette closing
    * as the timer runs down, and a pulse on the beat of the countdown.
    */
+  /**
+   * Is a wagered section owning this frame, and whose?
+   *
+   * M43: MONAS's portal joins HEX's Void here. It gets the same treatment - the
+   * ground goes dark, the accent wash drops, the strata dim, and the artwork is
+   * pushed in close and outlined - because it is the same kind of moment: a stake
+   * placed, a fixed number of frames to survive.
+   *
+   * MONAS reaches it through `__monasPortal` rather than by setting `voidMode`.
+   * That distinction is load-bearing and `monas-runtime.js` documents why at
+   * length: `voidMode` also drives `drawScene`'s tunnel colour, which would paint
+   * the Hexagram's reserved cyan over a MONAS event, and it is read by the warp
+   * starfield. The Warp Surge tried borrowing the flag once and cost 49ms a frame.
+   *
+   * The cost here is affordable for the opposite reason the surge's was not: the
+   * surge ran for the whole rite, the portal runs for a bounded 300 frames, which
+   * is the same shape and duration of cost HEX's Void has always paid.
+   */
+  function wagerActive(gameInstance) {
+    if (gameInstance?.voidMode || gameInstance?.__gateSliceVoidActive) return 'HEX';
+    if (gameInstance?.__monasPortal) return 'MONAS';
+    return null;
+  }
+
   function drawVoid(ctx, gameInstance, width, height) {
     const artApi = art();
     if (!artApi) return;
@@ -266,8 +290,17 @@
     }
 
     // How far through the wager we are. The walls of the world close in as it runs.
-    const total = Math.max(1, finite(gameInstance?.voidTimer, 0) + 1);
-    const progress = 1 - Math.min(1, total / (8 * 60));
+    //
+    // MONAS's portal does not use `voidTimer` - it never sets `voidMode`, and its
+    // clock is `framesRemaining` on the Undertow state. Read from whichever is
+    // live, scaled by that section's own length, so the vignette closes at the same
+    // rate in a 300-frame portal as in a 480-frame Void rather than barely moving.
+    const portal = gameInstance?.__monasPortal;
+    const total = portal
+      ? Math.max(1, finite(portal.framesRemaining, 0) + 1)
+      : Math.max(1, finite(gameInstance?.voidTimer, 0) + 1);
+    const span = portal ? Math.max(1, finite(portal.totalFrames, 300)) : (8 * 60);
+    const progress = 1 - Math.min(1, total / span);
     const pulse = reduced ? 0 : Math.sin(finite(gameInstance?.frames, 0) * 0.14) * 0.04;
     const inner = Math.max(width, height) * (0.62 - progress * 0.22 + pulse);
     const vignette = ctx.createRadialGradient(width / 2, height / 2, inner * 0.35, width / 2, height / 2, inner);
@@ -289,7 +322,7 @@
     if (!ctx || !art()) return false;
     const width = gameInstance.canvas.width;
     const height = gameInstance.canvas.height;
-    const voidActive = Boolean(gameInstance.voidMode || gameInstance.__gateSliceVoidActive);
+    const voidActive = Boolean(wagerActive(gameInstance));
     const bandName = currentBandName(gameInstance);
 
     const buffer = fieldBuffer(width, height);
@@ -449,7 +482,7 @@
     const x = finite(pillar.x, 0);
 
     ctx.save();
-    ctx.globalAlpha = gameInstance.voidMode || gameInstance.__gateSliceVoidActive ? 0.35 : 0.85;
+    ctx.globalAlpha = wagerActive(gameInstance) ? 0.35 : 0.85;
     // Only the solid spans carry inscription. Drawing across the gap would put
     // marks where the player has to fly.
     ctx.save();
@@ -653,8 +686,11 @@
   function mercuryRimWall(ctx, pillar, gameInstance) {
     if (!ctx || !pillar || !gameInstance) return false;
     if (gameInstance.gameMode !== 'MONAS' || !gameInstance.monasState) return false;
-    // The Caduceus has no walls, and the surge is already its own spectacle.
-    if (gameInstance.__monasCaduceus) return false;
+    // The Caduceus has no walls, and the surge is already its own spectacle. The
+    // portal is too - it wears the dark field and the outlined artwork, and a
+    // second gold treatment on the walls inside it reads as noise rather than as
+    // MONAS's signature. Same reason `neonRiskWall` stands down inside HEX's Void.
+    if (gameInstance.__monasCaduceus || gameInstance.__monasPortal) return false;
 
     const gapTop = finite(pillar.top, 0);
     const gap = finite(pillar.gap, 0);
@@ -1184,7 +1220,8 @@
    * is an error card, not artwork, so it never draws.
    */
   function drawLevelArtwork(gameInstance) {
-    const inVoid = Boolean(gameInstance.voidMode || gameInstance.__gateSliceVoidActive);
+    const wager = wagerActive(gameInstance);
+    const inVoid = Boolean(wager);
     const level = activeLevel(gameInstance);
     const image = level?.img;
     if (!level?.loaded || !image || !image.complete) return false;
@@ -1264,7 +1301,13 @@
       ctx.globalCompositeOperation = 'lighter';
       // A slow drift over the cyan baked into the layer, so the outlines change
       // colour across the section without a second per-pixel pass.
-      ctx.filter = 'hue-rotate(' + ((frames * 0.6) % 360) + 'deg)';
+      //
+      // M43: MONAS starts the drift half a turn round, which takes the baked cyan
+      // to gold. One extra term in an expression that was already being evaluated -
+      // the alternative, baking a second layer in MONAS's colour, would double the
+      // Sobel cache for a hue rotation.
+      const hueBase = gameInstance?.__monasPortal ? 180 : 0;
+      ctx.filter = 'hue-rotate(' + ((hueBase + (frames * 0.6)) % 360) + 'deg)';
       ctx.globalAlpha = 0.5;
       ctx.drawImage(layer, drawX, drawY, drawWidth, drawHeight);
 

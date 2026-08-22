@@ -189,7 +189,7 @@ try {
     game.gameMode = 'MONAS';
     game.startGame();
     const out = [];
-    for (const gates of [0, 36, 80, 150]) {
+    for (const gates of [0, 36, 80, 110]) {
       window.__SEX_MAGICK_MONAS_PROGRESSION__.forceGatesForTest(gates);
       const written = game.gameSpeed;
       for (let f = 0; f < 5; f += 1) { game.frames += 1; game.updateGameObjects(); }
@@ -205,6 +205,144 @@ try {
   }
   assert.ok(speeds.at(-1).live > speeds[0].live * 1.7,
     `the ladder must nearly double across its range (${speeds[0].live} -> ${speeds.at(-1).live})`);
+
+  // ---------------------------------------------------------------------------
+  // Inside the portal.
+  //
+  // The section is the reason M43 exists, and the reason its numbers matter is
+  // that they are a difficulty claim: the clamp has to land the hardest possible
+  // portal on D-051's audited 5.7/190 ceiling and never past it. Sampled every
+  // frame rather than once, because a bracket that restores wrongly would show a
+  // correct value at the edges and a wrong one in between.
+  // ---------------------------------------------------------------------------
+  const inside = await evaluate(`(() => {
+    game.gameMode = 'MONAS';
+    game.startGame();
+    // The top live band, so the clamp is actually exercised: 5.3 * 1.5 = 7.95 raw,
+    // which must come back as the audited 5.7.
+    window.__SEX_MAGICK_MONAS_PROGRESSION__.forceGatesForTest(110);
+    const bandSpeed = game.gameSpeed;
+    const bandGap = game.monasState.progressionGap;
+    game.monasState.gnosis = game.monasState.gnosisCapacity;
+    game.monasState.portalReady = true;
+    // A surge running as the ring is reached, so suppression is tested rather
+    // than assumed.
+    game.monasState.surgeActive = true;
+    game.monasState.surgeFramesRemaining = 600;
+
+    let waited = 0;
+    while (!game.__monasPortalOffer && waited++ < 900) {
+      game.frames = (game.frames || 0) + 1;
+      game.player.y = game.canvas.height / 2; game.player.vy = 0;
+      game.updateGameObjects();
+    }
+    let reach = 0;
+    while (game.__monasPortalOffer && !game.__monasPortal && reach++ < 900) {
+      game.frames += 1;
+      game.player.x = game.__monasPortalOffer.x;
+      game.player.y = game.__monasPortalOffer.y;
+      game.updateGameObjects();
+    }
+    if (!game.__monasPortal) return { entered: false };
+
+    // Capture the speed the walls are actually moved by, at the call site that
+    // moves them. Reading game.gameSpeed after the frame would read the *restored*
+    // value - the bracket's whole job - and measuring a pillar's travel breaks
+    // whenever that pillar is spliced mid-frame. The argument Pillar.update is
+    // handed is the speed the player experienced, with no inference in between.
+    const realPillarUpdate = Pillar.prototype.update;
+    Pillar.prototype.update = function m43Measured(speed, ...rest) {
+      speeds.push(speed);
+      return realPillarUpdate.call(this, speed, ...rest);
+    };
+
+    const classWhileInside = document.getElementById('game-container')?.className || '';
+    const surgeWhileInside = game.monasState.surgeActive;
+    const speeds = [];
+    const gaps = [];
+    const sectionGaps = [];
+    let guard = 0;
+    while (game.__monasPortal && guard++ < 900) {
+      game.frames += 1;
+      game.player.y = game.canvas.height / 2; game.player.vy = 1;
+      // Sampled from inside the delegated update by reading what the pillars were
+      // actually built with, plus the live speed the frame ran at.
+      const beforeCount = game.obstacles.length;
+      game.updateGameObjects();
+      // The *nominal* corridor the section set, not the per-pillar gap.
+      // obstacle-variety-runtime.js scales each pillar by its pattern's own
+      // gapScale, and the reachability audit takes that scale as a parameter - so a
+      // scaled pillar at a verified nominal is inside the audited surface, and
+      // asserting on the scaled number would be asserting the wrong quantity.
+      if (game.__monasSectionGap != null) sectionGaps.push(game.__monasSectionGap);
+      if (game.obstacles.length > beforeCount) gaps.push(game.obstacles[game.obstacles.length - 1].gap);
+    }
+    Pillar.prototype.update = realPillarUpdate;
+    return {
+      entered: true, bandSpeed, bandGap, classWhileInside, surgeWhileInside,
+      gaps, speeds, sectionGaps, frames: guard,
+      speedAfter: game.gameSpeed,
+      classAfter: document.getElementById('game-container')?.className || ''
+    };
+  })()`);
+
+  console.log('inside the portal:', JSON.stringify({ ...inside, gaps: inside.gaps?.slice(0, 4), speeds: [...new Set(inside.speeds || [])], sectionGaps: [...new Set(inside.sectionGaps || [])] }));
+  assert.equal(inside.entered, true, 'the crown-band portal must be reachable');
+  assert.ok(inside.classWhileInside.includes('monas-portal-active'),
+    'the section must arm the darkened field while it runs');
+  assert.equal(inside.surgeWhileInside, false,
+    'the Warp Surge must be suppressed inside the portal - two escalations at once is both unreadable and unaudited');
+
+  assert.ok(inside.gaps.length > 0, 'pillars must keep coming inside the portal - it is a wager on a corridor');
+  assert.ok(inside.sectionGaps.length > 0, 'the section must have owned the corridor every frame');
+  const nominal = [...new Set(inside.sectionGaps)];
+  assert.deepEqual(nominal, [190],
+    `the portal corridor must be the audited 190 nominal on every frame (saw ${JSON.stringify(nominal)})`);
+  assert.ok(nominal[0] < inside.bandGap,
+    `the portal must actually tighten the corridor (band ${inside.bandGap}, portal ${nominal[0]})`);
+
+  assert.ok(inside.speeds.length > 0, 'the section must have been measured');
+  const observed = [...new Set(inside.speeds)];
+  assert.deepEqual(observed, [5.7],
+    `every wall inside the portal must move at the clamped 5.7 and nothing else (saw ${JSON.stringify(observed)})`);
+  assert.ok(observed[0] > inside.bandSpeed,
+    `the portal must be faster than the band it interrupted (band ${inside.bandSpeed}, portal ${observed[0]})`);
+
+  assert.ok(Math.abs(inside.speedAfter - inside.bandSpeed) < 1e-9,
+    `the band speed must be restored when the section ends (${inside.bandSpeed} -> ${inside.speedAfter})`);
+  assert.ok(!inside.classAfter.includes('monas-portal-active'),
+    'the darkened field must come down with the section');
+
+  // The clamp itself, asserted directly against the module rather than inferred
+  // from a frame - a pure function is the right place to prove a ceiling.
+  const clamps = await evaluate(`(() => {
+    const m = window.SexMagickMonas;
+    const bands = window.__SEX_MAGICK_MONAS_PROGRESSION__.getFingerprint().bands;
+    return {
+      has: typeof m.portalSpeedFor === 'function',
+      top: m.portalSpeedFor(5.3), mid: m.portalSpeedFor(2.9),
+      gapTop: m.portalGapFor(200), gapMid: m.portalGapFor(260),
+      escalates: bands.map(b => ({
+        id: b.id,
+        fasterBy: m.portalSpeedFor(b.speed) - b.speed,
+        tighterBy: b.gap - m.portalGapFor(b.gap)
+      }))
+    };
+  })()`);
+  console.log('portal clamps:', JSON.stringify(clamps));
+  assert.equal(clamps.has, true, 'the clamp must be exported so its ceiling is assertable');
+  assert.equal(clamps.top, 5.7, 'the hardest portal must saturate at the audited ceiling, not run past it');
+  assert.equal(clamps.gapTop, 190, 'the tightest portal corridor must saturate at the audited 190');
+  assert.ok(clamps.mid > 2.9 && clamps.mid < 5.7, 'a low-band portal must escalate without reaching the ceiling');
+  assert.ok(clamps.gapMid < 260 && clamps.gapMid > 190, 'a low-band portal must tighten without reaching the floor');
+
+  // The reason 5.7 / 190 is not a live band: if it were, a portal opening on the
+  // top band would be identical to ordinary play - a stake and a dark field with no
+  // escalation behind them. Every band must have somewhere to escalate to.
+  for (const band of clamps.escalates) {
+    assert.ok(band.fasterBy > 0, `a portal on ${band.id} must be faster than the band it interrupts`);
+    assert.ok(band.tighterBy > 0, `a portal on ${band.id} must be tighter than the band it interrupts`);
+  }
 
   sock.close();
   console.log('\nAll M43 MONAS rite checks passed.');
