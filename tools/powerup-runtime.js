@@ -747,12 +747,35 @@
     return true;
   }
 
+  /**
+   * The band index this rite is currently in, whichever rite that is.
+   *
+   * M41: until now `observe` returned early without a `gateSliceState`, which is
+   * HEX-only - so in MONAS the shield was inert. Not merely unearnable: the
+   * pre-emptive `tryDissolve` below never ran either, so a held charge would not
+   * have spent itself even if one had somehow been granted. The whole power-up
+   * layer was dead in half the game.
+   *
+   * MONAS keeps its own six-band ladder in `monas-progression-runtime.js`, and it
+   * is a different ladder with different thresholds. That is fine here, because
+   * `unlockBand` asks "how far has this player got", not "which of HEX's bands is
+   * this" - and AEGIS unlocks at band 0 in either rite.
+   */
+  function currentBandIndex(gameInstance) {
+    const slice = gameInstance?.gateSliceState;
+    if (slice) return wholeNumber(slice.bandIndex, 0);
+    const monas = gameInstance?.monasState;
+    if (monas) return wholeNumber(monas.progressionBandIndex, 0);
+    return null;
+  }
+
   function observe(gameInstance) {
     if (!liveState) return;
     const slice = gameInstance?.gateSliceState;
-    if (!slice) return;
+    const bandIndex = currentBandIndex(gameInstance);
+    if (bandIndex === null) return;
 
-    const unlockedNow = recordBand(liveState, slice.bandIndex);
+    const unlockedNow = recordBand(liveState, bandIndex);
     if (unlockedNow.length > 0) {
       writeState(liveStorage, liveState);
       for (const id of unlockedNow) {
@@ -762,8 +785,11 @@
       }
     }
 
-    const survivals = wholeNumber(slice.voidSurvivals, 0);
-    if (survivals > lastVoidSurvivals) {
+    // The wagered Void is HEX's, so this source simply has nothing to report in
+    // MONAS. Its own equivalent pays through the score checkpoint below rather
+    // than adding a second award path.
+    const survivals = wholeNumber(slice?.voidSurvivals, 0);
+    if (slice && survivals > lastVoidSurvivals) {
       for (let count = lastVoidSurvivals; count < survivals; count += 1) {
         const earned = awardCharge(liveState);
         if (earned) {
