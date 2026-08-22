@@ -210,6 +210,17 @@ try {
   assert.equal(paused.band, null);
 
   const resumed = await page.evaluate(() => {
+    // Clear the field and re-centre before resuming. At KETHER the run is at
+    // terminal speed in a 110px corridor with nobody flying it, so a resumed frame
+    // can kill the player between `togglePause()` and the read below - which makes
+    // this assertion a coin flip that reports a *timing* loss as M35 failing to
+    // reconstruct its band. Observed failing in CI on a commit that touched no
+    // gameplay at all, which is how it was identified as a race rather than a
+    // regression. Nothing here weakens what is under test: the snapshot and the
+    // band attribute are rebuilt from `gateSliceState`, which is untouched.
+    game.obstacles.length = 0;
+    game.player.y = game.canvas.height / 2;
+    game.player.vy = 0;
     game.togglePause();
     return {
       state: game.state,
