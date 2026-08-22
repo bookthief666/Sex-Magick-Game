@@ -190,9 +190,12 @@ try {
     const snapshot = () => ({
       screenFlash: game.screenFlash,
       glitchEffect: game.glitchEffect,
-      glitchTimer: game.glitchTimer
+      glitchTimer: game.glitchTimer,
+      glitchFxActive: GlitchFX.active,
+      glitchFxDuration: GlitchFX.duration
     });
-    const clean = value => value.screenFlash === null && value.glitchEffect === false && value.glitchTimer === 0;
+    const clean = value => value.screenFlash === null && value.glitchEffect === false &&
+      value.glitchTimer === 0 && value.glitchFxActive === false && value.glitchFxDuration === 0;
 
     game.gameMode = 'HEX';
     game.startGame();
@@ -222,8 +225,10 @@ try {
   console.log('fresh-run effects:', JSON.stringify(freshRunEffects));
   assert.ok(freshRunEffects.firstDeath.screenFlash?.active,
     'negative control: death must arm a visible screen flash before retry');
-  assert.equal(freshRunEffects.firstDeath.glitchEffect, true,
-    'negative control: death must arm the RGB glitch before retry');
+  assert.equal(freshRunEffects.firstDeath.glitchFxActive, true,
+    'negative control: death must arm the canvas-wide RGB glitch before retry');
+  assert.ok(freshRunEffects.firstDeath.glitchFxDuration > 0,
+    'negative control: the death RGB glitch must have live duration before retry');
   assert.ok(freshRunEffects.secondDeath.screenFlash?.active,
     'negative control: death must arm the effect before switching rites');
   assert.equal(freshRunEffects.retryClean, true,

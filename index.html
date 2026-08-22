@@ -1475,6 +1475,14 @@
                 this.screenFlash = null;
                 this.glitchEffect = false;
                 this.glitchTimer = 0;
+                // triggerDeathGlitch() uses the separate canvas-wide GlitchFX
+                // singleton, not the legacy instance fields above. Leaving it
+                // active carries the previous run's death RGB split into retry or
+                // a rite switch even though the new Game state is otherwise clean.
+                GlitchFX.active = false;
+                GlitchFX.duration = 0;
+                GlitchFX.intensity = 1;
+                GlitchFX.tint = null;
                 this.voidMode = false;
                 this.voidTimer = 0;
                 this.constellation = null;

@@ -161,6 +161,14 @@ is unchanged. The deep arm now applies the selected band through the shipped
 arm; previously it changed progression metadata without proving the corresponding
 speed and corridor were live.
 
+The next browser step showed that the first C5 regression named the wrong RGB
+state. Death calls `GlitchFX.trigger()` and arms the canvas-wide singleton; it does
+not set the older `game.glitchEffect` field. Resetting only `screenFlash`,
+`glitchEffect`, and `glitchTimer` therefore left the actual death split alive for
+the next run. `initGame()` now also clears `GlitchFX.active` and its duration, and
+the death → retry / death → menu → MONAS test observes that singleton directly.
+Its negative control first requires death to arm a live global effect.
+
 Automated reachability remains a mathematical claim about replayable routes under
 the modeled state law. It does not answer whether HEX 10.0 or MONAS 6.5 feels
 right. Styling parity does not make the remaining jsDelivr audio origin offline;
