@@ -127,6 +127,10 @@
   let held = false;
   let monasGallery = [];
 
+  function whole(value, fallback = 0) {
+    return Math.max(0, Math.floor(finite(value, fallback)));
+  }
+
   function finite(value, fallback = 0) {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
   }
@@ -550,6 +554,161 @@
     );
   }
 
+  // --- the Caduceus ------------------------------------------------------------
+  //
+  // M41: MONAS's answer to HEX's bonus corridor. Not a copy of it - see the essay
+  // at the top of `monas-currents.js` for why a constellation caught by darting
+  // would have made MONAS a worse version of the other rite rather than a second
+  // one. Here the nodes lie on two intertwined strands and the payout scales on
+  // unbroken glide, so the greedy line and the smooth line are different lines.
+
+  const CADUCEUS_EVERY_GATES = 18;
+  const CADUCEUS_BRAID_PERIOD = 150;
+
+  function caduceusEveryGates() {
+    // Reaching a section that arrives every 18 gates costs minutes of play, and
+    // D-066/D-069 both record what that does: sections go unverified because
+    // verifying them is expensive. Same override shape as `?bonusEvery=`.
+    try {
+      const raw = new URLSearchParams(root.location?.search || '').get('caduceusEvery');
+      const parsed = Math.floor(Number(raw));
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    } catch (_error) {}
+    return CADUCEUS_EVERY_GATES;
+  }
+
+  function currentsApi() {
+    return root.SexMagickMonasCurrents || null;
+  }
+
+  /**
+   * The braid: two sine strands in antiphase, so a node on one is at the other's
+   * mirror. Amplitude is bounded to the middle of the screen rather than the full
+   * height, because a node against the ceiling is not a glide target - it is a
+   * wall the player has to slam into.
+   */
+  function braidY(gameInstance, index) {
+    const height = Math.max(1, finite(gameInstance?.canvas?.height, 640));
+    const phase = (finite(gameInstance?.frames, 0) / CADUCEUS_BRAID_PERIOD) * Math.PI * 2;
+    const side = currentsApi()?.strandFor(index) === 'left' ? 1 : -1;
+    const amplitude = height * 0.22;
+    return (height / 2) + (Math.sin(phase) * amplitude * side);
+  }
+
+  function resetCaduceus(gameInstance) {
+    gameInstance.__monasCaduceus = null;
+    gameInstance.__monasCaduceusLastGate = -1;
+    gameInstance.__monasCaduceusNextSpawn = 0;
+  }
+
+  /**
+   * Open a section when the gate count lands on the interval, and only then.
+   *
+   * Guarded by `__monasCaduceusLastGate` for the same reason `tickBonusCorridor`
+   * is: `gatesPassed` can hold the same value for many frames, and without the
+   * guard the section would re-open every frame it sat on a multiple.
+   */
+  function maybeOpenCaduceus(gameInstance) {
+    const api = currentsApi();
+    if (!api || gameInstance.__monasCaduceus) return false;
+    const gates = whole(gameInstance.monasState?.gatesPassed, 0);
+    if (gates <= 0 || gates % caduceusEveryGates() !== 0) return false;
+    if (gameInstance.__monasCaduceusLastGate === gates) return false;
+
+    gameInstance.__monasCaduceusLastGate = gates;
+    gameInstance.__monasCaduceus = api.createCaduceus(whole(gameInstance.monasState?.progressionBandIndex, 0));
+    gameInstance.__monasCaduceusNextSpawn = 0;
+    return true;
+  }
+
+  /**
+   * Spawn pacing derived from the section's own countdown rather than a fixed
+   * interval. D-069 recorded what a fixed interval did to HEX's corridor - the
+   * smallest set finished in 120 of 300 frames and left three seconds of nothing -
+   * and this is the same section shape, so it inherits the same correction rather
+   * than the same bug.
+   */
+  function spawnCaduceusNodes(gameInstance) {
+    const state = gameInstance.__monasCaduceus;
+    const api = currentsApi();
+    if (!state || !api || state.spawned >= state.total) return;
+    if (gameInstance.__monasCaduceusNextSpawn > 0) {
+      gameInstance.__monasCaduceusNextSpawn -= 1;
+      return;
+    }
+    const remaining = Math.max(1, state.total - state.spawned);
+    // Leave a tail so the last node is reachable before the section closes.
+    const window = Math.max(1, state.framesRemaining - 60);
+    gameInstance.__monasCaduceusNextSpawn = Math.max(12, Math.floor(window / remaining));
+
+    try {
+      if (typeof Pentagram !== 'function') return;
+      const order = root.SexMagickPolygram?.BAND_ORDERS?.[
+        Math.min(whole(gameInstance.monasState?.progressionBandIndex, 0),
+          (root.SexMagickPolygram.BAND_ORDERS.length || 1) - 1)
+      ];
+      const node = new Pentagram(
+        finite(root.innerWidth, gameInstance.canvas?.width || 800),
+        braidY(gameInstance, state.spawned),
+        order
+      );
+      node.__monasStrand = api.strandFor(state.spawned);
+      gameInstance.pentagrams.push(node);
+      state.spawned += 1;
+    } catch (_error) { /* a node that fails to spawn costs points, not the run */ }
+  }
+
+  /**
+   * Close out one Caduceus frame: score what was caught, count what was lost, and
+   * end the section when its clock runs out.
+   *
+   * Misses are counted in both removal paths, not just the obvious one. D-069
+   * recorded that the `frames % 60` compaction filter in `index.html` drops
+   * off-screen stars silently, which was invisible before a streak existed and
+   * would quietly forgive a miss at random once one did. `__missed` guards against
+   * counting the same node twice when both paths see it.
+   */
+  function settleCaduceusFrame(gameInstance, state, nodesBefore, reversed) {
+    const api = currentsApi();
+    if (!api || !state) return;
+
+    api.tickCaduceus(state, Boolean(reversed));
+
+    if (nodesBefore) {
+      for (const node of nodesBefore) {
+        if (!node || node.__monasScored) continue;
+        if (node.collected) {
+          node.__monasScored = true;
+          const result = api.catchNode(state);
+          gameInstance.score = whole(gameInstance.score, 0) + result.awarded;
+          try {
+            if (root.GlitchFX?.trigger) {
+              root.GlitchFX.trigger(result.smoothness > 0.5 ? 90 : 40,
+                result.smoothness > 0.5 ? 'shearTear' : 'rgbSplit');
+            }
+          } catch (_error) {}
+        } else if (!gameInstance.pentagrams.includes(node) && !node.__missed) {
+          // Left the field uncaught, by either removal path.
+          node.__missed = true;
+          node.__monasScored = true;
+          api.missNode(state);
+        }
+      }
+    }
+
+    const completion = api.claimCaduceusCompletion(state);
+    if (completion > 0) {
+      gameInstance.score = whole(gameInstance.score, 0) + completion;
+      try { root.GlitchFX?.trigger?.(220, 'sweepBeam', '#7de3ff'); } catch (_error) {}
+      try { if (gameInstance.settings?.sfx) SFX.levelUp(); } catch (_error) {}
+    }
+
+    if (state.framesRemaining <= 0) {
+      gameInstance.__monasCaduceus = null;
+      gameInstance.__monasCaduceusNextSpawn = 0;
+    }
+  }
+
   function install() {
     if (installed || Game.prototype.__monasRuntimeInstalled) return root.__SEX_MAGICK_MONAS__ || null;
     if (!dependenciesReady()) return null;
@@ -626,9 +785,17 @@
           ? MASTER_POOL
           : this.gameLevels;
         monasGallery = shuffled(pool);
+        resetCaduceus(this);
         renderHud(this);
       } else {
         this.monasState = null;
+        // Clear the section too, and for the same reason the meter is re-rendered
+        // below: `monasUpdate` returns early once the rite is not MONAS, so a
+        // section left open here never ticks down and never closes - it simply
+        // sits on the instance through the whole HEX run. The browser suite
+        // caught exactly that, which is the second time in this milestone a
+        // MONAS teardown has turned out to be one-sided.
+        resetCaduceus(this);
         // Also render on the way out. `renderHud` computes `active` as false
         // without a MONAS state and hides the meter, and nothing else will do it:
         // `updateGameObjects` returns early for non-MONAS, so the only other
@@ -727,10 +894,35 @@
       // Vertical direction reversals are the smoothness signal, sampled per frame.
       const previousVy = finite(this.__monasPreviousVy, 0);
       const currentVy = finite(this.player?.vy, 0);
-      if (previousVy !== 0 && Math.sign(currentVy) !== Math.sign(previousVy) && currentVy !== 0) {
+      const reversedThisFrame = previousVy !== 0
+        && Math.sign(currentVy) !== Math.sign(previousVy)
+        && currentVy !== 0;
+      if (reversedThisFrame) {
         this.__monasReversals = finite(this.__monasReversals, 0) + 1;
       }
       this.__monasPreviousVy = currentVy;
+
+      // The Caduceus runs *around* the delegated update, because the nodes are
+      // caught inside it: `pentagrams` entries are marked `collected` and then
+      // spliced, so the only way to see a catch is to hold the array by reference
+      // across the call and read the flags afterwards. Same technique the Gate
+      // slice uses for its own corridor, and for the same reason.
+      maybeOpenCaduceus(this);
+      const caduceus = this.__monasCaduceus;
+      const nodesBefore = caduceus && this.pentagrams?.length ? [...this.pentagrams] : null;
+      if (caduceus) spawnCaduceusNodes(this);
+
+      // Pillars stop for the section. `PILLAR_SPAWN_BASE` is pushed out of reach
+      // rather than `voidMode` being borrowed as HEX's corridor does, because
+      // `voidMode` also arms the Void vignette and the warp starfield - MONAS
+      // already learned that lesson once, in the surge (see the note above), and
+      // the nodes here are spawned by this module rather than by the original's
+      // `if (this.voidMode)` arm, so the flag buys nothing.
+      const previousSpawnBase = caduceus && typeof CONFIG !== 'undefined'
+        ? CONFIG.PILLAR_SPAWN_BASE : null;
+      if (caduceus && typeof CONFIG !== 'undefined') {
+        CONFIG.PILLAR_SPAWN_BASE = Number.MAX_SAFE_INTEGER;
+      }
 
       // Difficulty escalation: speed increases on a 5-gate rhythm independent from
       // colour cycling (currentLevelIdx), following `monasSpeedForGatesPassed`. The
@@ -845,6 +1037,11 @@
         const ticked = tickSurge(this.monasState);
         this.monasState = ticked.state;
       }
+
+      if (previousSpawnBase !== null && typeof CONFIG !== 'undefined') {
+        CONFIG.PILLAR_SPAWN_BASE = previousSpawnBase;
+      }
+      if (caduceus) settleCaduceusFrame(this, caduceus, nodesBefore, reversedThisFrame);
 
       renderHud(this);
       return result;

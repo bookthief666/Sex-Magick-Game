@@ -109,6 +109,8 @@ jobs:
           node --check tools/void-constellation.js
           node --check tools/test-void-constellation.js
           node --check tools/void-edge-layer.js
+          node --check tools/monas-currents.js
+          node --check tools/test-monas-currents.js
           node --check tools/test-void-edge-layer.js
           node --check tools/test-gallery-source.mjs
           node --check tools/gallery-source.mjs
@@ -136,6 +138,7 @@ jobs:
           node --check tools/browser-m41-hud-defects-test.mjs
           node --check tools/browser-m41-title-gallery-test.mjs
           node --check tools/browser-m41-monas-powerups-test.mjs
+          node --check tools/browser-m41-caduceus-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -178,6 +181,7 @@ jobs:
           node tools/test-polygram.js
           node tools/test-void-constellation.js
           node tools/test-void-edge-layer.js
+          node tools/test-monas-currents.js
           node tools/test-gallery-source.mjs
 
       - name: Run fixed-step Chrome integration
@@ -200,6 +204,9 @@ jobs:
 
       - name: Run M41 MONAS power-up Chrome integration
         run: node tools/browser-m41-monas-powerups-test.mjs
+
+      - name: Run M41 Caduceus Chrome integration
+        run: node tools/browser-m41-caduceus-test.mjs
 
       - name: Run M9 runtime hardening Chrome integration
         run: node tools/browser-m9-runtime-hardening-test.mjs
