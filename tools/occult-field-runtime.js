@@ -697,6 +697,210 @@
     }
   }
 
+  // --- the title gallery ------------------------------------------------------
+  //
+  // M41: the menu wore the procedural seal card above while the wagered Void had
+  // the treatment the owner actually wanted - a darkened, zoomed photograph with
+  // the figures traced in light. The seal stays as the fallback for the seconds
+  // before the gallery has decoded, and for any session where it never does.
+  //
+  // Cost is the reason this is a canvas rather than four CSS layers. The
+  // photograph is dimmed and zoomed **once** into an offscreen canvas, so a frame
+  // is three composites - ground, edges, travelling band - and never a filter over
+  // a full-size image. The Sobel pass itself runs once per picture and is cached
+  // by `void-edge-layer.js`; the menu asks for the same layer the Void will ask
+  // for, so entering a Void after looking at the menu costs nothing at all.
+
+  const TITLE_ZOOM = 1.28;
+  const TITLE_ARTWORK_ALPHA = 0.42;
+  let titleGallery = null;
+
+  function visualQaActive() {
+    try {
+      return new URLSearchParams(root.location?.search || '').get('visualQa') === '1';
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  /**
+   * A decoded gallery picture, or null while none has arrived yet.
+   *
+   * Under `visualQa=1` this is the *first* pool entry rather than a random one,
+   * and the animation below freezes: M14 compares the menu against a committed
+   * PNG, and a backdrop that rolled a different photograph every load would make that
+   * baseline meaningless rather than merely noisy.
+   */
+  function pickTitleImage() {
+    const pool = (typeof MASTER_POOL !== 'undefined' && Array.isArray(MASTER_POOL)) ? MASTER_POOL : null;
+    if (!pool || !pool.length) return null;
+    const loaded = pool.filter(entry => entry && entry.loaded && entry.img);
+    if (!loaded.length) return null;
+    if (visualQaActive()) return loaded[0].img;
+    return loaded[Math.floor(Math.random() * loaded.length)].img;
+  }
+
+  function ensureTitleCanvas(screen) {
+    let canvas = document.getElementById('sex-magick-title-field');
+    if (canvas) return canvas;
+    canvas = document.createElement('canvas');
+    canvas.id = 'sex-magick-title-field';
+    // Behind the menu's own content but above `#startScreen::before`, which sits
+    // at z-index -1 and supplies the vignette this draws underneath.
+    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;' +
+      'pointer-events:none;z-index:0;';
+    screen.insertBefore(canvas, screen.firstChild);
+    return canvas;
+  }
+
+  /** The dimmed, zoomed photograph, rendered once and then only blitted. */
+  function buildTitleGround(image, width, height) {
+    const artApi = root.SexMagickOccultArt;
+    const ground = artApi?.createCanvas ? artApi.createCanvas(width, height) : null;
+    if (!ground) return null;
+    const ctx = ground.getContext('2d');
+    if (!ctx) return null;
+
+    const scale = Math.max(width / image.width, height / image.height) * TITLE_ZOOM;
+    const drawWidth = image.width * scale;
+    const drawHeight = image.height * scale;
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, width, height);
+    ctx.save();
+    ctx.globalAlpha = TITLE_ARTWORK_ALPHA;
+    ctx.filter = 'blur(2px) saturate(0.6)';
+    ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+    ctx.restore();
+    return ground;
+  }
+
+  /**
+   * Start the menu backdrop, or report why it could not.
+   *
+   * Returns false rather than throwing on every failure path: the menu losing its
+   * photograph is a cosmetic downgrade to the seal card, and an exception here
+   * would take the start screen down with it.
+   */
+  function startTitleGallery() {
+    if (titleGallery) return true;
+    const screen = document.getElementById('startScreen');
+    if (!screen) return false;
+    const image = pickTitleImage();
+    if (!image) return false;
+
+    const canvas = ensureTitleCanvas(screen);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+
+    const frozen = visualQaActive();
+    const state = { canvas, ctx, image, ground: null, width: 0, height: 0, frame: 0, raf: 0, frozen };
+
+    const resize = () => {
+      const rect = screen.getBoundingClientRect();
+      const width = Math.max(1, Math.round(rect.width || root.innerWidth || 1));
+      const height = Math.max(1, Math.round(rect.height || root.innerHeight || 1));
+      if (width === state.width && height === state.height) return;
+      state.width = width;
+      state.height = height;
+      canvas.width = width;
+      canvas.height = height;
+      state.ground = buildTitleGround(state.image, width, height);
+    };
+
+    const draw = () => {
+      state.raf = 0;
+      // The menu is the only thing this paints for. A hidden start screen means a
+      // run is in progress, and the loop must not compete with it for frames.
+      if (screen.classList.contains('hidden')) {
+        state.raf = root.requestAnimationFrame(draw);
+        return;
+      }
+      resize();
+      const { width, height } = state;
+      try {
+        ctx.clearRect(0, 0, width, height);
+        if (state.ground) ctx.drawImage(state.ground, 0, 0, width, height);
+        drawTitleEdges(state);
+      } catch (_error) { /* a lost frame here is not worth taking the menu down */ }
+      if (!state.frozen) state.frame += 1;
+      state.raf = root.requestAnimationFrame(draw);
+    };
+
+    titleGallery = state;
+    resize();
+    state.raf = root.requestAnimationFrame(draw);
+    return true;
+  }
+
+  /**
+   * The same silhouette treatment the Void wears, on the menu.
+   *
+   * Shares `void-edge-layer.js`'s cache with `drawVoidEdges`, so the pass is paid
+   * once per picture for both. Frozen under visual QA, since a hue that advances
+   * with the frame counter cannot be screenshot-compared.
+   */
+  function drawTitleEdges(state) {
+    const edges = root.SexMagickVoidEdgeLayer;
+    if (!edges) return false;
+    const layer = edges.getEdgeLayer(state.image);
+    if (!layer || !layer.height) return false;
+
+    const { ctx, width, height, frame } = state;
+    const scale = Math.max(width / state.image.width, height / state.image.height) * TITLE_ZOOM;
+    const drawWidth = state.image.width * scale;
+    const drawHeight = state.image.height * scale;
+    const drawX = (width - drawWidth) / 2;
+    const drawY = (height - drawHeight) / 2;
+
+    try {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.filter = state.frozen ? 'none' : 'hue-rotate(' + ((frame * 0.4) % 360) + 'deg)';
+      ctx.globalAlpha = 0.45;
+      ctx.drawImage(layer, drawX, drawY, drawWidth, drawHeight);
+
+      if (!state.frozen) {
+        const bandHeight = Math.max(24, height * 0.14);
+        const travel = (frame * 2.4) % (height + bandHeight);
+        const sourceTop = ((travel - bandHeight - drawY) / drawHeight) * layer.height;
+        const sourceHeight = (bandHeight / drawHeight) * layer.height;
+        const clippedTop = Math.max(0, sourceTop);
+        const clippedHeight = Math.min(layer.height - clippedTop, sourceHeight - (clippedTop - sourceTop));
+        if (clippedHeight > 0 && clippedTop < layer.height) {
+          ctx.globalAlpha = 0.8;
+          ctx.drawImage(
+            layer,
+            0, clippedTop, layer.width, clippedHeight,
+            drawX, drawY + ((clippedTop / layer.height) * drawHeight),
+            drawWidth, (clippedHeight / layer.height) * drawHeight
+          );
+        }
+      }
+      ctx.restore();
+      return true;
+    } catch (_error) {
+      try { ctx.restore(); } catch (_restoreError) {}
+      return false;
+    }
+  }
+
+  /**
+   * Keep trying until the gallery decodes.
+   *
+   * `preloadAllImages()` has an eight-second failsafe and 75 images to fetch, so
+   * on a cold load the menu is up long before any picture is ready. Polling ends
+   * on the first success or at the timeout, and the seal card is what shows in
+   * the meantime.
+   */
+  function scheduleTitleGallery(timeoutMs = 20000) {
+    if (startTitleGallery()) return;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (startTitleGallery() || Date.now() - startedAt >= timeoutMs) clearInterval(timer);
+    }, 400);
+  }
+
   function install() {
     if (installed) return root.__SEX_MAGICK_OCCULT_FIELD__;
     if (typeof Game === 'undefined' || typeof Pillar === 'undefined' || typeof document === 'undefined') return null;
@@ -794,6 +998,7 @@
     };
 
     try { applyTitleBackdrop(); } catch (_error) {}
+    try { scheduleTitleGallery(); } catch (_error) {}
 
     installed = true;
     root.__SEX_MAGICK_OCCULT_FIELD__ = Object.freeze({
@@ -960,6 +1165,8 @@
     chargeRiskEdges,
     buildTitleBackdrop,
     applyTitleBackdrop,
+    startTitleGallery,
+    pickTitleImage,
     // The Void's glyph rain advances one step per draw. Exposed so deterministic
     // visual QA can pin its phase for a screenshot; rendering never reads this.
     getGlyphRain: () => glyphRain,

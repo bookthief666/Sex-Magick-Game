@@ -134,6 +134,7 @@ jobs:
           node --check tools/browser-m34-ritual-ascent-test.mjs
           node --check tools/browser-m35-living-sephiroth-test.mjs
           node --check tools/browser-m41-hud-defects-test.mjs
+          node --check tools/browser-m41-title-gallery-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -192,6 +193,9 @@ jobs:
 
       - name: Run M41 HUD defect Chrome integration
         run: node tools/browser-m41-hud-defects-test.mjs
+
+      - name: Run M41 title gallery Chrome integration
+        run: node tools/browser-m41-title-gallery-test.mjs
 
       - name: Run M9 runtime hardening Chrome integration
         run: node tools/browser-m9-runtime-hardening-test.mjs
