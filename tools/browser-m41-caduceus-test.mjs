@@ -62,7 +62,14 @@ try {
     const seen = { opened: false, maxNodes: 0, totals: null, spawnedPillars: 0 };
     const scoreAtStart = game.score;
 
+    // game.frames is advanced by the game loop, not by updateGameObjects, and
+    // isSpawnFrame reads it - so a harness that only calls updateGameObjects never
+    // spawns a pillar at all, and any claim about pillar suppression made against
+    // it is vacuous. The first version of this test made exactly that mistake: it
+    // recorded obstacles.length as 0 during the section and that number meant
+    // nothing. Frames are advanced by hand here so the comparison below is real.
     for (let frame = 0; frame < 420; frame += 1) {
+      game.frames = (game.frames || 0) + 1;
       // Hold the avatar still and alive: this measures the section, not the pilot.
       game.player.y = game.canvas.height / 2;
       game.player.vy = 0;
@@ -77,7 +84,20 @@ try {
       }
       if (seen.opened && !state) break;
     }
-    return { ...seen, scoreAtStart };
+
+    // The control: the same number of frames in MONAS with no section running.
+    // Without this, "no pillars during the section" is unfalsifiable.
+    game.gameMode = 'MONAS';
+    game.startGame();
+    let controlPillars = 0;
+    for (let frame = 0; frame < 300; frame += 1) {
+      game.frames = (game.frames || 0) + 1;
+      game.player.y = game.canvas.height / 2;
+      game.player.vy = 0;
+      game.updateGameObjects();
+      controlPillars = Math.max(controlPillars, game.obstacles.length);
+    }
+    return { ...seen, scoreAtStart, controlPillars };
   })()`);
   console.log('caduceus run:', JSON.stringify(report));
 
@@ -85,6 +105,10 @@ try {
   assert.ok(report.maxNodes > 0, 'nodes must actually reach the field');
   assert.ok(report.totals.spawned >= report.totals.total,
     `every node in the set must spawn before the section closes (${report.totals.spawned}/${report.totals.total})`);
+  assert.ok(report.controlPillars > 0,
+    'the control must actually spawn pillars, or the suppression check below proves nothing');
+  assert.equal(report.spawnedPillars, 0,
+    `no pillar may spawn while the section runs (saw ${report.spawnedPillars}, control saw ${report.controlPillars})`);
 
   // Catching pays, and gliding pays more - through the real page, not the module.
   const payouts = await evaluate(`(() => {

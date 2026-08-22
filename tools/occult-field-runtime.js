@@ -584,6 +584,77 @@
   const NEON_RISK_COLOR = '0, 229, 255';
   const SHEAR_FRAME_BUCKET = 6;
 
+  // MONAS's own wall signature. Gold rather than cyan because cyan is the
+  // Hexagram's reserved colour and has been inviolable since M7, and *flowing*
+  // rather than torn because the two rites should not glitch the same way: HEX's
+  // walls fault and shear, MONAS's run like liquid metal. Same cost profile as
+  // `neonRiskWall` - a handful of `fillRect`s, everything derived from `pillar.x`
+  // and the frame counter, no `getImageData` anywhere near it.
+  const MERCURY_RIM_COLOR = '255, 215, 0';
+  const MERCURY_HIGHLIGHT = '255, 246, 201';
+  const MERCURY_SEGMENTS = 6;
+
+  function mercuryRimWall(ctx, pillar, gameInstance) {
+    if (!ctx || !pillar || !gameInstance) return false;
+    if (gameInstance.gameMode !== 'MONAS' || !gameInstance.monasState) return false;
+    // The Caduceus has no walls, and the surge is already its own spectacle.
+    if (gameInstance.__monasCaduceus) return false;
+
+    const gapTop = finite(pillar.top, 0);
+    const gap = finite(pillar.gap, 0);
+    const height = finite(gameInstance?.canvas?.height, 0);
+    if (gap <= 0 || height <= 0) return false;
+
+    const x = finite(pillar.x, 0);
+    const width = Math.max(1, finite(pillar.w, 45));
+    const gapBottom = gapTop + gap;
+    const frames = finite(gameInstance?.frames, 0);
+    const bandIndex = finite(gameInstance.monasState.progressionBandIndex, 0);
+    // Climbs with MONAS's own ladder, the same way HEX's climbs with its bands.
+    const intensity = Math.min(1, 0.3 + (bandIndex * 0.12))
+      * (gameInstance.monasState.surgeActive ? 1.35 : 1);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    // The rim is drawn as segments whose brightness travels along the edge, so it
+    // reads as something flowing rather than as a static outline. A single
+    // gradient would cost a `createLinearGradient` per pillar per frame; this is
+    // twelve `fillRect`s and no allocation.
+    const segmentWidth = width / MERCURY_SEGMENTS;
+    for (let index = 0; index < MERCURY_SEGMENTS; index += 1) {
+      const phase = ((x + (index * segmentWidth)) * 0.045) + (frames * 0.09);
+      const ripple = (Math.sin(phase) + 1) / 2;
+      const alpha = (0.22 + (ripple * 0.5)) * intensity;
+      ctx.fillStyle = 'rgba(' + MERCURY_RIM_COLOR + ', ' + alpha.toFixed(3) + ')';
+      const segmentX = x + (index * segmentWidth);
+      ctx.fillRect(segmentX, gapTop - 2, segmentWidth + 0.5, 2);
+      ctx.fillRect(segmentX, gapBottom, segmentWidth + 0.5, 2);
+
+      // The crest of the ripple carries a pale highlight - the bead of light that
+      // makes it read as liquid rather than as a glowing line.
+      if (ripple > 0.86) {
+        ctx.fillStyle = 'rgba(' + MERCURY_HIGHLIGHT + ', ' + (0.6 * intensity).toFixed(3) + ')';
+        ctx.fillRect(segmentX, gapTop - 3, segmentWidth + 0.5, 1);
+        ctx.fillRect(segmentX, gapBottom + 1, segmentWidth + 0.5, 1);
+      }
+    }
+
+    // One slow bead running down each solid span, so the wall body is not inert.
+    // Solid spans only, for the same reason HEX's shear bars avoid the gap: a mark
+    // drawn across the corridor reads as an obstacle that is not there.
+    const beadPeriod = 220;
+    const beadPhase = ((frames + (Math.abs(Math.round(x)) % beadPeriod)) % beadPeriod) / beadPeriod;
+    ctx.fillStyle = 'rgba(' + MERCURY_HIGHLIGHT + ', ' + (0.3 * intensity).toFixed(3) + ')';
+    const upperBead = beadPhase * Math.max(0, gapTop - 4);
+    if (gapTop > 8) ctx.fillRect(x, upperBead, width, 2);
+    const lowerSpan = Math.max(0, height - gapBottom - 4);
+    if (lowerSpan > 8) ctx.fillRect(x, gapBottom + 4 + (beadPhase * lowerSpan), width, 2);
+
+    ctx.restore();
+    return true;
+  }
+
   function neonRiskWall(ctx, pillar, gameInstance) {
     const state = gameInstance?.gateSliceState;
     if (!ctx || !pillar || !state) return false;
@@ -980,6 +1051,7 @@
           decoratePillar(ctx, this, game);
           chargeRiskEdges(ctx, this, game);
           neonRiskWall(ctx, this, game);
+          mercuryRimWall(ctx, this, game);
         }
       } catch (_error) {}
       return result;
@@ -1163,6 +1235,7 @@
     drawGateSummoning,
     decoratePillar,
     chargeRiskEdges,
+    mercuryRimWall,
     buildTitleBackdrop,
     applyTitleBackdrop,
     startTitleGallery,
