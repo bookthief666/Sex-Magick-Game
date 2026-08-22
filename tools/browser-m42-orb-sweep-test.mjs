@@ -67,7 +67,7 @@ try {
 
   // One sampler, run at two depths. The early pass is M42's contract unchanged;
   // the late pass is M44's, and the difference between them is the whole point.
-  const sampler = (gates) => `(() => {
+  const sampler = (gates, frames) => `(() => {
     game.gameMode = 'HEX';
     game.startGame();
     // Guarantee orbs rather than waiting on a 0.5 roll, so the *scarcity* measured
@@ -87,7 +87,7 @@ try {
     let outsideSafeBand = 0;
     let distinctYs = new Set();
 
-    for (let frame = 0; frame < 1600; frame += 1) {
+    for (let frame = 0; frame < ${frames}; frame += 1) {
       game.frames = (game.frames || 0) + 1;
       // Fly the gap so the run survives long enough to sample many orbs.
       const ahead = game.obstacles.filter(o => o.x + o.w > game.player.x).sort((a, b) => a.x - b.x)[0];
@@ -127,8 +127,12 @@ try {
              spawnRatio: walls > 0 ? Math.round((orbsSpawned / walls) * 100) / 100 : null };
   })()`;
 
-  const report = await evaluate(sampler(0));
-  const deep = await evaluate(sampler(400));
+  const report = await evaluate(sampler(0, 1600));
+  // The late pass runs longer because orbs are *meant* to be scarce there: at the
+  // 0.17 floor a 1600-frame run yields one or two, which is too thin to assert a
+  // rate on. Measuring scarcity needs a sample proportional to how rare the thing
+  // has become - a shorter run here failed intermittently on the mechanic working.
+  const deep = await evaluate(sampler(400, 6000));
   console.log('orb sweep:', JSON.stringify(report));
 
   assert.ok(report.sampled > 400, `needed a real sample of orb frames, got ${report.sampled}`);
@@ -152,7 +156,8 @@ try {
 
   // And at depth it must have left that line, or the late-game defect is back.
   console.log('orb at depth:', JSON.stringify(deep));
-  assert.ok(deep.sampled > 100, `needed a sample of late-run orb frames, got ${deep.sampled}`);
+  assert.ok(deep.walls >= 20, `needed enough late-run walls to measure a rate, got ${deep.walls}`);
+  assert.ok(deep.orbsSpawned >= 2, `needed at least a couple of late-run orbs to inspect, got ${deep.orbsSpawned}`);
   assert.ok(deep.maxAbsOffset > 40,
     `a late-run orb must sit well off the corridor centre (largest offset ${deep.maxAbsOffset}px)`);
   assert.equal(deep.offScreen, 0,
