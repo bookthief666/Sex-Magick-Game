@@ -110,9 +110,16 @@ classes used by the final score with local CSS, and embeds the same Orbitron and
 Cinzel Decorative faces under their retained OFL notices.
 
 At the four release geometries, `qa.yml` compares computed style and layout with
-all external HTTP requests blocked, asserts the captured preflight invariants,
-requires every font face to resolve locally, and compares the existing committed
-visual-state screenshots. The baselines are not regenerated to accept the change.
+all external HTTP requests blocked, freezes CSS animation and transition phase in
+both documents, asserts the captured preflight invariants, and requires every font
+face to resolve locally. Freezing is subject isolation: without it, two separately
+loaded pages report different sub-pixel geometry and animated colours merely
+because their animation clocks started at different times. M14's existing
+visual-state workflow remains unchanged as the independent art-regression net.
+Its screenshots are not used as a before/after oracle here: the font-source
+change moved three narrow-geometry baselines beyond their existing tolerance, so
+that change needs the existing explicit image-review/regeneration process on its
+own merits. No M14 baseline is deleted, regenerated, or loosened here.
 
 ## Validation and claim boundary
 

@@ -34,6 +34,25 @@ async function openGame(page: import('@playwright/test').Page) {
   return pageErrors;
 }
 
+async function freezeReleaseShell(page: import('@playwright/test').Page) {
+  await page.evaluate(async () => {
+    const id = 'release-shell-qa-freeze';
+    if (!document.getElementById(id)) {
+      const style = document.createElement('style');
+      style.id = id;
+      style.textContent = `
+        *, *::before, *::after {
+          animation: none !important;
+          transition: none !important;
+          caret-color: transparent !important;
+        }
+      `;
+      document.head.append(style);
+    }
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  });
+}
+
 test('BrowserStack SDK configuration remains serializable', async ({}, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop', 'Configuration contract runs once.');
   const yaml = fs.readFileSync('browserstack.yml', 'utf8');
@@ -126,6 +145,11 @@ test('release shell styling is identical with every CDN blocked', async ({ page,
     page.evaluate(() => document.fonts?.ready),
     blockedPage.evaluate(() => document.fonts?.ready)
   ]);
+  // These are two separately-loaded documents. Comparing live animation phases
+  // would make the test measure navigation timing instead of CDN independence.
+  // Freeze both sides before sampling; the M14 visual-state suite remains the
+  // independent guard for animated/rendered presentation.
+  await Promise.all([freezeReleaseShell(page), freezeReleaseShell(blockedPage)]);
 
   const signature = (target: import('@playwright/test').Page) => target.evaluate(() => {
     const selectors = [
