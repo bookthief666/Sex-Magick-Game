@@ -25,3 +25,13 @@ A green boundary audit means these mathematical conditions have replayable route
 ## Validation
 
 `tools/run-m31-monas-boundary-audit.js` emits retained evidence for the adjacent control and search ceiling. `.github/workflows/m31-monas-boundary-audit.yml` makes any marginal/unverified case a failed evidence gate.
+
+## Correction — D-075
+
+This decision proves only the coordinates it names: 5.3/200 and 5.7/190. It was
+later cited as support for M44's 6.1/180, 6.5/170, and 7.0/160 ladder extension,
+which it never ran. The old runner also audited the raw pattern catalog rather
+than `reachability-policy.js`'s shipped overrides. D-075 replaces the runner and
+artifact for the raised ladder. This record remains a historical result for the
+raw catalog inside its original 5.7/190 boundary; it is not sufficient evidence
+for the policy-adjusted schedule that ships.

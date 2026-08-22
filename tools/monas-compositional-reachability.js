@@ -3,34 +3,58 @@
 /**
  * M31 — compositional MONAS reachability.
  *
- * The PatternScheduler does not choose arbitrary families: it walks FAMILY_CYCLE.
- * This module therefore audits only transitions the shipped scheduler can actually
- * emit. Each pair uses a conservative geometry envelope (the tighter gapScale and
- * larger motion amplitude across the two patterns), so an accepted witness is safe
- * for both real patterns. Search exhaustion remains "unverified", never impossible.
+ * The PatternScheduler does not choose arbitrary families: it walks one of the
+ * band-dependent FAMILY_CYCLES. This module therefore audits the union of every
+ * transition the shipped scheduler can emit. Each pair uses a conservative
+ * geometry envelope (the tighter gapScale and larger motion amplitude across the
+ * two patterns), so an accepted witness is safe for both real patterns. Search
+ * exhaustion remains "unverified", never impossible.
  */
 
 const grammar = require('./obstacle-grammar.js');
 const reach = require('./monas-reachability.js');
 
-const COMPOSITION_VERSION = 1;
+const COMPOSITION_VERSION = 2;
 
 function finite(value, fallback = 0) {
   const resolved = Number(value);
   return Number.isFinite(resolved) ? resolved : fallback;
 }
 
-function deriveLegalFamilyTransitions(cycle = grammar.FAMILY_CYCLE) {
-  if (!Array.isArray(cycle) || cycle.length === 0) return [];
+function greatestCommonDivisor(a, b) {
+  let left = Math.max(1, Math.floor(Math.abs(a)));
+  let right = Math.max(1, Math.floor(Math.abs(b)));
+  while (right !== 0) [left, right] = [right, left % right];
+  return left;
+}
+
+function deriveLegalFamilyTransitions(cycles = grammar.FAMILY_CYCLES || [grammar.FAMILY_CYCLE]) {
+  if (!Array.isArray(cycles) || cycles.length === 0) return [];
+  const normalizedCycles = Array.isArray(cycles[0]) ? cycles : [cycles];
   const seen = new Set();
   const transitions = [];
-  for (let index = 0; index < cycle.length; index += 1) {
-    const from = cycle[index];
-    const to = cycle[(index + 1) % cycle.length];
-    const key = `${from}->${to}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    transitions.push(Object.freeze({ from, to, key }));
+  // Band progression is monotone, but a long active pattern can cross one or
+  // more band thresholds before the scheduler chooses again. familyCursor does
+  // not reset when cycleForBand changes, so every old-tier -> same-or-higher-tier
+  // pair must be joined at the same cursor position. Iterating the LCM covers the
+  // general case if cycle lengths ever stop matching.
+  for (let fromTier = 0; fromTier < normalizedCycles.length; fromTier += 1) {
+    const fromCycle = normalizedCycles[fromTier];
+    if (!Array.isArray(fromCycle) || fromCycle.length === 0) continue;
+    for (let toTier = fromTier; toTier < normalizedCycles.length; toTier += 1) {
+      const toCycle = normalizedCycles[toTier];
+      if (!Array.isArray(toCycle) || toCycle.length === 0) continue;
+      const period = (fromCycle.length * toCycle.length) /
+        greatestCommonDivisor(fromCycle.length, toCycle.length);
+      for (let cursor = 1; cursor <= period; cursor += 1) {
+        const from = fromCycle[(cursor - 1) % fromCycle.length];
+        const to = toCycle[cursor % toCycle.length];
+        const key = `${from}->${to}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        transitions.push(Object.freeze({ from, to, key }));
+      }
+    }
   }
   return transitions;
 }

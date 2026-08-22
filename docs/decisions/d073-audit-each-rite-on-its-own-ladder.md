@@ -92,3 +92,24 @@ boundary job's `[8, 4, 0]` and full composition cross-product should still run a
 these exact coordinates before they are treated as settled.
 
 **Full record:** this document.
+
+## Correction — D-075 release audit
+
+Two evidence claims above were wrong; the gameplay values are unchanged.
+
+First, the green D-051 boundary artifact covered 5.3/200 and 5.7/190. It did not
+exercise M44's 6.1/180, 6.5/170, or 7.0/160 coordinates, and the old audit path
+materialized the raw grammar catalog rather than the policy-adjusted sequences the
+scheduler ships. It therefore cannot be cited as boundary evidence for the M44
+ladder. D-075 replaces that claim with an audit of the shipped library at every
+live coordinate and the portal ceiling; release stays blocked unless that job and
+its 14/120 negative control pass.
+
+Second, “no spacing headroom” was an artifact of witness replay rebuilding the
+gate sequence without `pillarSpawnBase`. With replay consuming the exact immutable
+sequence searched, base 132 is 450/450 verified as the owner observed — and so are
+124 and 116. Base 108 is the first rejected grid point. The corrected frontier is
+therefore **17% tighter than shipped**, not zero. This reopens a future difficulty
+lever; it does not authorize a late release retune or change the current base 140.
+The absurd base-12 negative control also rejects the coordinate, but the corrected
+breakdown is 295 verified / 51 marginal / 104 invalid — not “450 of 450 rejected.”

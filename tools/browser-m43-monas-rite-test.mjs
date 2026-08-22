@@ -181,6 +181,57 @@ try {
     'HEX bleeds are gradients; a flat fill here means the MONAS rule leaked into the Hexagram');
 
   // ---------------------------------------------------------------------------
+  // Death presentation state belongs to the run that caused it.
+  //
+  // The Game instance is reused for retry and for switching rites. A fresh run
+  // must not inherit the previous death's red flash or RGB split.
+  // ---------------------------------------------------------------------------
+  const freshRunEffects = await evaluate(`(() => {
+    const snapshot = () => ({
+      screenFlash: game.screenFlash,
+      glitchEffect: game.glitchEffect,
+      glitchTimer: game.glitchTimer
+    });
+    const clean = value => value.screenFlash === null && value.glitchEffect === false && value.glitchTimer === 0;
+
+    game.gameMode = 'HEX';
+    game.startGame();
+    game.gameOver();
+    const firstDeath = snapshot();
+    game.restartGame();
+    game.state = GameState.PAUSED;
+    const retry = snapshot();
+
+    game.state = GameState.PLAYING;
+    game.gameOver();
+    const secondDeath = snapshot();
+    game.returnToMenu();
+    game.gameMode = 'MONAS';
+    game.startGame();
+    game.state = GameState.PAUSED;
+    const switchedRite = snapshot();
+    return {
+      firstDeath,
+      retry,
+      secondDeath,
+      switchedRite,
+      retryClean: clean(retry),
+      switchClean: clean(switchedRite)
+    };
+  })()`);
+  console.log('fresh-run effects:', JSON.stringify(freshRunEffects));
+  assert.ok(freshRunEffects.firstDeath.screenFlash?.active,
+    'negative control: death must arm a visible screen flash before retry');
+  assert.equal(freshRunEffects.firstDeath.glitchEffect, true,
+    'negative control: death must arm the RGB glitch before retry');
+  assert.ok(freshRunEffects.secondDeath.screenFlash?.active,
+    'negative control: death must arm the effect before switching rites');
+  assert.equal(freshRunEffects.retryClean, true,
+    'death -> retry must begin with no inherited flash or RGB split');
+  assert.equal(freshRunEffects.switchClean, true,
+    'death -> menu -> MONAS must begin with no HEX death presentation state');
+
+  // ---------------------------------------------------------------------------
   // The ladder still owns speed once frames have run. This is the regression the
   // M32 suite could not see, asserted again here because it is the defect most
   // likely to be reintroduced by anything that touches the MONAS frame path.

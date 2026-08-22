@@ -988,12 +988,12 @@
   // (gate-slice-runtime.js). MONAS uses the same shape and the same reasoning, with
   // its own envelope.
   //
-  // That envelope is D-050's frontier and D-051's boundary job: every coordinate
-  // from 2.9/260 through 5.7/190 is verified, and 5.7/190 was audited across the
-  // complete scheduler-legal pattern-variant pair cross-product. So the clamp lands
-  // the hardest possible portal exactly on the audited ceiling. Below it, the
-  // portal is slower at a wider corridor than a verified pair, which is inside the
-  // envelope by the same monotonicity argument D-058 used.
+  // D-075 corrects the old evidence claim here. D-051 stopped at 5.7/190 and
+  // materialized the raw catalog, so it cannot support M44's raised clamp. The
+  // retained release audit now exercises the policy-adjusted scheduler catalog at
+  // 7.0/160 in ordinary and surge flight, with the full legal composition surface.
+  // Below the clamp, the portal is slower at a wider corridor than an explicitly
+  // audited pair, inside the envelope by the same monotonicity argument D-058 used.
   const PORTAL_SPEED_MULTIPLIER = 1.5;
   const PORTAL_GAP_REDUCTION = 20;
   // M44: re-searched and raised from 5.7/190. See the BANDS comment in
@@ -1016,7 +1016,7 @@
   // band's 660 is a little over eleven seconds.
   //
   // Length is the escalation the Undertow can carry without new evidence: it is
-  // more frames of a condition already clamped to the audited 5.7/190, not a harder
+  // more frames of a condition clamped to the release-audited 7.0/160, not a harder
   // one. And it bites specifically: `settleUndertow` scales the return by
   // smoothness, so a longer current is more time to stay smooth, which is the thing
   // the section actually asks for.

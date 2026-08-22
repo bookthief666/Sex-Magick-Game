@@ -56,6 +56,55 @@ function testCollisionWindows() {
   }
 }
 
+function testSpawnTimelineReplayIdentity() {
+  assert.equal(reachability.SOLVER_VERSION, 2,
+    'exact-timeline replay changes the evidence semantics and requires solver v2');
+  const pattern = grammar.PATTERN_LIBRARY.HEX.find(item => item.id === 'hex.axis-hold');
+  const ratios = grammar.materializePattern(pattern, 0.22, 1);
+  const base140 = reachability.buildGateWindows(ratios, {
+    viewportWidth: 390,
+    viewportHeight: 844,
+    speed: 8.5,
+    gap: 110,
+    pillarSpawnBase: 140
+  });
+  const base132 = reachability.buildGateWindows(ratios, {
+    viewportWidth: 390,
+    viewportHeight: 844,
+    speed: 8.5,
+    gap: 110,
+    pillarSpawnBase: 132
+  });
+  assert.equal(Object.isFrozen(base132), true, 'the searched gate sequence must be immutable');
+  assert.ok(base132.every(Object.isFrozen), 'every searched gate must be immutable');
+  assert.notDeepEqual(
+    base140.map(gate => gate.spawnFrame),
+    base132.map(gate => gate.spawnFrame),
+    'negative control: bases 140 and 132 must produce different wall timelines'
+  );
+
+  const solved = reachability.solveGateSequence({
+    rite: 'HEX',
+    ratios,
+    viewportWidth: 390,
+    viewportHeight: 844,
+    mobile: true,
+    speed: 8.5,
+    gap: 110,
+    pillarSpawnBase: 132,
+    breathPhase: 0,
+    beamWidth: 2500,
+    margin: 8
+  });
+  assert.equal(solved.solvable, true,
+    'the corrected base-132 witness must not be rejected by replaying default-base walls');
+  assert.equal(solved.witnessValid, true);
+  assert.equal(solved.replayUsedSearchGates, true,
+    'witness replay must consume the exact immutable array produced for search');
+  assert.deepEqual(solved.replaySpawnFrames, solved.searchSpawnFrames,
+    'search and replay must observe identical spawnFrame arrays');
+}
+
 function testReachabilityMatrix() {
   const unsafeReturnFlow = grammar.PATTERN_LIBRARY.MONAS.find(pattern => pattern.id === 'monas.return-flow');
   const unsafeResult = reachability.classifyGateSequence({
@@ -291,6 +340,7 @@ function testFallbackPolicy() {
 
 testPhysicsProfiles();
 testCollisionWindows();
+testSpawnTimelineReplayIdentity();
 const audit = testReachabilityMatrix();
 testFallbackPolicy();
 

@@ -5,10 +5,17 @@ const monas = require('./monas-runtime.js');
 const grammar = require('./obstacle-grammar.js');
 const variety = require('./obstacle-variety-runtime.js');
 const reach = require('./monas-reachability.js');
+const progression = require('./monas-progression-runtime.js');
+const policy = require('./reachability-policy.js');
 
 function approximately(actual, expected, epsilon = 1e-9) {
   assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
 }
+
+assert.equal(reach.SURGE_GAP_MULTIPLIER, progression.SURGE_GAP_MULTIPLIER,
+  'the reachability proof must consume the shipped progression surge-gap constant');
+assert.equal(reach.SPAWN_GAP_OSCILLATION_PX, progression.GAP_OSCILLATION_PX,
+  'the reachability proof must consume the shipped progression breathing amplitude');
 
 // --- the solver advances the live hold/release law, not the old jump model -------
 {
@@ -23,6 +30,30 @@ function approximately(actual, expected, epsilon = 1e-9) {
   assert.ok(held.y < 500 && held.vy < 0, 'HOLD must climb');
   assert.ok(released.y > 500 && released.vy > 0, 'RELEASE must sink');
   assert.equal(held.releaseAge, 0, 'holding resets release age exactly like Player.update');
+}
+
+// --- the audit accepts the exact policy-adjusted catalog shipped at runtime ----
+{
+  const raw = grammar.PATTERN_LIBRARY.MONAS.find(pattern => pattern.id === 'monas.return-flow');
+  const adjusted = policy.applyPatternOverride(raw);
+  assert.equal(raw.values.length, 5, 'negative control: the raw return-flow is the obsolete five-wall sequence');
+  assert.equal(adjusted.values.length, 12, 'the shipped policy must expand return-flow to twelve walls');
+
+  const audit = reach.auditMonasPatternLibrary({
+    library: [adjusted],
+    patternIds: [adjusted.id],
+    scenarios: [{ id: 'fold-closed', width: 374, height: 882 }],
+    anchors: [0.5],
+    margins: [8, 4, 0],
+    baseSpeed: 2.9,
+    nominalGap: 260,
+    mode: 'ordinary',
+    beamWidth: 500
+  });
+  assert.deepEqual(audit.libraryPatternIds, ['monas.return-flow']);
+  assert.equal(audit.totalCases, 1);
+  assert.equal(audit.cases[0].patternLength, adjusted.values.length,
+    'the hold/release audit must materialize the shipped twelve-wall sequence');
 }
 
 {

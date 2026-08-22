@@ -91,6 +91,118 @@ try {
   const strictlyIncreasing = xs => xs.every((v, i) => i === 0 || v > xs[i - 1]);
   const nonIncreasing = xs => xs.every((v, i) => i === 0 || v <= xs[i - 1]);
 
+  // A resize is part of the live difficulty path, not merely layout. The base
+  // portrait accommodation writes 2.61 into gameSpeed; Gate must reassert the
+  // band or Void value after that write. Sample after real update frames so this
+  // cannot pass on a pre-frame value that another wrapper immediately clobbers.
+  const prepareKether = await evaluate(`(() => {
+    game.gameMode = 'HEX';
+    game.startGame();
+    game.state = GameState.PAUSED;
+    const bands = window.SexMagickGateSlice.BANDS;
+    const last = bands[bands.length - 1];
+    game.gateSliceState.gatesCleared = last.gateThreshold;
+    game.gateSliceState.bandIndex = bands.length - 1;
+    game.applyLevel();
+    game.player.update = () => {};
+    game.obstacles = [];
+    return { expected: last.speed, actual: game.gameSpeed, bandIndex: game.gateSliceState.bandIndex };
+  })()`);
+  assert.equal(prepareKether.actual, prepareKether.expected, 'the resize probe must begin at canonical KETHER speed');
+
+  const sampleResize = async (width, height) => {
+    await send('Emulation.setDeviceMetricsOverride', {
+      width, height, deviceScaleFactor: 1, mobile: width < height
+    });
+    await wait(60);
+    return evaluate(`(() => {
+      game.resizeCanvas();
+      game.player.y = game.canvas.height / 2;
+      game.player.vy = 0;
+      game.obstacles = [];
+      for (let frame = 0; frame < 4; frame += 1) {
+        game.frames += 1;
+        game.updateGameObjects();
+      }
+      return {
+        width: game.canvas.width,
+        height: game.canvas.height,
+        speed: game.gameSpeed,
+        bandIndex: game.gateSliceState.bandIndex,
+        voidActive: Boolean(game.__gateSliceVoidActive)
+      };
+    })()`);
+  };
+
+  const ordinaryResize = [
+    await sampleResize(390, 844),
+    await sampleResize(844, 390),
+    await sampleResize(390, 844)
+  ];
+  ordinaryResize.forEach(sample => {
+    assert.equal(sample.speed, prepareKether.expected,
+      `ordinary KETHER must remain ${prepareKether.expected} after ${sample.width}x${sample.height} and live frames`);
+    assert.equal(sample.bandIndex, prepareKether.bandIndex, 'resize must not move the KETHER band');
+    assert.equal(sample.voidActive, false, 'ordinary resize sample must remain outside Void');
+  });
+
+  const voidPrepared = await evaluate(`(() => {
+    game.startVoidMode(1);
+    return {
+      expected: game.gameSpeed,
+      active: Boolean(game.__gateSliceVoidActive),
+      maxValidatedSpeed: window.SexMagickGateSlice.MAX_VALIDATED_SPEED
+    };
+  })()`);
+  assert.equal(voidPrepared.active, true, 'the resize probe must actually enter a KETHER Void');
+  assert.equal(voidPrepared.expected, voidPrepared.maxValidatedSpeed,
+    'KETHER Void must clamp at the audited ceiling rather than exceed it');
+  const voidResize = [
+    await sampleResize(844, 390),
+    await sampleResize(390, 844)
+  ];
+  voidResize.forEach(sample => {
+    assert.equal(sample.speed, voidPrepared.expected,
+      `KETHER Void must remain ${voidPrepared.expected} after ${sample.width}x${sample.height} and live frames`);
+    assert.equal(sample.voidActive, true, 'resize must not end the active Void');
+  });
+
+  // At KETHER the ordinary and Void values are both the 10.0 validation clamp,
+  // so that case proves the clobber is gone but cannot distinguish the two
+  // applyBand branches. Repeat at a lower band where the Void value is strictly
+  // different; reapplying only the ordinary band after resize must fail here.
+  const uncappedVoidPrepared = await evaluate(`(() => {
+    game.endVoidMode();
+    const bands = window.SexMagickGateSlice.BANDS;
+    const bandIndex = Math.floor((bands.length - 1) / 2);
+    const band = bands[bandIndex];
+    game.gateSliceState.gatesCleared = band.gateThreshold;
+    game.gateSliceState.bandIndex = bandIndex;
+    game.applyLevel();
+    const ordinarySpeed = game.gameSpeed;
+    game.startVoidMode(1);
+    return {
+      bandIndex,
+      ordinarySpeed,
+      expected: game.gameSpeed,
+      active: Boolean(game.__gateSliceVoidActive)
+    };
+  })()`);
+  assert.equal(uncappedVoidPrepared.active, true, 'the distinguishing resize probe must enter a lower-band Void');
+  assert.ok(uncappedVoidPrepared.expected > uncappedVoidPrepared.ordinarySpeed,
+    'negative control: this Void speed must differ from its ordinary band speed');
+  const uncappedVoidResize = [
+    await sampleResize(844, 390),
+    await sampleResize(390, 844)
+  ];
+  uncappedVoidResize.forEach(sample => {
+    assert.equal(sample.speed, uncappedVoidPrepared.expected,
+      `lower-band Void must remain ${uncappedVoidPrepared.expected} after ${sample.width}x${sample.height} and live frames`);
+    assert.equal(sample.bandIndex, uncappedVoidPrepared.bandIndex, 'resize must not move the lower Void band');
+    assert.equal(sample.voidActive, true, 'resize must not end the lower-band Void');
+  });
+  console.log('HEX resize speeds:', JSON.stringify({ ordinaryResize, voidResize, uncappedVoidResize }));
+
   // 1. Speed climbs the whole way, in both rites.
   assert.ok(strictlyIncreasing(ladders.hex.speeds),
     `HEX speed must climb at every band (${ladders.hex.speeds})`);

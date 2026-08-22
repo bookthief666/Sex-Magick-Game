@@ -39,6 +39,11 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Export pinned Chromium to legacy CDP suites
+        run: >-
+          node -e "require('node:fs').appendFileSync(process.env.GITHUB_ENV,
+          'CHROME_BIN=' + require('@playwright/test').chromium.executablePath() + '\\n')"
+
       - name: Syntax-check runtime and tests
         run: |
           node --check tools/fixed-step-clock.js
@@ -100,6 +105,7 @@ jobs:
           node --check tools/test-leaderboard-runtime.js
           node --check tools/test-occult-art-runtime.js
           node --check tools/test-player-reachability.js
+          node --check tools/test-player-replay-timeline.js
           node --check tools/test-compositional-reachability.js
           node --check tools/test-m7-review-diagnostics.js
           node --check tools/notice-slot.js
@@ -189,6 +195,7 @@ jobs:
           node tools/test-powerup-runtime.js
           node tools/test-monas-runtime.js
           node tools/test-monas-reachability.js
+          node tools/test-player-replay-timeline.js
           node tools/test-leaderboard-runtime.js
           node tools/test-occult-art-runtime.js
           node tools/test-m7-review-diagnostics.js
@@ -207,6 +214,19 @@ jobs:
           node tools/test-monas-compositional-reachability.js
           node tools/test-monas-progression-frontier.js
           node tools/test-gallery-source.mjs
+
+      # D-075: the CDN-removal proof and the committed before/after pictures must
+      # run in the release gate that every PR receives. The broader M14 workflow
+      # remains intact; this focused four-geometry slice is deliberately redundant.
+      - name: Run release shell and visual baseline Chrome integration
+        run: >-
+          npx playwright test tests/cross-screen.spec.ts tests/visual-state.spec.ts
+          --config=playwright.config.ts
+          --grep "release shell styling|deterministic visual signatures"
+          --project=chromium-small-phone
+          --project=chromium-fold-cover
+          --project=chromium-fold-inner
+          --project=chromium-desktop
 
       - name: Run fixed-step Chrome integration
         run: node tools/run-browser-fixed-step-test.mjs
@@ -279,6 +299,15 @@ jobs:
 
       - name: Run obstacle grammar Chrome integration
         run: node tools/run-browser-obstacle-grammar-test.mjs
+
+      # The scheduled/develop-only reachability workflow does not run on a draft
+      # PR synchronize event. Keep these browser contracts in the release gate as
+      # well so exact catalog equality and real-player parity cannot wait a week.
+      - name: Run real-player reachability Chrome integration
+        run: node tools/run-browser-reachability-test.mjs
+
+      - name: Run compositional reachability Chrome integration
+        run: node tools/run-browser-compositional-test.mjs
 
       - name: Run M17 obstacle variety Chrome integration
         run: node tools/browser-m17-obstacle-variety-test.mjs

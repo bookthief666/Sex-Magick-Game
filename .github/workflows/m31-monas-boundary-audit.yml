@@ -9,7 +9,14 @@ on:
       - 'tools/monas-reachability.js'
       - 'tools/monas-compositional-reachability.js'
       - 'tools/monas-progression-frontier.js'
+      - 'tools/monas-runtime.js'
+      - 'tools/obstacle-grammar.js'
+      - 'tools/obstacle-variety-runtime.js'
+      - 'tools/player-reachability.js'
+      - 'tools/reachability-policy.js'
+      - 'tools/monas-progression-runtime.js'
       - 'tools/run-m31-monas-boundary-audit.js'
+      - 'docs/qa/m44-monas-shipped-boundary-audit.json'
       - '.github/workflows/m31-monas-boundary-audit.yml'
   workflow_dispatch:
 
@@ -19,7 +26,9 @@ permissions:
 jobs:
   monas-boundary-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Two full composition cross-products plus the three live M44 coordinates
+    # intentionally take longer than the old two-coordinate M31 proof.
+    timeout-minutes: 360
 
     steps:
       - name: Check out repository
@@ -33,14 +42,17 @@ jobs:
       - name: Syntax-check boundary audit
         run: node --check tools/run-m31-monas-boundary-audit.js
 
-      - name: Run upper MONAS boundary audit
+      - name: Run shipped MONAS boundary audit
         run: node tools/run-m31-monas-boundary-audit.js
+
+      - name: Verify committed boundary evidence is current
+        run: git diff --exit-code -- docs/qa/m44-monas-shipped-boundary-audit.json
 
       - name: Upload boundary evidence
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: m31-monas-boundary-audit-${{ github.run_attempt }}
-          path: artifacts/m31-monas-boundary-audit.json
+          name: m44-monas-shipped-boundary-audit-${{ github.run_attempt }}
+          path: docs/qa/m44-monas-shipped-boundary-audit.json
           if-no-files-found: warn
           retention-days: 14

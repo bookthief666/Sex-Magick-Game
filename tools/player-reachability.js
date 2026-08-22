@@ -7,7 +7,9 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createReachabilityApi() {
   'use strict';
 
-  const SOLVER_VERSION = 1;
+  // v2: witness replay consumes the exact immutable gate timeline produced by
+  // search. v1 could silently rebuild with the default pillar spawn base.
+  const SOLVER_VERSION = 2;
   const PLAYER_RADIUS = 16;
   const HITBOX_OFFSET = 4;
   const HITBOX_HALF = PLAYER_RADIUS - HITBOX_OFFSET;
@@ -126,20 +128,22 @@
     const gap = Math.max((HITBOX_HALF * 2) + 1, finite(options.gap, 200));
     const spawnRate = computeSpawnRate(speed, options.pillarSpawnBase);
 
-    return ratios.map((ratio, index) => {
+    return Object.freeze(ratios.map((ratio, index) => {
+      const spawnFrame = index * spawnRate;
       const collision = computeGateCollisionWindow({
         viewportWidth: width,
         speed,
-        spawnFrame: index * spawnRate
+        spawnFrame
       });
-      return {
+      return Object.freeze({
         index,
         ratio,
+        spawnFrame,
         top: computeTopFromRatio(height, gap, ratio),
         gap,
         ...collision
-      };
-    });
+      });
+    }));
   }
 
   function isStateSafeForGate(state, gate, absoluteFrame, margin = 0, breathPhase = 0) {
@@ -298,7 +302,19 @@
       gates
     };
 
-    const replay = replayWitness({ ...options, rite, ratios, margin, jumpFrames });
+    // Replay the exact immutable geometry searched above. Rebuilding here once
+    // dropped pillarSpawnBase and validated a witness against default-base 140
+    // walls while the result reported the requested spacing.
+    const replay = replayWitness({ ...options, rite, ratios, margin, jumpFrames, gates });
+    result.searchSpawnFrames = gates.map(gate => gate.spawnFrame);
+    result.replaySpawnFrames = replay.gates.map(gate => gate.spawnFrame);
+    result.replayUsedSearchGates = replay.gates === gates;
+    if (
+      result.searchSpawnFrames.length !== result.replaySpawnFrames.length ||
+      result.searchSpawnFrames.some((frame, index) => frame !== result.replaySpawnFrames[index])
+    ) {
+      throw new Error('Reachability witness replay used a different pillar spawn timeline than search');
+    }
     result.witnessValid = replay.valid;
     result.minimumClearance = replay.minimumClearance;
     if (!replay.valid) {
@@ -320,7 +336,15 @@
     const margin = Math.max(0, finite(options.margin, 0));
     const breathPhase = Math.floor(finite(options.breathPhase, 0));
     const jumps = new Set((options.jumpFrames || []).map(value => Math.floor(Number(value))));
-    const gates = buildGateWindows(ratios, { viewportWidth, viewportHeight, gap, speed });
+    const gates = Array.isArray(options.gates) && options.gates.length > 0
+      ? options.gates
+      : buildGateWindows(ratios, {
+        viewportWidth,
+        viewportHeight,
+        gap,
+        speed,
+        pillarSpawnBase: options.pillarSpawnBase
+      });
     const firstFrame = gates[0].start;
     const finalFrame = gates[gates.length - 1].end;
     const initialBreathe = Math.sin((firstFrame + breathPhase) * 0.05) * 5;
@@ -340,7 +364,8 @@
             valid: false,
             failedFrame: frame,
             failedGateIndex: gate.index,
-            minimumClearance
+            minimumClearance,
+            gates
           };
         }
       }
@@ -356,12 +381,13 @@
           valid: false,
           failedFrame: frame,
           failedGateIndex: activeGates[0]?.index ?? null,
-          minimumClearance
+          minimumClearance,
+          gates
         };
       }
     }
 
-    return { valid: true, minimumClearance, finalState: state };
+    return { valid: true, minimumClearance, finalState: state, gates };
   }
 
   function classifyGateSequence(options = {}) {

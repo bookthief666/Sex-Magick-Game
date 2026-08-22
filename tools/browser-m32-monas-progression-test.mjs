@@ -84,6 +84,26 @@ try {
         };
       };
 
+      // Mutation control for the exact failure shape that exposed S1. The
+      // progression wrapper must not swallow an exception originating inside
+      // the captured frame update. A blanket catch leaves this null.
+      const mutationSentinel = 'M32_CAPTURED_INNER_UPDATE_THROW';
+      let capturedInnerError = null;
+      game.obstacles = [{
+        x: game.canvas.width + 100,
+        w: 45,
+        top: 30,
+        gap: Math.max(100, game.canvas.height - 80),
+        marked: true,
+        update() { throw new Error(mutationSentinel); },
+        collides() { return false; }
+      }];
+      game.state = GameState.PLAYING;
+      try { game.updateGameObjects(); } catch (error) { capturedInnerError = error?.message || String(error); }
+      game.state = GameState.PAUSED;
+      game.obstacles = [];
+      game.frames = 0;
+
       const initial = snapshot();
       const ladder = [];
       for (const gates of [8, 20, 36, 56, 80, 110]) {
@@ -121,9 +141,22 @@ try {
       for (const gates of [8, 36, 80, 110]) {
         progression.forceGatesForTest(gates);
         const written = game.gameSpeed;
+        const innerSpeeds = [];
+        const probe = {
+          x: game.canvas.width + 100,
+          w: 45,
+          top: 30,
+          gap: Math.max(100, game.canvas.height - 80),
+          marked: true,
+          update(speed) { innerSpeeds.push(speed); this.x -= speed; },
+          collides() { return false; }
+        };
+        game.obstacles = [probe];
+        game.frames = 1;
         game.state = GameState.PLAYING;
         for (let i = 0; i < 4; i += 1) {
-          try { game.updateGameObjects(); } catch (_error) {}
+          game.frames += 1;
+          game.updateGameObjects();
         }
         game.state = GameState.PAUSED;
         afterFrames.push({
@@ -131,7 +164,8 @@ try {
           band: game.monasState.progressionBandIndex,
           written,
           live: game.gameSpeed,
-          surgeActive: Boolean(game.monasState.surgeActive)
+          surgeActive: Boolean(game.monasState.surgeActive),
+          innerSpeeds
         });
       }
 
@@ -145,6 +179,7 @@ try {
       const afterRetry = snapshot();
 
       return {
+        capturedInnerError,
         initial,
         ladder,
         beforeScoreCheck,
@@ -173,6 +208,9 @@ try {
       { gatesPassed: 110, band: 6, speed: 4.77, nominalGap: 200 }
     ];
 
+    assert.equal(result.capturedInnerError, 'M32_CAPTURED_INNER_UPDATE_THROW',
+      `${label}: negative control — an exception inside the captured update must escape the wrapper; ` +
+      'a blanket catch would leave this null and fail');
     assert.equal(result.initial.gatesPassed, 0, `${label}: fresh run must begin at gate 0`);
     assert.equal(result.initial.band, 0, `${label}: fresh run must begin at band 0`);
     assert.equal(rounded(result.initial.speed), 2.61, `${label}: fresh speed`);
@@ -214,6 +252,12 @@ try {
         rounded(entry.live), wanted,
         `${label}: gameSpeed must still be ${wanted} at gate ${entry.gates} after frames run - ` +
         'a mismatch means the band ladder is being overwritten per frame again (D-058, M43)'
+      );
+      assert.deepEqual(
+        entry.innerSpeeds.map(rounded),
+        [wanted, wanted, wanted, wanted],
+        `${label}: four delegated inner frames must move a real obstacle at the live ${wanted} speed; ` +
+        'a throw at the first line of the captured inner update must leave this empty and fail'
       );
     });
 

@@ -596,7 +596,7 @@
         viewportHeight: gameInstance.canvas?.height || window.innerHeight,
         gap,
         // M45: the progression-adjusted chance, decided by the scheduler's own
-        // seeded stream. M44 briefly applied the scarcity as a `Math.random()`
+        // seeded stream. M44 briefly applied the scarcity as a global-RNG
         // veto *after* this decision, inside the orb block below - which broke
         // replay determinism, because this stream is reproducible from a seed and
         // that roll was not. The scheduler already took an `orbChance`; giving it
@@ -611,13 +611,11 @@
         bandIndex: gameInstance.gateSliceState?.bandIndex
       });
 
-      // Construct once so global cosmetic Math.random consumption remains equivalent
-      // to the legacy pillar constructor. The legacy Orb roll is consumed and discarded;
-      // gameplay placement and Orb presence come from the per-run seeded stream.
-      const pillar = new Pillar(gameInstance.currentLevelIdx, gap);
-      const legacyOrbRoll = Math.random();
-      const legacyWouldSpawnOrb = legacyOrbRoll > (1 - CONFIG.ORB_SPAWN_CHANCE);
-      if (legacyWouldSpawnOrb) Math.random();
+      // Seeded construction is a separate Pillar path: every authoritative field
+      // is initialized from the scheduler spec and no legacy global RNG draw is
+      // consumed. This keeps the grammar's entire spawn decision on its per-run
+      // stream instead of relying on later overwrites to hide global draws.
+      const pillar = new Pillar(gameInstance.currentLevelIdx, gap, spec);
       // The variety runtime owns the safety clamps, so route geometry through it
       // when present and fall back to the flat pattern placement when it is not.
       const variety = root.SexMagickObstacleVariety;
@@ -635,16 +633,7 @@
         pillar.top = spec.top;
         pillar.baseTop = spec.top;
       }
-      pillar.rotation = spec.rotation;
-      pillar.innerPattern = spec.innerPattern;
-      pillar.hasWarning = Boolean(gameInstance.isMobile && spec.warning);
       pillar.warningAlpha = 1;
-      pillar.patternId = spec.patternId;
-      pillar.patternFamily = spec.family;
-      pillar.patternStep = spec.patternStep;
-      pillar.patternSerial = spec.patternSerial;
-      pillar.patternSpawnIndex = spec.spawnIndex;
-      pillar.patternSeed = spec.seed;
       gameInstance.obstacles.push(pillar);
 
       if (spec.orb) {

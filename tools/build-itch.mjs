@@ -42,7 +42,7 @@ function parseArgs(argv) {
  * Every local asset `index.html` pulls in.
  *
  * Remote origins are deliberately kept: the audio is on jsDelivr at a pinned
- * commit and Tailwind/Fonts are CDN links, so they are not bundled - they are
+ * commit. Styling and fonts are now local, but any remaining origin is still
  * *reported*, because a build whose network dependencies are invisible is one
  * nobody can reason about when itch's iframe blocks something.
  */

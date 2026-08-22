@@ -16,6 +16,7 @@
  */
 
 const monas = require('./monas-runtime.js');
+const progression = require('./monas-progression-runtime.js');
 const neutral = require('./player-reachability.js');
 const grammar = require('./obstacle-grammar.js');
 const variety = require('./obstacle-variety-runtime.js');
@@ -25,8 +26,10 @@ const PLAYER_RADIUS = neutral.PLAYER_RADIUS;
 const HITBOX_HALF = neutral.HITBOX_HALF;
 const PILLAR_SPAWN_BASE = neutral.PILLAR_SPAWN_BASE;
 const TOP_CLAMP = PLAYER_RADIUS * 1.5;
-const SURGE_GAP_MULTIPLIER = 1.18; // mirrors Game.prototype.getCurrentGap in monas-runtime.js
-const SPAWN_GAP_OSCILLATION_PX = 10; // base getCurrentGap() adds sin(frames * .05) * 10
+// Read the constants from the outer progression wrapper that owns shipped MONAS
+// geometry. Duplicating them here would let the proof drift away from play.
+const SURGE_GAP_MULTIPLIER = progression.SURGE_GAP_MULTIPLIER;
+const SPAWN_GAP_OSCILLATION_PX = progression.GAP_OSCILLATION_PX;
 const Y_QUANTUM = 2;
 const VY_QUANTUM = 0.5;
 const DEFAULT_BEAM_WIDTH = 700;
@@ -427,9 +430,17 @@ function auditMonasPatternLibrary(options = {}) {
   const patternIds = Array.isArray(options.patternIds) && options.patternIds.length
     ? new Set(options.patternIds)
     : null;
+  // The installed scheduler does not necessarily materialize the raw catalog.
+  // reachability-policy.js replaces five MONAS value sequences before they reach
+  // play, including expanding return-flow from five walls to twelve. Accept the
+  // exact catalog being audited so the hold/release proof and the shipped
+  // scheduler cannot silently describe different obstacle timelines.
+  const library = Array.isArray(options.library) && options.library.length
+    ? options.library
+    : grammar.PATTERN_LIBRARY.MONAS;
   const cases = [];
 
-  for (const pattern of grammar.PATTERN_LIBRARY.MONAS) {
+  for (const pattern of library) {
     if (patternIds && !patternIds.has(pattern.id)) continue;
     for (const direction of listPatternVariants(pattern)) {
       for (const anchor of anchors) {
@@ -447,6 +458,7 @@ function auditMonasPatternLibrary(options = {}) {
             mode: normalizeMode(options.mode),
             patternId: pattern.id,
             family: pattern.family,
+            patternLength: pattern.values.length,
             direction,
             anchor,
             scenarioId: scenario.id,
@@ -487,6 +499,7 @@ function auditMonasPatternLibrary(options = {}) {
     totalCases: cases.length,
     scenarios: scenarios.map(scenario => ({ ...scenario })),
     anchors: [...anchors],
+    libraryPatternIds: library.map(pattern => pattern.id),
     patternVerdicts,
     cases
   };

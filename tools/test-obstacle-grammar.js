@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   GRAMMAR_VERSION,
   STORAGE_KEY,
@@ -216,6 +218,15 @@ function testMalformedHistoryFallback() {
   assert.deepEqual(safeReadHistory(storage), []);
 }
 
+function testGrammarSourceNeverCallsGlobalRandom() {
+  const source = fs.readFileSync(path.join(__dirname, 'obstacle-grammar.js'), 'utf8');
+  assert.equal(
+    /\bMath\s*\.\s*random\b/.test(source),
+    false,
+    'obstacle-grammar.js must not even name the global RNG; this stronger textual guard cannot hide a call in a template expression or comment'
+  );
+}
+
 testCatalogContracts();
 testSeedDeterminism();
 testRandomRange();
@@ -226,5 +237,6 @@ testResponsiveTopMapping();
 testSpawnCadencePreservation();
 testLedgerRetentionAndPrivacy();
 testMalformedHistoryFallback();
+testGrammarSourceNeverCallsGlobalRandom();
 
 console.log(`obstacle-grammar v${GRAMMAR_VERSION}: all deterministic contracts passed`);

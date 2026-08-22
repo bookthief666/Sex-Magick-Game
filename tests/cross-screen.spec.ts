@@ -95,6 +95,112 @@ test('layout, profile, touch targets, and DPR budget remain valid', async ({ pag
   expect(pageErrors).toEqual([]);
 });
 
+test('release shell styling is identical with every CDN blocked', async ({ page, context }, testInfo) => {
+  const releaseGeometries = new Set([
+    'chromium-small-phone',
+    'chromium-fold-cover',
+    'chromium-fold-inner',
+    'chromium-desktop'
+  ]);
+  test.skip(!releaseGeometries.has(testInfo.project.name), 'CDN parity runs at the four release visual geometries.');
+
+  const blockedPage = await context.newPage();
+  const styleCdnPattern = /(?:cdn\.tailwindcss\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)/i;
+  const onlineStyleRequests: string[] = [];
+  const blockedExternalRequests: string[] = [];
+  page.on('request', request => {
+    if (styleCdnPattern.test(request.url())) onlineStyleRequests.push(request.url());
+  });
+  await blockedPage.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.protocol.startsWith('http') && !['127.0.0.1', 'localhost'].includes(url.hostname)) {
+      blockedExternalRequests.push(url.href);
+      return route.abort('blockedbyclient');
+    }
+    return route.continue();
+  });
+
+  const onlinePageErrors = await openGame(page);
+  const blockedPageErrors = await openGame(blockedPage);
+  await Promise.all([
+    page.evaluate(() => document.fonts?.ready),
+    blockedPage.evaluate(() => document.fonts?.ready)
+  ]);
+
+  const signature = (target: import('@playwright/test').Page) => target.evaluate(() => {
+    const selectors = [
+      'html', 'body', '#game-container', '#startScreen', '.title-text',
+      '.mystic-btn', '#gameOverScreen', '.release-final-score'
+    ];
+    const properties = [
+      'boxSizing', 'borderTopWidth', 'fontFamily', 'fontSize', 'fontWeight',
+      'lineHeight', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+      'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+      'backgroundColor', 'backgroundImage', 'color', 'display', 'position', 'textTransform'
+    ];
+    return Object.fromEntries(selectors.map(selector => {
+      const node = document.querySelector(selector) as HTMLElement;
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return [selector, {
+        styles: Object.fromEntries(properties.map(property => [property, (style as any)[property]])),
+        rect: [rect.x, rect.y, rect.width, rect.height].map(value => Number(value.toFixed(3)))
+      }];
+    }));
+  });
+
+  const onlineSignature = await signature(page);
+  const blockedSignature = await signature(blockedPage);
+  expect(blockedSignature).toEqual(onlineSignature);
+  expect(blockedSignature['body'].styles, 'captured Tailwind preflight body contract').toMatchObject({
+    boxSizing: 'border-box', borderTopWidth: '0px', marginTop: '0px', marginRight: '0px',
+    marginBottom: '0px', marginLeft: '0px', lineHeight: '24px'
+  });
+  expect(blockedSignature['.title-text'].styles, 'captured heading/preflight contract').toMatchObject({
+    boxSizing: 'border-box', borderTopWidth: '0px', marginTop: '0px', marginRight: '0px',
+    marginBottom: '0px', marginLeft: '0px'
+  });
+  const localFonts = await blockedPage.evaluate(() => {
+    const embeddedFaces = [...document.styleSheets].flatMap(sheet => {
+      try {
+        return [...sheet.cssRules]
+          .filter(rule => rule instanceof CSSFontFaceRule)
+          .map(rule => {
+            const style = (rule as CSSFontFaceRule).style;
+            return {
+              family: style.fontFamily.replaceAll(/['"]/g, ''),
+              weight: style.fontWeight,
+              embedded: /^url\(["']?data:font\/ttf;base64,/i.test(style.getPropertyValue('src').trim())
+            };
+          });
+      } catch { return []; }
+    });
+    return {
+      embeddedFaces,
+      checks: {
+        orbitron: document.fonts.check('400 16px "Orbitron"'),
+        cinzelBold: document.fonts.check('700 16px "Cinzel Decorative"'),
+        cinzelBlack: document.fonts.check('900 16px "Cinzel Decorative"')
+      }
+    };
+  });
+  expect(localFonts.embeddedFaces.map(face => `${face.family}|${face.weight}|${face.embedded}`).sort(),
+    'the named faces must have actual embedded @font-face sources; FontFaceSet.check alone can succeed via fallback').toEqual([
+    'Cinzel Decorative|700|true',
+    'Cinzel Decorative|900|true',
+    'Orbitron|400 900|true'
+  ]);
+  expect(localFonts.checks, 'all embedded release typefaces must resolve without a network request').toEqual({
+    orbitron: true, cinzelBold: true, cinzelBlack: true
+  });
+  expect(onlineStyleRequests, 'the release must not request Tailwind or Google Fonts').toEqual([]);
+  expect(blockedExternalRequests.some(url => /cdn\.jsdelivr\.net/i.test(url)),
+    'negative control: the all-external route must actually intercept the remaining audio CDN').toBe(true);
+  expect(onlinePageErrors, 'online release shell must initialize without page errors').toEqual([]);
+  expect(blockedPageErrors, 'all-CDNs-blocked release shell must initialize without page errors').toEqual([]);
+  await blockedPage.close();
+});
+
 test('missions HUD stays inside the safe area and clear of the play corridor', async ({ page }, testInfo) => {
   // The missions HUD is deliberately absent from the M14 signature baselines,
   // because mission progress is per-player persisted state and would make those

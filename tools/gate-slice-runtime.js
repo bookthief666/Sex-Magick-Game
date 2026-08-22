@@ -40,12 +40,14 @@
   // speed all froze there for the rest of the run - the owner's report that the
   // game stops building, and why a late run could continue indefinitely.
   //
-  // The corridor is the lever with headroom left. Speed is at the raised ceiling,
-  // and M44's repaired spacing frontier showed wall spacing has essentially none:
-  // even a 6% tightening at the hardest coordinate came back invalid. D-072's grid
-  // verified gap 110 at speed 10.0, so the descent closes KETHER's 122 toward that
-  // floor, two pixels every thirty gates. Bounded, not endless - the game still
-  // plateaus, just far later and 12px tighter.
+  // M44 chose the corridor for the post-KETHER descent because speed is already
+  // at the raised ceiling. Its claim that wall spacing had no headroom was a
+  // replay-harness artifact: search used the requested base, then witness replay
+  // silently rebuilt default-base walls. D-075 replays the exact gates and finds
+  // bases 132, 124 and 116 all 450/450 verified at 10.0/110; 108 is the first
+  // rejection. That reopens spacing as a future lever but does not retune this
+  // release. The existing descent still closes KETHER's 122 toward the separately
+  // proven 110 corridor floor, two pixels every thirty gates.
   const DESCENT_GATES_PER_STEP = 30;
   const DESCENT_GAP_PER_STEP = 2;
 
@@ -1248,6 +1250,7 @@
     const originalDrawGameObjects = Game.prototype.drawGameObjects;
     const originalPillarDraw = Pillar.prototype.draw;
     const originalGetCurrentGap = Game.prototype.getCurrentGap;
+    const originalAdjustForScreenSize = Game.prototype.adjustForScreenSize;
 
     Game.prototype.prepareLevels = function prepareGateSliceLevels() {
       return prepareOrderedLevels(this, originalPrepareLevels);
@@ -1256,6 +1259,18 @@
     Game.prototype.applyLevel = function applyGateSliceLevel() {
       if (!this.gateSliceState) return;
       applyBand(this, false);
+    };
+
+    // The base responsive path assigns a portrait fallback speed after every
+    // resize. That is correct before a rite starts, but once HEX owns difficulty
+    // it overwrites the current band (10.0 -> 2.61 at KETHER) while leaving the
+    // band and corridor unchanged. Reapply the exact current Gate state after the
+    // base method, including the wagered Void multiplier when that section owns
+    // the frame. MONAS installs its own outer wrapper and never enters this guard.
+    Game.prototype.adjustForScreenSize = function adjustGateSliceForScreen(...args) {
+      const result = originalAdjustForScreenSize.apply(this, args);
+      if (this.gameMode === 'HEX' && this.gateSliceState) applyBand(this, false);
+      return result;
     };
 
     Game.prototype.checkLevel = function checkGateSliceBand() {

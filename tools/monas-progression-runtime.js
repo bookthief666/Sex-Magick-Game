@@ -36,17 +36,18 @@
   const MIN_VALIDATED_GAP = 160;
   const INSTALL_TIMEOUT_MS = 12_000;
   const SURGE_GAP_MULTIPLIER = 1.18;
+  const GAP_OSCILLATION_PX = 10;
 
-  // Every speed/gap pair below is one of the exact M31 frontier coordinates.
+  // Every speed/gap pair below is an exact hold/release solver coordinate.
   //
   // M43 extends the ladder by one coordinate, to 5.3 / 200 - one of the two D-053
   // held back as "validated tuning headroom, not live bands".
   //
-  // The reason for holding them was never missing evidence: D-050's frontier
-  // verified every coordinate from 2.9 / 260 through 5.7 / 190, and D-051's
-  // boundary job fully verified 5.7 / 190 across the complete scheduler-legal
-  // pattern-variant pair cross-product. It was that shipping a harder number needs
-  // a reason, and until M43 there was none.
+  // D-050's frontier covered the raw catalog through 5.7 / 190, and D-051's
+  // boundary job exercised that ceiling. D-075 corrects the later overclaim:
+  // neither result covered M44's raised coordinates or the policy-adjusted
+  // sequences that the scheduler actually emits. The retained release audit now
+  // runs this live ladder and the portal clamp against that shipped catalog.
   //
   // Now there is. The ladder had never actually governed play: `monas-runtime.js`
   // overwrote `gameSpeed` every frame from a flat ramp, so a run climbed 0.007 per
@@ -79,9 +80,9 @@
     // because 5.7 x 1.45 surge reached 8.265, "already close to the base game's
     // existing 8.5 maximum-speed scale" - a comparison against HEX's cap, which
     // M44 has since raised to 10.0 on D-072's evidence. With the comparison gone
-    // the ceiling was re-searched, and MONAS verified clean at 6.1/180, 6.5/170
-    // and 7.0/160 in both ordinary and Warp Surge flight, with 14/120 rejecting so
-    // the instrument is known to be able to say no.
+    // the ceiling was re-searched. D-075 requires the retained release audit to
+    // prove 6.1/180, 6.5/170 and 7.0/160 in ordinary and Warp Surge flight against
+    // the policy-adjusted catalog, with 14/120 rejecting in all three audit arms.
     //
     // 7.0/160 is deliberately absent, for the reason M43 learned the hard way: it
     // is the portal's clamp, and promoting the ceiling to a live band makes a
@@ -151,7 +152,7 @@
   }
 
   function gapFor(gatesPassed, frames = 0, surgeActive = false) {
-    const breathing = Math.sin(finite(frames, 0) * 0.05) * 10;
+    const breathing = Math.sin(finite(frames, 0) * 0.05) * GAP_OSCILLATION_PX;
     const base = nominalGapFor(gatesPassed) + breathing;
     return surgeActive ? base * SURGE_GAP_MULTIPLIER : base;
   }
@@ -335,7 +336,7 @@
       if (!isMonas(this) || !this.monasState) return originalGetCurrentGap.apply(this, args);
       const section = finite(this.__monasSectionGap, NaN);
       if (Number.isFinite(section) && section > 0) {
-        const breathing = Math.sin(finite(this.frames, 0) * 0.05) * 10;
+        const breathing = Math.sin(finite(this.frames, 0) * 0.05) * GAP_OSCILLATION_PX;
         const base = section + breathing;
         return this.monasState.surgeActive ? base * SURGE_GAP_MULTIPLIER : base;
       }
@@ -428,6 +429,7 @@
   return Object.freeze({
     PROGRESSION_VERSION,
     SURGE_GAP_MULTIPLIER,
+    GAP_OSCILLATION_PX,
     BANDS,
     MAX_VALIDATED_SPEED,
     MIN_VALIDATED_GAP,
