@@ -151,6 +151,7 @@ jobs:
           node --check tools/browser-m42-monas-edge-test.mjs
           node --check tools/browser-m43-monas-rite-test.mjs
           node --check tools/browser-m44-endless-test.mjs
+          node --check tools/browser-m45-perf-ceiling-test.mjs
           node --check tools/browser-m32-monas-progression-test.mjs
           node --check tools/browser-global-board-test.mjs
           node --check tools/browser-telemetry-test.mjs
@@ -250,6 +251,13 @@ jobs:
 
       - name: Run M32 MONAS progression Chrome integration
         run: node tools/browser-m32-monas-progression-test.mjs
+
+      # M45: what the raised ceiling costs to draw. Asserts on ratios between
+      # phases measured back-to-back, never on absolute milliseconds - this runner
+      # rasterises in software and no figure from it is comparable to D-060. The
+      # absolute capture is docs/qa/m45-fold-perf-capture.md, run on the device.
+      - name: Run M45 perf-ceiling Chrome integration
+        run: node tools/browser-m45-perf-ceiling-test.mjs
 
       - name: Run global board client Chrome integration
         run: node tools/browser-global-board-test.mjs
