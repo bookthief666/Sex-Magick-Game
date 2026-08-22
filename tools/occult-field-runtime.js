@@ -894,10 +894,28 @@
    * PNG, and a backdrop that rolled a different photograph every load would make that
    * baseline meaningless rather than merely noisy.
    */
+  /**
+   * A photograph for the menu backdrop, or nothing.
+   *
+   * `assetFallback` entries are excluded, and that exclusion is the whole point.
+   * `asset-resilience-runtime.js` substitutes a 480x270 procedural card - rings, a
+   * hexagram, and the words SIGIL CHANNEL OFFLINE at 18px - for any picture that
+   * fails to load. It is sized and lettered to be read at that size. The backdrop
+   * scales whatever it is given to cover the viewport and then zooms it further,
+   * so handing it that card renders the lettering hundreds of pixels tall and
+   * crops it: on a 884x1104 menu the screen reads "GIL CHANNEL OFFLI".
+   *
+   * That is what a player sees on a cold load before the gallery decodes, which is
+   * the first frame of the game. `startTitleGallery` already polls until a picture
+   * is ready and shows the seal card meanwhile, so returning null here is the path
+   * that was always intended - the placeholder simply looked like a loaded image
+   * because it sets `loaded = true`, which it must, for the gameplay it stands in
+   * for.
+   */
   function pickTitleImage() {
     const pool = (typeof MASTER_POOL !== 'undefined' && Array.isArray(MASTER_POOL)) ? MASTER_POOL : null;
     if (!pool || !pool.length) return null;
-    const loaded = pool.filter(entry => entry && entry.loaded && entry.img);
+    const loaded = pool.filter(entry => entry && entry.loaded && entry.img && !entry.assetFallback);
     if (!loaded.length) return null;
     if (visualQaActive()) return loaded[0].img;
     return loaded[Math.floor(Math.random() * loaded.length)].img;
