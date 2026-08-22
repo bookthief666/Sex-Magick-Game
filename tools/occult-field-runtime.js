@@ -518,21 +518,57 @@
   }
 
   /**
-   * Charged edges on the risk zones.
+   * Which rite's risk signal this pillar should wear, and whether it is live.
    *
-   * The boundaries and their colour are unchanged - they are a functional signal
-   * and the entry-rate metric depends on them reading the same. What changes is
-   * that the edge now bleeds light inward, so courting it feels like courting
-   * something rather than crossing a dashed line.
+   * M43: MONAS banks Gnosis through the same `classifyGateClear` HEX does - the
+   * risk model has been rite-agnostic since M42 - but this function read
+   * `gateSliceState`, which MONAS has never had. So a MONAS player was asked to
+   * court an edge the game never drew. This resolves the reading per rite instead.
+   *
+   * Colour is the one thing that must not be shared. Cyan is the Hexagram's
+   * reserved colour and has been inviolable since M7, so MONAS wears the gold its
+   * `mercuryRimWall` already uses.
    */
-  function chargeRiskEdges(ctx, pillar, gameInstance) {
+  function riskSignalFor(gameInstance) {
+    const monasState = gameInstance?.monasState;
+    if (monasState && gameInstance?.gameMode === 'MONAS') {
+      const monas = root.SexMagickMonas;
+      const from = finite(monas?.MONAS_RISK_FROM_BAND, 1);
+      if (finite(monasState.progressionBandIndex, 0) < from) return null;
+      return {
+        rite: 'MONAS',
+        tint: '255, 215, 0',
+        // The true boundary `classifyGateClear` scores against, so the line marks
+        // where Gnosis actually starts rather than approximating it.
+        playerHalf: finite(monas?.MONAS_PLAYER_HALF, 12),
+        boundary: true
+      };
+    }
+
     const state = gameInstance?.gateSliceState;
-    if (!ctx || !pillar || !state) return;
+    if (!state) return null;
     const slice = root.__SEX_MAGICK_GATE_SLICE__;
     const bandNames = slice?.getFingerprint?.().bandNames;
     // MALKUTH has risk inactive; charging its edges would promise a reward that
     // is not on offer there.
-    if (!Array.isArray(bandNames) || finite(state.bandIndex, 0) < 1) return;
+    if (!Array.isArray(bandNames) || finite(state.bandIndex, 0) < 1) return null;
+    // HEX keeps exactly the bleed M21 shipped and no boundary line: its comment
+    // below is load-bearing, and the M14 visual baselines are drawn from it.
+    return { rite: 'HEX', tint: '0, 229, 255', playerHalf: 0, boundary: false };
+  }
+
+  /**
+   * Charged edges on the risk zones.
+   *
+   * The boundaries and their colour are unchanged for HEX - they are a functional
+   * signal and the entry-rate metric depends on them reading the same. What changes
+   * is that the edge now bleeds light inward, so courting it feels like courting
+   * something rather than crossing a dashed line.
+   */
+  function chargeRiskEdges(ctx, pillar, gameInstance) {
+    if (!ctx || !pillar) return;
+    const signal = riskSignalFor(gameInstance);
+    if (!signal) return;
 
     const gapTop = finite(pillar.top, 0);
     const gap = finite(pillar.gap, 0);
@@ -540,21 +576,41 @@
     const x = finite(pillar.x, 0);
     const width = finite(pillar.w, 45);
     const bleed = Math.min(gap * 0.28, 34);
+    const tint = signal.tint;
 
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
     const top = ctx.createLinearGradient(0, gapTop, 0, gapTop + bleed);
-    top.addColorStop(0, 'rgba(0, 229, 255, 0.30)');
-    top.addColorStop(1, 'rgba(0, 229, 255, 0)');
+    top.addColorStop(0, 'rgba(' + tint + ', 0.30)');
+    top.addColorStop(1, 'rgba(' + tint + ', 0)');
     ctx.fillStyle = top;
     ctx.fillRect(x, gapTop, width, bleed);
 
     const bottom = ctx.createLinearGradient(0, gapTop + gap, 0, gapTop + gap - bleed);
-    bottom.addColorStop(0, 'rgba(0, 229, 255, 0.30)');
-    bottom.addColorStop(1, 'rgba(0, 229, 255, 0)');
+    bottom.addColorStop(0, 'rgba(' + tint + ', 0.30)');
+    bottom.addColorStop(1, 'rgba(' + tint + ', 0)');
     ctx.fillStyle = bottom;
     ctx.fillRect(x, gapTop + gap - bleed, width, bleed);
+
+    // The line that says *where* the reward begins.
+    //
+    // The bleed alone is a mood, not an instruction: it fades over 34px while the
+    // scored zone is a third of the safe height, which on MONAS's 260px corridor is
+    // nearer 79. A player reading the glow would hug far tighter than they need to.
+    // These two rules are the exact `topRiskBoundary` / `bottomRiskBoundary`
+    // `classifyGateClear` returns, so crossing one is the moment Gnosis is earned.
+    if (signal.boundary) {
+      const safeTop = gapTop + signal.playerHalf;
+      const safeBottom = gapTop + gap - signal.playerHalf;
+      const safeHeight = safeBottom - safeTop;
+      if (safeHeight > 0) {
+        const third = safeHeight / 3;
+        ctx.fillStyle = 'rgba(' + tint + ', 0.45)';
+        ctx.fillRect(x, safeTop + third, width, 1);
+        ctx.fillRect(x, safeBottom - third, width, 1);
+      }
+    }
 
     ctx.restore();
   }

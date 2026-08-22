@@ -561,6 +561,35 @@
         background: linear-gradient(90deg, #fff6c9, #ffffff);
       }
       #monas-hud.is-portal-ready #monas-gnosis-fill { background: #ffffff; }
+      /* M43: risk-live bands tint the Gnosis row, so the HUD and the corridor say
+         the same thing - the gold boundary rules drawn on the pillars appear on
+         exactly the bands this class is on. */
+      #monas-hud.is-risk-live #monas-gnosis { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, .7); }
+      #monas-hud.is-risk-live #monas-gnosis-meter { border-color: rgba(255, 215, 0, .62); }
+      /* M43: MONAS's own transient line. It does not reach into the Gate slice's
+         telegraph: that element belongs to a HEX-only HUD and is hidden with it, and
+         a cross-rite reach would couple the two rites' shells for one string. Same
+         D-065 notice band and D-066 edge-faded scrim as every other notice, so the
+         slot arbitration keeps exactly one message on screen. Gold, not cyan. */
+      #monas-telegraph {
+        position: fixed;
+        left: 50%;
+        bottom: max(128px, calc(env(safe-area-inset-bottom) + 122px));
+        transform: translateX(-50%);
+        z-index: 29;
+        padding: 7px 14px;
+        border: none;
+        background: linear-gradient(90deg,
+          transparent, rgba(0,0,0,.72) 18%, rgba(0,0,0,.72) 82%, transparent);
+        color: #fff6c9;
+        text-align: center;
+        pointer-events: none;
+        white-space: nowrap;
+        font: var(--sm-hud-font-size, 10px)/1.5 'Orbitron', monospace;
+        letter-spacing: 2.4px;
+        text-shadow: 0 0 10px #ffd700;
+      }
+      #monas-telegraph[hidden] { display: none !important; }
     `;
     document.head.appendChild(style);
 
@@ -572,7 +601,72 @@
       + '<div id="monas-gnosis">GNOSIS</div>'
       + '<div id="monas-gnosis-meter"><div id="monas-gnosis-fill"></div></div>';
     document.body.appendChild(hud);
+
+    if (!document.getElementById('monas-telegraph')) {
+      const telegraph = document.createElement('div');
+      telegraph.id = 'monas-telegraph';
+      telegraph.hidden = true;
+      document.body.appendChild(telegraph);
+    }
     return hud;
+  }
+
+  /** Suppressed under visual QA, since a timed message cannot be screenshot-compared. */
+  function visualQaActive() {
+    try {
+      return new URLSearchParams(root.location?.search || '').get('visualQa') === '1';
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  let telegraphTimer = null;
+
+  /**
+   * MONAS's transient line, through the shared notice slot (D-065).
+   */
+  function setMonasTelegraph(text, durationMs = 1100) {
+    if (visualQaActive()) return;
+    ensureHud();
+    const element = document.getElementById('monas-telegraph');
+    if (!element) return;
+    element.textContent = text;
+    try {
+      root.SexMagickNoticeSlot?.register('monas-telegraph');
+      root.SexMagickNoticeSlot?.claim('monas-telegraph');
+    } catch (_error) { /* never let slot arbitration break a notice */ }
+    element.hidden = false;
+    if (telegraphTimer) clearTimeout(telegraphTimer);
+    telegraphTimer = setTimeout(() => {
+      element.hidden = true;
+      telegraphTimer = null;
+    }, durationMs);
+  }
+
+  /**
+   * Announce the band the run has just entered, and say whether the edge pays.
+   *
+   * M43: MONAS has banked Gnosis by edging since M42 and never said so. The band
+   * that opens risk is the moment the gold boundary rules start being drawn on the
+   * pillars, so it is the moment worth naming - the same reading HEX's
+   * `THE EDGE AWAKENS` gives, in MONAS's own vocabulary.
+   */
+  function announceBandChange(gameInstance) {
+    const state = gameInstance?.monasState;
+    if (!state) return;
+    const bandIndex = whole(state.progressionBandIndex, 0);
+    const previous = gameInstance.__monasLastBandIndex;
+    gameInstance.__monasLastBandIndex = bandIndex;
+    if (!Number.isInteger(previous) || bandIndex <= previous) return;
+
+    const riskLive = bandIndex >= MONAS_RISK_FROM_BAND;
+    const opensRisk = riskLive && previous < MONAS_RISK_FROM_BAND;
+    setMonasTelegraph(
+      opensRisk ? 'THE EDGE AWAKENS  ·  HUG THE WALL TO BANK GNOSIS'
+        : riskLive ? 'THE CURRENT QUICKENS  ·  THE EDGE STILL PAYS'
+          : 'LEARN THE CURRENT',
+      opensRisk ? 1500 : 950
+    );
   }
 
   function renderHud(gameInstance) {
@@ -615,7 +709,13 @@
         : `GNOSIS ${gnosis.toFixed(1).replace('.0', '')} / ${capacity}`;
     }
     if (fill) fill.style.width = `${clamp(gnosis / capacity, 0, 1) * 100}%`;
-    if (hud) hud.classList.toggle('is-portal-ready', Boolean(state.portalReady));
+    if (hud) {
+      hud.classList.toggle('is-portal-ready', Boolean(state.portalReady));
+      hud.classList.toggle(
+        'is-risk-live',
+        whole(state.progressionBandIndex, 0) >= MONAS_RISK_FROM_BAND
+      );
+    }
   }
 
   function trackHold() {
@@ -1080,6 +1180,9 @@
         monasGallery = shuffled(pool);
         resetCaduceus(this);
         resetPortal(this);
+        // Seeded to the opening band rather than left undefined, so a fresh run
+        // does not announce band 0 as if it had just been reached.
+        this.__monasLastBandIndex = whole(this.monasState?.progressionBandIndex, 0);
         beginMonasRun(this);
         renderHud(this);
       } else {
@@ -1092,6 +1195,7 @@
         // MONAS teardown has turned out to be one-sided.
         resetCaduceus(this);
         resetPortal(this);
+        this.__monasLastBandIndex = null;
         // Also render on the way out. `renderHud` computes `active` as false
         // without a MONAS state and hides the meter, and nothing else will do it:
         // `updateGameObjects` returns early for non-MONAS, so the only other
@@ -1384,6 +1488,10 @@
       if (caduceus) settleCaduceusFrame(this, caduceus, nodesBefore, reversedThisFrame);
       tickPortal(this, reversedThisFrame);
 
+      // After the inner update, so the gate that was cleared this frame has already
+      // moved the band through `applyProgression`.
+      announceBandChange(this);
+
       renderHud(this);
       return result;
     };
@@ -1527,6 +1635,10 @@
     GRAVITY, DAMPING, LIFT, MAX_RISE, MAX_FALL, HANG_FRAMES,
     COHERENCE_CAPACITY, CENTRE_TOLERANCE, SMOOTH_REVERSALS, SMOOTHNESS_SHARE,
     SURGE_FRAMES, SURGE_SPEED_MULTIPLIER, SURGE_SCORE_MULTIPLIER,
+    // M43: read by occult-field-runtime.js so the risk-zone boundaries it draws are
+    // the ones `classifyGateClear` actually scores against, rather than a second
+    // copy of the same numbers that could drift away from them.
+    MONAS_PLAYER_HALF, MONAS_RISK_FROM_BAND, MONAS_NEAR_MISS_PX,
     GALLERY_ADVANCE_GATES, COLOR_ADVANCE_GATES, DIFFICULTY_ADVANCE_GATES,
     AMBIENT_GLYPH_MIN_FRAMES, AMBIENT_GLYPH_JITTER_FRAMES, AMBIENT_GLYPH_DURATION_FRAMES,
     clamp,
