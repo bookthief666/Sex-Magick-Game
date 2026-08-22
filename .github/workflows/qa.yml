@@ -116,6 +116,7 @@ jobs:
           node --check tools/gallery-source.mjs
           node --check tools/fetch-gallery.mjs
           node --check tools/qa-static-server.mjs
+          node --check tools/build-itch.mjs
           node --check tools/browser-fixed-step-test.mjs
           node --check tools/browser-collision-test.mjs
           node --check tools/browser-policy-fail-closed-test.mjs
