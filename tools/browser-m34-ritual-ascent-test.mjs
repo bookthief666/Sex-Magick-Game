@@ -90,12 +90,26 @@ try {
       overflow: document.documentElement.scrollWidth > innerWidth
     };
   });
+  // Derived, not hardcoded. D-067 re-spaced the HEX ladder and YESOD's threshold
+  // moved from 6 to 9; this assertion still said 6, which is the sixth test in
+  // three milestones found encoding the old spacing as a literal (see D-070 and
+  // D-071 for the previous two). A band threshold is data, and a test that copies
+  // it fails the next time the curve is tuned - reporting a spacing change as a
+  // broken ascent banner, which points away from the actual cause.
+  const yesodThreshold = await page.evaluate(() => {
+    const bands = window.SexMagickGateSlice?.BANDS || [];
+    const yesod = bands.find(band => String(band.name).toUpperCase() === 'YESOD');
+    return yesod ? yesod.gateThreshold : null;
+  });
+  assert.ok(Number.isFinite(yesodThreshold) && yesodThreshold > 0,
+    'YESOD must have a real threshold to derive from');
+
   assert.equal(initial.snapshot.band.name, 'MALKUTH');
   assert.equal(initial.snapshot.band.meaning, 'KINGDOM');
   assert.equal(initial.snapshot.progress.nextName, 'YESOD');
-  assert.equal(initial.snapshot.progress.gatesToNext, 6);
+  assert.equal(initial.snapshot.progress.gatesToNext, yesodThreshold);
   assert.equal(initial.meaning, 'KINGDOM');
-  assert.equal(initial.next, 'YESOD · 6 GATES');
+  assert.equal(initial.next, `YESOD · ${yesodThreshold} GATES`);
   assert.equal(initial.bannerName, 'MALKUTH');
   assert.equal(initial.bannerSubtitle, 'KINGDOM');
   assert.equal(initial.rowHidden, false);
@@ -124,7 +138,11 @@ try {
   const yesod = await page.evaluate(() => {
     // Drive the real Gate progression entry point instead of directly setting the
     // displayed band. The M34 layer is an observer; it must follow product truth.
-    game.gateSliceState.gatesCleared = 6;
+    // The gate count comes from the ladder rather than from a literal, for the
+    // reason given above the YESOD threshold lookup.
+    const bands = window.SexMagickGateSlice?.BANDS || [];
+    const yesodBand = bands.find(band => String(band.name).toUpperCase() === 'YESOD');
+    game.gateSliceState.gatesCleared = yesodBand.gateThreshold;
     game.checkLevel();
     window.__SEX_MAGICK_RITUAL_ASCENT__.refresh();
     const snapshot = window.__SEX_MAGICK_RITUAL_ASCENT__.getSnapshot();
@@ -139,10 +157,17 @@ try {
   });
   assert.equal(yesod.snapshot.band.name, 'YESOD');
   assert.equal(yesod.snapshot.band.meaning, 'FOUNDATION');
+  const tipharethGap = await page.evaluate(() => {
+    const bands = window.SexMagickGateSlice?.BANDS || [];
+    const yesodBand = bands.find(band => String(band.name).toUpperCase() === 'YESOD');
+    const tiphareth = bands.find(band => String(band.name).toUpperCase() === 'TIPHARETH');
+    return tiphareth.gateThreshold - yesodBand.gateThreshold;
+  });
+  assert.ok(Number.isFinite(tipharethGap) && tipharethGap > 0, 'the ladder must actually step upward');
   assert.equal(yesod.snapshot.progress.nextName, 'TIPHARETH');
-  assert.equal(yesod.snapshot.progress.gatesToNext, 10);
+  assert.equal(yesod.snapshot.progress.gatesToNext, tipharethGap);
   assert.equal(yesod.meaning, 'FOUNDATION');
-  assert.equal(yesod.next, 'TIPHARETH · 10 GATES');
+  assert.equal(yesod.next, `TIPHARETH · ${tipharethGap} GATES`);
   assert.equal(yesod.bannerName, 'YESOD');
   assert.equal(yesod.bannerSubtitle, 'FOUNDATION');
   assert.equal(yesod.bannerHidden, false, 'real band transition must raise the ceremonial ascent banner');
