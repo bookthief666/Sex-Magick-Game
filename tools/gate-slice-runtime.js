@@ -893,6 +893,20 @@
     if (!state) return null;
     const band = BANDS[state.bandIndex] || BANDS[0];
     const matching = gameInstance.gameLevels.find(level => String(level.name).toUpperCase() === band.name);
+    // The wagered Void owns the level readout for its duration - `startVoidMode`
+    // writes 'THE VOID' in cyan, and that is the player's only confirmation that a
+    // wager is live. Difficulty still belongs to the band underneath (the speed
+    // assignment below applies the Void multiplier to it), so only the
+    // *presentation* half stands down here.
+    //
+    // This split exists because M46's resize guard made it matter. Before it,
+    // applyBand ran only on band transitions, which cannot happen inside a Void, so
+    // the label was safe by accident. Reasserting band speed after every resize
+    // meant the label was reasserted too, and rotating the phone mid-Void silently
+    // reverted 'THE VOID' to the band name while the wager was still running -
+    // found by eye-reviewing regenerated baselines, which is the second defect that
+    // review has caught.
+    const voidOwnsPresentation = Boolean(gameInstance.__gateSliceVoidActive);
     if (matching) {
       // Everything visual reads currentLevelIdx, not the band: drawLevelArtwork,
       // drawScene's tunnelColor, and the accent wash all look up
@@ -902,11 +916,13 @@
       // them visible.
       const matchedIndex = gameInstance.gameLevels.indexOf(matching);
       if (matchedIndex >= 0) gameInstance.currentLevelIdx = matchedIndex;
-      document.getElementById('levelUi').textContent = matching.name;
-      document.getElementById('levelUi').style.color = matching.accent;
-      document.getElementById('levelUi').style.textShadow = `0 0 15px ${matching.accent}`;
-      gameInstance.root.style.setProperty('--primary', matching.accent);
-    } else {
+      if (!voidOwnsPresentation) {
+        document.getElementById('levelUi').textContent = matching.name;
+        document.getElementById('levelUi').style.color = matching.accent;
+        document.getElementById('levelUi').style.textShadow = `0 0 15px ${matching.accent}`;
+        gameInstance.root.style.setProperty('--primary', matching.accent);
+      }
+    } else if (!voidOwnsPresentation) {
       document.getElementById('levelUi').textContent = band.name;
     }
     gameInstance.gameSpeed = gameInstance.__gateSliceVoidActive

@@ -129,7 +129,9 @@ try {
         height: game.canvas.height,
         speed: game.gameSpeed,
         bandIndex: game.gateSliceState.bandIndex,
-        voidActive: Boolean(game.__gateSliceVoidActive)
+        voidActive: Boolean(game.__gateSliceVoidActive),
+        levelLabel: document.getElementById('levelUi')?.textContent || '',
+        levelColor: document.getElementById('levelUi')?.style.color || ''
       };
     })()`);
   };
@@ -165,6 +167,13 @@ try {
     assert.equal(sample.speed, voidPrepared.expected,
       `KETHER Void must remain ${voidPrepared.expected} after ${sample.width}x${sample.height} and live frames`);
     assert.equal(sample.voidActive, true, 'resize must not end the active Void');
+    // The label, not only the speed. M46's resize guard reapplied the whole of
+    // applyBand after every resize, and applyBand rewrote the level readout with
+    // the band name - so rotating the phone mid-Void reverted 'THE VOID' to
+    // 'KETHER' while the wager was still live and the speed was still correct.
+    // Asserting speed alone could not see it; the regenerated baselines could.
+    assert.equal(sample.levelLabel, 'THE VOID',
+      `an active Void must still read THE VOID after ${sample.width}x${sample.height}, not the band beneath it`);
   });
 
   // At KETHER the ordinary and Void values are both the 10.0 validation clamp,
