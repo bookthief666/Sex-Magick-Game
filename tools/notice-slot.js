@@ -92,7 +92,7 @@
    * line from the device itself, with no git or server involved.
    */
   function buildMarker() {
-    return 'M45 what was never being run: CI green, eight suites wired in, baselines compared, the menu stops showing an error card';
+    return 'M46 release evidence exercises the release: MONAS audited on its shipped physics, the resize speed clobber gone from both rites, no CDN at boot, seeded spawning truly seeded';
   }
 
   return Object.freeze({
