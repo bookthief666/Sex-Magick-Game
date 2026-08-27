@@ -93,10 +93,9 @@ try {
       edgedRisky: fly('edge', 36),
       centredRisky: fly('centre', 36),
       // Gate 0 is band 0, MONAS's teachable band, where the edge pays nothing.
-      // Shorter, because band 1 opens at gate 8 and the full budget clears exactly
-      // that many - the flight has to end while still inside the band it is
-      // testing, or it would be asserting about the wrong one.
-      edgedEarly: fly('edge', 0, 1100)
+      // Shorter, because band 1 opens at gate 6 and the flight has to end while
+      // still inside the band it is testing.
+      edgedEarly: fly('edge', 0, 900)
     };
   })()`);
   console.log('MONAS edge banking:', JSON.stringify(flown));
