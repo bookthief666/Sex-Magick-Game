@@ -92,7 +92,7 @@
    * line from the device itself, with no git or server involved.
    */
   function buildMarker() {
-    return 'M46 release evidence exercises the release: MONAS audited on its shipped physics, the resize speed clobber gone from both rites, no CDN at boot, seeded spawning truly seeded';
+    return 'M47 playtest tuning: steeper MONAS speed curve with post-cap drift, HEX radial stars from center, scanlines and speed vignette';
   }
 
   return Object.freeze({

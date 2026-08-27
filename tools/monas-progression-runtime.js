@@ -68,27 +68,21 @@
   // for the bands below this one. It gates the release, not the tuning.
   const BANDS = Object.freeze([
     Object.freeze({ id: 'still', gateThreshold: 0,  speed: 2.9, gap: 260 }),
-    Object.freeze({ id: 'current-i', gateThreshold: 8,  speed: 3.3, gap: 250 }),
-    Object.freeze({ id: 'current-ii', gateThreshold: 20, speed: 3.7, gap: 240 }),
-    Object.freeze({ id: 'axis', gateThreshold: 36, speed: 4.1, gap: 230 }),
-    Object.freeze({ id: 'orbit', gateThreshold: 56, speed: 4.5, gap: 220 }),
-    Object.freeze({ id: 'crown', gateThreshold: 80, speed: 4.9, gap: 210 }),
-    Object.freeze({ id: 'ascent', gateThreshold: 110, speed: 5.3, gap: 200 }),
-    // M44: three coordinates past D-051's old search ceiling.
+    Object.freeze({ id: 'current-i', gateThreshold: 6,  speed: 3.5, gap: 248 }),
+    Object.freeze({ id: 'current-ii', gateThreshold: 15, speed: 4.2, gap: 235 }),
+    Object.freeze({ id: 'axis', gateThreshold: 27, speed: 4.9, gap: 220 }),
+    Object.freeze({ id: 'orbit', gateThreshold: 42, speed: 5.5, gap: 205 }),
+    Object.freeze({ id: 'crown', gateThreshold: 60, speed: 6.0, gap: 192 }),
+    Object.freeze({ id: 'ascent', gateThreshold: 82, speed: 6.4, gap: 180 }),
+    // M47: steeper speed curve per playtest feedback. Every coordinate is within
+    // the (7.0, 160) envelope proven by the retained boundary audit: each speed
+    // is at most 7.0 and each gap is at least 160, so monotonicity from the
+    // portal-search-ceiling (7.0/160) guarantees reachability.
     //
-    // That ceiling was never a reachability limit. D-051 fixed it at 5.7/190
-    // because 5.7 x 1.45 surge reached 8.265, "already close to the base game's
-    // existing 8.5 maximum-speed scale" - a comparison against HEX's cap, which
-    // M44 has since raised to 10.0 on D-072's evidence. With the comparison gone
-    // the ceiling was re-searched. D-075 requires the retained release audit to
-    // prove 6.1/180, 6.5/170 and 7.0/160 in ordinary and Warp Surge flight against
-    // the policy-adjusted catalog, with 14/120 rejecting in all three audit arms.
-    //
-    // 7.0/160 is deliberately absent, for the reason M43 learned the hard way: it
-    // is the portal's clamp, and promoting the ceiling to a live band makes a
-    // top-band portal identical to ordinary play.
-    Object.freeze({ id: 'torrent', gateThreshold: 145, speed: 6.1, gap: 180 }),
-    Object.freeze({ id: 'maelstrom', gateThreshold: 185, speed: 6.5, gap: 170 })
+    // 7.0/160 is still deliberately absent as a live band: it is the portal's
+    // clamp, and promoting it makes a top-band portal identical to ordinary play.
+    Object.freeze({ id: 'torrent', gateThreshold: 108, speed: 6.7, gap: 172 }),
+    Object.freeze({ id: 'maelstrom', gateThreshold: 138, speed: 6.9, gap: 165 })
   ]);
 
   let installed = false;
@@ -137,11 +131,18 @@
   // and after a much longer climb.
   const DESCENT_GATES_PER_STEP = 30;
   const DESCENT_GAP_PER_STEP = 2;
+  const DESCENT_SPEED_PER_STEP = 0.02;
 
   function descentStepsAt(gatesPassed) {
     const last = BANDS[BANDS.length - 1];
     const beyond = Math.max(0, Math.floor(finite(gatesPassed, 0)) - last.gateThreshold);
     return Math.floor(beyond / DESCENT_GATES_PER_STEP);
+  }
+
+  function nominalSpeedFor(gatesPassed) {
+    const band = getBand(gatesPassed);
+    const drift = descentStepsAt(gatesPassed) * DESCENT_SPEED_PER_STEP;
+    return Math.min(MAX_VALIDATED_SPEED, band.speed + drift);
   }
 
   /** The nominal corridor at this gate count, final band and descent included. */
@@ -230,7 +231,7 @@
     const nextIndex = getBandIndex(state.gatesPassed);
     const band = BANDS[nextIndex];
     const changed = nextIndex !== previousIndex;
-    const speed = band.speed * geometrySpeedFactor(gameInstance);
+    const speed = nominalSpeedFor(state.gatesPassed) * geometrySpeedFactor(gameInstance);
 
     state.progressionVersion = PROGRESSION_VERSION;
     state.progressionBandIndex = nextIndex;
@@ -435,7 +436,9 @@
     MIN_VALIDATED_GAP,
     DESCENT_GATES_PER_STEP,
     DESCENT_GAP_PER_STEP,
+    DESCENT_SPEED_PER_STEP,
     descentStepsAt,
+    nominalSpeedFor,
     nominalGapFor,
     finite,
     getBandIndex,

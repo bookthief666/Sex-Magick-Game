@@ -106,13 +106,13 @@ try {
 
       const initial = snapshot();
       const ladder = [];
-      for (const gates of [8, 20, 36, 56, 80, 110]) {
+      for (const gates of [6, 15, 27, 42, 60, 82]) {
         progression.forceGatesForTest(gates);
         ladder.push(snapshot());
       }
 
       // Score and the legacy checkLevel path must not own MONAS difficulty anymore.
-      progression.forceGatesForTest(20);
+      progression.forceGatesForTest(15);
       const beforeScoreCheck = snapshot();
       const levelBeforeScoreCheck = game.currentLevelIdx;
       game.score = 9999;
@@ -120,7 +120,7 @@ try {
       const afterScoreCheck = snapshot();
       const levelAfterScoreCheck = game.currentLevelIdx;
 
-      progression.forceGatesForTest(80);
+      progression.forceGatesForTest(60);
       game.monasState.surgeActive = true;
       const surge = snapshot();
       game.monasState.surgeActive = false;
@@ -138,7 +138,7 @@ try {
       // So: force the band, then actually run frames, then look. The player only
       // ever experiences the post-frame value.
       const afterFrames = [];
-      for (const gates of [8, 36, 80, 110]) {
+      for (const gates of [6, 27, 60, 82]) {
         progression.forceGatesForTest(gates);
         const written = game.gameSpeed;
         const innerSpeeds = [];
@@ -171,7 +171,7 @@ try {
 
       // Gate's restart wrapper creates HEX state underneath MONAS when Gate exists;
       // M32 must erase it and rebuild a clean MONAS run before returning control.
-      progression.forceGatesForTest(80);
+      progression.forceGatesForTest(60);
       game.restartGame();
       game.gameLoop = () => undefined;
       game.state = GameState.PAUSED;
@@ -200,12 +200,12 @@ try {
     // geometrySpeedFactor) - every band speed below is the shipped value x0.9,
     // not the raw ladder literal. Gap is untouched by that composition.
     const expected = [
-      { gatesPassed: 8, band: 1, speed: 2.97, nominalGap: 250 },
-      { gatesPassed: 20, band: 2, speed: 3.33, nominalGap: 240 },
-      { gatesPassed: 36, band: 3, speed: 3.69, nominalGap: 230 },
-      { gatesPassed: 56, band: 4, speed: 4.05, nominalGap: 220 },
-      { gatesPassed: 80, band: 5, speed: 4.41, nominalGap: 210 },
-      { gatesPassed: 110, band: 6, speed: 4.77, nominalGap: 200 }
+      { gatesPassed: 6, band: 1, speed: 3.15, nominalGap: 248 },
+      { gatesPassed: 15, band: 2, speed: 3.78, nominalGap: 235 },
+      { gatesPassed: 27, band: 3, speed: 4.41, nominalGap: 220 },
+      { gatesPassed: 42, band: 4, speed: 4.95, nominalGap: 205 },
+      { gatesPassed: 60, band: 5, speed: 5.4, nominalGap: 192 },
+      { gatesPassed: 82, band: 6, speed: 5.76, nominalGap: 180 }
     ];
 
     assert.equal(result.capturedInnerError, 'M32_CAPTURED_INNER_UPDATE_THROW',
@@ -233,14 +233,14 @@ try {
     assert.equal(result.levelAfterScoreCheck, result.levelBeforeScoreCheck, `${label}: legacy level index must not advance from score`);
     assert.equal(result.afterScoreCheck.voidMode, false, `${label}: score/checkLevel must never trigger base Void`);
 
-    assert.equal(rounded(result.surge.speed), 4.41, `${label}: Warp Surge must not mutate canonical base speed`);
-    assert.equal(rounded(result.surge.nominalGap), 210, `${label}: Warp Surge nominal gap`);
-    assert.equal(rounded(result.surge.liveGap), 247.8, `${label}: Warp Surge must widen 210 by 1.18`);
+    assert.equal(rounded(result.surge.speed), 5.4, `${label}: Warp Surge must not mutate canonical base speed`);
+    assert.equal(rounded(result.surge.nominalGap), 192, `${label}: Warp Surge nominal gap`);
+    assert.equal(rounded(result.surge.liveGap), 226.56, `${label}: Warp Surge must widen 192 by 1.18`);
 
     // M43: the ladder must still be the live speed after frames have run. A
     // regression here means something is writing `gameSpeed` per frame again, and
     // the ladder above has quietly become decoration.
-    const liveExpected = { 8: 2.97, 36: 3.69, 80: 4.41, 110: 4.77 };
+    const liveExpected = { 6: 3.15, 27: 4.41, 60: 5.4, 82: 5.76 };
     result.afterFrames.forEach(entry => {
       const wanted = liveExpected[entry.gates];
       assert.equal(entry.surgeActive, false, `${label}: surge must be off for the live-speed check at ${entry.gates}`);

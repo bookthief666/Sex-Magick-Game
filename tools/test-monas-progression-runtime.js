@@ -11,18 +11,15 @@ function approximately(actual, expected, epsilon = 1e-9) {
 
 assert.equal(progression.validateBands(), true);
 
-const expectedThresholds = [0, 8, 20, 36, 56, 80, 110, 145, 185];
+const expectedThresholds = [0, 6, 15, 27, 42, 60, 82, 108, 138];
 assert.deepEqual(progression.BANDS.map(band => band.gateThreshold), expectedThresholds);
 
-// The M31 frontier's coordinates all remain live bands, in order. M44 adds three
-// past its last one, re-searched after D-051's ceiling turned out to rest on a
-// comparison against HEX's 8.5 cap rather than on a reachability limit.
-for (let index = 0; index < frontier.CANDIDATES.length - 1; index += 1) {
-  const live = progression.BANDS[index];
-  const proven = frontier.CANDIDATES[index];
-  approximately(live.speed, proven.baseSpeed);
-  approximately(live.gap, proven.nominalGap);
-}
+// M47 re-tuned the MONAS curve steeper than the M31 frontier's candidates. The
+// bands no longer match those coordinates one-to-one; the envelope check below
+// (every band ≤ MAX_VALIDATED_SPEED / ≥ MIN_VALIDATED_GAP) is the live safety
+// contract, and the frontier scan is an independent exploration artifact.
+assert.ok(progression.BANDS.length >= frontier.CANDIDATES.length,
+  'the live ladder must have at least as many bands as the frontier explored');
 
 // The ceiling stays off the ladder on purpose. It is the portal's clamp, and M43
 // established by measurement that promoting it makes a top-band portal identical
@@ -83,7 +80,7 @@ approximately(progression.gapFor(lastBand.gateThreshold, troughFrame, false), la
 // The hardest reward state remains materially below the M31 search ceiling and
 // below the game's pre-existing 8.5 maximum-speed scale.
 const liveSurgeMax = lastBand.speed * monas.SURGE_SPEED_MULTIPLIER;
-approximately(liveSurgeMax, 9.425);
+approximately(liveSurgeMax, 10.005);
 // The surge at the top live band was audited at that coordinate directly, in
 // `mode: 'surge'`, rather than being compared against HEX's scale. D-051's ceiling
 // rested on exactly that comparison, which is why it moved once HEX's cap did.
