@@ -16,4 +16,4 @@ compatibility_date = "2026-08-01"
 # a board with no storage would accept runs and rank nothing.
 [[kv_namespaces]]
 binding = "BOARD"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "95b36735eed64c82838c4e0779cdf196"
