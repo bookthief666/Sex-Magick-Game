@@ -270,8 +270,13 @@
 
     Game.prototype.returnToMenu = function globalBoardReturnToMenu(...args) {
       const result = originalReturnToMenu.apply(this, args);
+      // `returnToMenu` may reset or change the active mode. Read the completed
+      // recorder after it finishes instead, then refresh the same rite that was
+      // submitted so a MONAS player never lands on the HEX global board.
+      const completedRun = newestRun();
+      const completedRite = completedRun?.rite === 'MONAS' ? 'MONAS' : 'HEX';
       try {
-        submitNewestRun().then(() => refresh()).catch(() => {});
+        submitNewestRun().then(() => refresh(completedRite)).catch(() => {});
       } catch (_error) {}
       return result;
     };
