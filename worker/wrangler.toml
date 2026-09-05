@@ -1,6 +1,11 @@
 name = "sex-magick-rite-board"
 main = "index.js"
 compatibility_date = "2026-08-01"
+# workers.dev returned Cloudflare 1042 without this: the bundled Worker uses the
+# platform fetch surface and Cloudflare requires it to target public origins only.
+# Keep the flag in source so a future Wrangler/API deploy cannot silently undo the
+# production configuration that was proven live on the Fold.
+compatibility_flags = ["global_fetch_strictly_public"]
 
 # Cloudflare bundles with esbuild, which resolves the CommonJS `require` in
 # board.js and the shared `tools/rite-validation.js` it pulls in. The validation
@@ -9,11 +14,7 @@ compatibility_date = "2026-08-01"
 
 # Created with:
 #   npx wrangler kv namespace create BOARD --config worker/wrangler.toml
-# Paste the returned id below before the first deploy. Full steps, written to be
-# followed from a phone, are in docs/qa/m42-board-deploy-runbook.md.
-#
-# Until this id is real the Worker will not deploy, which is the correct failure:
-# a board with no storage would accept runs and rank nothing.
+# Full phone deployment/recovery steps are in docs/qa/m42-board-deploy-runbook.md.
 [[kv_namespaces]]
 binding = "BOARD"
 id = "95b36735eed64c82838c4e0779cdf196"
