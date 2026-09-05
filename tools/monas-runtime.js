@@ -1313,14 +1313,33 @@
   // recorder. D-004 requires the two Rites rank separately and they do: the board
   // key is `board:{rite}` and MONAS runs are stamped `MONAS`.
   //
-  // Kept in memory rather than persisted. HEX's history is its *local* leaderboard
-  // and has to survive a reload; MONAS has no local board of its own yet, and this
-  // exists solely so the newest finished run can be handed to the global board on
-  // the way to the menu. Writing it to storage would imply a durability nothing
-  // reads.
+  // MONAS now has the same local Rite Board contract as HEX, so its history must
+  // survive a reload as well as feed the global board.
 
   const MONAS_HISTORY_LIMIT = 20;
-  let monasHistory = [];
+  const MONAS_HISTORY_STORAGE_KEY = 'sex_magick_monas_history_v1';
+
+  function loadMonasHistory() {
+    try {
+      const raw = root.localStorage?.getItem(MONAS_HISTORY_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.slice(0, MONAS_HISTORY_LIMIT) : [];
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  let monasHistory = loadMonasHistory();
+
+  function persistMonasHistory() {
+    try {
+      root.localStorage?.setItem(
+        MONAS_HISTORY_STORAGE_KEY,
+        JSON.stringify(monasHistory.slice(0, MONAS_HISTORY_LIMIT))
+      );
+    } catch (_error) {}
+  }
 
   function beginMonasRun(gameInstance) {
     const state = gameInstance?.monasState;
@@ -1372,6 +1391,7 @@
 
     monasHistory.unshift(summary);
     monasHistory = monasHistory.slice(0, MONAS_HISTORY_LIMIT);
+    persistMonasHistory();
     return summary;
   }
 

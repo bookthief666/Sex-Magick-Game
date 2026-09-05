@@ -12,7 +12,29 @@ function approximately(actual, expected, epsilon = 1e-9) {
 assert.equal(progression.validateBands(), true);
 
 const expectedThresholds = [0, 6, 15, 27, 42, 60, 82, 108, 138];
+
 assert.deepEqual(progression.BANDS.map(band => band.gateThreshold), expectedThresholds);
+
+// Regression: the live composition begins a MONAS run in monas-runtime.js and the
+// outer progression wrapper resets progression immediately afterward. That reset
+// must preserve the run identity and start clock or finishMonasRun produces a
+// zero-duration record which the shared leaderboard validator rejects.
+const liveRun = {
+  gameMode: 'MONAS',
+  gameSpeed: 2.9,
+  monasState: {
+    ...monas.createMonasState(),
+    runId: 'monas_regression_run',
+    startedAt: '2026-09-05T00:00:00.000Z',
+    endedAt: null
+  },
+  player: {}
+};
+progression.resetMonasRun(liveRun);
+assert.equal(liveRun.monasState.runId, 'monas_regression_run');
+assert.equal(liveRun.monasState.startedAt, '2026-09-05T00:00:00.000Z');
+assert.equal(liveRun.monasState.endedAt, null);
+assert.equal(liveRun.monasState.gatesPassed, 0);
 
 // M47 re-tuned the MONAS curve steeper than the M31 frontier's candidates. The
 // bands no longer match those coordinates one-to-one; the envelope check below

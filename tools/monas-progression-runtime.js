@@ -255,8 +255,22 @@
     clearGateResidue(gameInstance);
 
     const monas = root.SexMagickMonas;
+
+    // The inner MONAS runtime has already begun this run before the progression
+    // wrapper gets here. Preserve its identity and clock while resetting the
+    // progression state; replacing them made honest MONAS runs fall back to
+    // startedAt === endedAt and therefore fail the shared duration validator.
+    const runIdentity = gameInstance.monasState ? {
+      runId: gameInstance.monasState.runId,
+      startedAt: gameInstance.monasState.startedAt,
+      endedAt: gameInstance.monasState.endedAt
+    } : null;
+
     if (monas && typeof monas.createMonasState === 'function') {
-      gameInstance.monasState = decorateState(monas.createMonasState());
+      gameInstance.monasState = decorateState({
+        ...monas.createMonasState(),
+        ...(runIdentity || {})
+      });
     } else if (gameInstance.monasState) {
       gameInstance.monasState = decorateState({ ...gameInstance.monasState, gatesPassed: 0, coherence: 0, surgeActive: false, surgeFramesRemaining: 0 });
     }

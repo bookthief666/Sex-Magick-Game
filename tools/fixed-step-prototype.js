@@ -658,15 +658,10 @@
   boardScript.onerror = () => console.error('[SEX MAGICK] Rite board runtime failed to load', boardScript.src);
   document.head.appendChild(boardScript);
 
-  // The global board is opt-in and the default build must stay network-free, so the
-  // flag is read here rather than inside the module: without `?globalBoard=1` the
-  // script is never even requested.
-  let globalBoardRequested = false;
-  try {
-    globalBoardRequested = new URLSearchParams(window.location.search || '').get('globalBoard') === '1';
-  } catch (_error) {}
-
-  if (globalBoardRequested && !document.querySelector('script[data-sex-magick-global-board]')) {
+  // The Worker has a production URL now, so load its client on ordinary builds.
+  // global-board-runtime.js remains the authority for activation and honours
+  // ?globalBoard=0 as the emergency network-off switch.
+  if (!document.querySelector('script[data-sex-magick-global-board]')) {
     const globalScript = document.createElement('script');
     globalScript.src = new URL('./global-board-runtime.js', currentSource).href;
     globalScript.async = false;
