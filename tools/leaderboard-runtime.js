@@ -2,23 +2,20 @@
  * The Rite board — a local, verified record of the player's own runs.
  *
  * The 1.0 board submitted an arbitrary integer to a shared hosted service with no
- * server-side validation, which D-004 ruled untrusted, and the Gate slice has
- * stubbed submission to local-only ever since. This module gives the owner a board
- * that works today without resolving that: it ranks the runs already stored in
- * `sex_magick_gate_slice_v1` by the thing 2.0 actually measures — gates cleared —
- * and shows which of them are internally consistent.
+ * server-side validation, which D-004 ruled untrusted. This module ranks the runs
+ * already stored by the two 2.0 rite recorders and shows which of them are
+ * internally consistent. HEX and MONAS remain separate categories because they run
+ * different ladders and measure different play.
  *
  * It performs no network I/O of any kind, by design and not by omission, and
- * `test-leaderboard-runtime.js` asserts that against this file's own source.
- * Enabling shared submission is an owner decision with prerequisites that are not
- * mine to make; D-040 records them.
+ * `test-leaderboard-runtime.js` asserts that against this file's own source. Shared
+ * submission lives in `global-board-runtime.js`; the local board remains useful
+ * offline and remains incapable of phoning anywhere.
  *
  * On verification, plainly: these checks establish that a run is *self-consistent*,
  * which catches corruption and casual editing of stored JSON. They are not security.
  * Anything running in the player's own browser can produce a consistent forgery, so
- * a verified mark here must never be read as proof against a determined cheat. That
- * needs server-side validation, which a guest session on the 1.0 service does not
- * provide.
+ * a verified mark here must never be read as proof against a determined cheat.
  */
 (function attachSexMagickRiteBoard(root) {
   'use strict';
@@ -28,13 +25,8 @@
 
   /**
    * The rules themselves live in `rite-validation.js`, because the global board
-   * (D-044) validates on the edge and both sides must run the same copy - a second
-   * copy in the Worker would drift the first time a threshold moved. This module
-   * keeps its own public surface unchanged and delegates the judging.
-   *
-   * Resolved rather than imported at module scope so the load order of plain
-   * `<script>` tags cannot matter: in the browser the validation module attaches to
-   * the same global, in Node it is required.
+   * validates on the edge and both sides must run the same copy. Resolved rather
+   * than imported at module scope so plain-script load order remains free.
    */
   function validation() {
     if (root.SexMagickRiteValidation) return root.SexMagickRiteValidation;
@@ -49,7 +41,10 @@
   const FALLBACK_BANDS = core ? core.FALLBACK_BANDS : Object.freeze([
     'MALKUTH', 'YESOD', 'TIPHARETH', 'GEBURAH', 'CHESED', 'BINAH', 'CHOKMAH', 'KETHER'
   ]);
-  const FALLBACK_THRESHOLDS = core ? core.FALLBACK_THRESHOLDS : Object.freeze([0, 6, 16, 32, 48, 68, 92, 120]);
+  const FALLBACK_THRESHOLDS = core ? core.FALLBACK_THRESHOLDS : Object.freeze([0, 9, 22, 40, 62, 88, 118, 152]);
+  const MONAS_BANDS = core ? core.MONAS_BANDS : Object.freeze([
+    'STILL', 'CURRENT-I', 'CURRENT-II', 'AXIS', 'ORBIT', 'CROWN', 'ASCENT', 'TORRENT', 'MAELSTROM'
+  ]);
 
   let installed = false;
   let installTimer = null;
@@ -96,41 +91,70 @@
     }
   }
 
-  function readHistory() {
+  function readHistory(rite = 'HEX') {
     try {
+      if (rite === 'MONAS') {
+        const monas = root.__SEX_MAGICK_MONAS__;
+        if (typeof monas?.getHistory === 'function') return monas.getHistory();
+        return [];
+      }
       const slice = root.__SEX_MAGICK_GATE_SLICE__;
       if (typeof slice?.getHistory === 'function') return slice.getHistory();
     } catch (_error) {}
     return [];
   }
 
-  function sliceOptions() {
-    try {
-      const fingerprint = root.__SEX_MAGICK_GATE_SLICE__?.getFingerprint?.();
-      if (fingerprint?.bandNames?.length) return { bandNames: fingerprint.bandNames };
-    } catch (_error) {}
-    return {};
+  /**
+   * The menu has one compact board surface, so show the rite the player most
+   * recently completed. This keeps the categories separate without doubling the
+   * Fold layout. On a fresh install with no history, HEX remains the initial view.
+   */
+  function newestCompletedRite() {
+    const candidates = [];
+    for (const rite of ['HEX', 'MONAS']) {
+      const history = readHistory(rite);
+      if (Array.isArray(history) && history[0]) candidates.push({ rite, run: history[0] });
+    }
+    if (candidates.length === 0) return 'HEX';
+    candidates.sort((a, b) => (parseTime(b.run?.endedAt) ?? 0) - (parseTime(a.run?.endedAt) ?? 0));
+    return candidates[0].rite;
   }
 
-  function render() {
+  function boardOptions(rite) {
+    if (rite === 'MONAS') return { rite: 'MONAS', bandNames: MONAS_BANDS };
+    try {
+      const fingerprint = root.__SEX_MAGICK_GATE_SLICE__?.getFingerprint?.();
+      if (fingerprint?.bandNames?.length) {
+        return { rite: 'HEX', bandNames: fingerprint.bandNames };
+      }
+    } catch (_error) {}
+    return { rite: 'HEX', bandNames: FALLBACK_BANDS };
+  }
+
+  function render(requestedRite = null) {
     const list = document.getElementById('leaderboardList');
     if (!list) return null;
 
-    // The visual QA suite asserts this exact text and treats any live content as a
+    // The visual QA suite asserts this surface and treats live content as a
     // determinism hazard. The board is deliberately inert under that flag.
     if (visualQaActive()) return null;
 
+    const rite = requestedRite === 'MONAS' ? 'MONAS'
+      : requestedRite === 'HEX' ? 'HEX'
+      : newestCompletedRite();
     const container = document.querySelector('.leaderboard-container');
     const title = document.querySelector('.leaderboard-title');
     if (container) container.hidden = false;
-    if (title) title.textContent = ':: THE RITE BOARD ::';
+    if (title) title.textContent = `:: THE RITE BOARD · ${rite} ::`;
 
-    const board = rankRuns(readHistory(), sliceOptions());
+    const board = rankRuns(readHistory(rite), boardOptions(rite));
 
     if (board.entries.length === 0) {
       list.textContent = board.totalRuns > 0
-        ? 'NO VERIFIED RUNS YET'
-        : 'NO RUNS YET · WALK THE GATE';
+        ? `NO VERIFIED ${rite} RUNS YET`
+        : rite === 'MONAS'
+          ? 'NO MONAS RUNS YET · HOLD THE CURRENT'
+          : 'NO HEX RUNS YET · WALK THE GATE';
       return board;
     }
 
@@ -149,8 +173,9 @@
   }
 
   /**
-   * A run only reaches the history when it ends, so the board has to redraw on the
-   * way back to the menu or the player's newest run is missing from it until reload.
+   * A recorder can sit outside this wrapper in the prototype chain. Render on the
+   * next task after returning to menu so whichever rite just ended has committed
+   * its summary before we choose the most recent history.
    */
   function installMenuRefresh() {
     try {
@@ -159,7 +184,9 @@
       if (typeof originalReturnToMenu !== 'function') return;
       Game.prototype.returnToMenu = function riteBoardReturnToMenu(...args) {
         const result = originalReturnToMenu.apply(this, args);
-        try { render(); } catch (_error) {}
+        setTimeout(() => {
+          try { render(); } catch (_error) {}
+        }, 0);
         return result;
       };
       Game.prototype.__riteBoardInstalled = true;
@@ -179,8 +206,10 @@
       validateRun,
       rankRuns,
       render,
-      getBoard() {
-        return rankRuns(readHistory(), sliceOptions());
+      getActiveRite: newestCompletedRite,
+      getBoard(rite = newestCompletedRite()) {
+        const resolved = rite === 'MONAS' ? 'MONAS' : 'HEX';
+        return rankRuns(readHistory(resolved), boardOptions(resolved));
       }
     });
 
@@ -205,6 +234,7 @@
     BOARD_SIZE,
     FALLBACK_BANDS,
     FALLBACK_THRESHOLDS,
+    MONAS_BANDS,
     validateRun,
     rankRuns,
     bandIndexFor,
