@@ -237,11 +237,12 @@ async function handleRunSubmit(request, env) {
     }, 422);
   }
 
+  const bandNames = issued.rite === 'MONAS' ? validation.MONAS_BANDS : validation.FALLBACK_BANDS;
   const entry = {
     name: sanitiseName(body?.name),
     gatesCleared: summary.gatesCleared,
     bandIndex: summary.bandIndex,
-    bandName: validation.FALLBACK_BANDS[summary.bandIndex] || '—',
+    bandName: bandNames[summary.bandIndex] || '—',
     score: validation.isFiniteNumber(summary.finalScore) ? summary.finalScore : 0,
     endedAt: summary.endedAt,
     rite: issued.rite
