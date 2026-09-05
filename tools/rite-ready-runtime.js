@@ -43,6 +43,44 @@
   }
 
   /**
+   * Only an actual rite-selection control should arm the threshold.
+   *
+   * startGame is also a programmatic lifecycle seam used by deterministic QA,
+   * diagnostics and a few internal harnesses. Treating every direct call as if a
+   * human had pressed RITE OF HEXAGRAM / RITE OF MONAS made those harnesses spend
+   * their whole run in the waiting animation instead of measuring gameplay. More
+   * importantly, it blurred the product rule: the pause exists because the player
+   * just chose a rite. Capture the selection event itself and consume it exactly
+   * once in startGame.
+   */
+  function armSelectedRiteStart(gameInstance) {
+    if (!gameInstance) return false;
+    gameInstance.__sexMagickRiteSelectionArmed = true;
+    return true;
+  }
+
+  function consumeSelectedRiteStart(gameInstance) {
+    if (!gameInstance) return false;
+    const armed = Boolean(gameInstance.__sexMagickRiteSelectionArmed);
+    gameInstance.__sexMagickRiteSelectionArmed = false;
+    return armed;
+  }
+
+  function installSelectionArm() {
+    if (typeof document === 'undefined' || root.__sexMagickRiteSelectionArmInstalled) return;
+    for (const id of ['startHexBtn', 'startMonasBtn']) {
+      const button = document.getElementById(id);
+      if (!button) continue;
+      button.addEventListener('click', () => {
+        try {
+          if (typeof game !== 'undefined' && game) armSelectedRiteStart(game);
+        } catch (_error) {}
+      }, { capture: true });
+    }
+    root.__sexMagickRiteSelectionArmInstalled = true;
+  }
+
+  /**
    * Begin actual play on the first gameplay input after rite selection.
    *
    * Recorder clocks are rebased here so time spent admiring the suspended glyph is
@@ -218,6 +256,7 @@
 
     installed = true;
     ensureStyle();
+    installSelectionArm();
 
     const originalStartGame = Game.prototype.startGame;
     const originalRestartGame = Game.prototype.restartGame;
@@ -228,8 +267,13 @@
     const originalPlayerDraw = Player.prototype.draw;
 
     Game.prototype.startGame = function startRiteAtThreshold(...args) {
-      prepareRiteReadyState(this);
+      const selectedByPlayer = consumeSelectedRiteStart(this);
+      if (selectedByPlayer) prepareRiteReadyState(this);
+      else this.awaitingRiteInput = false;
+
       const result = originalStartGame.apply(this, args);
+      if (!selectedByPlayer) return result;
+
       if (!isPlaying(this) || !this.player) {
         this.awaitingRiteInput = false;
         clearReadyPresentation();
@@ -265,7 +309,6 @@
         ? currentTime
         : (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
       this.__sexMagickRiteReadyVisualFrames = Number(this.__sexMagickRiteReadyVisualFrames || 0) + 1;
-      this.frames = this.__sexMagickRiteReadyVisualFrames;
       this.tunnelOffset = Number(this.tunnelOffset || 0) + 0.35;
 
       const height = Number(this.canvas?.height);
@@ -275,7 +318,9 @@
       }
 
       // Render-only threshold: no updateGameObjects, no pillars, no gravity, no
-      // scoring and no run progression until the deliberate second input.
+      // scoring and no run progression until the deliberate second input. Keep
+      // game.frames at zero as well: ready animation owns its own visual counter,
+      // so telemetry and fixed-step diagnostics still mean "simulation frames".
       this.drawScene(now);
       if (isReady(this)) {
         if (typeof this.scheduleFixedStepFrame === 'function') this.scheduleFixedStepFrame();
@@ -297,12 +342,14 @@
 
     Game.prototype.returnToMenu = function clearRiteReadyOnMenu(...args) {
       this.awaitingRiteInput = false;
+      this.__sexMagickRiteSelectionArmed = false;
       clearReadyPresentation();
       return originalReturnToMenu.apply(this, args);
     };
 
     Game.prototype.restartGame = function restartWithFreshGlobalToken(...args) {
       this.awaitingRiteInput = false;
+      this.__sexMagickRiteSelectionArmed = false;
       clearReadyPresentation();
       const result = originalRestartGame.apply(this, args);
       const rite = this.gameMode === 'MONAS' ? 'MONAS' : 'HEX';
@@ -321,6 +368,10 @@
       mode: 'deliberate-second-input-threshold',
       version: VERSION,
       isReady() { return typeof game !== 'undefined' ? isReady(game) : false; },
+      armSelectedRiteStart() {
+        try { return typeof game !== 'undefined' ? armSelectedRiteStart(game) : false; }
+        catch (_error) { return false; }
+      },
       getSnapshot() {
         if (typeof game === 'undefined' || !game) return null;
         return {
@@ -353,6 +404,8 @@
     prepareRiteReadyState,
     activateRiteReadyState,
     isReady,
+    armSelectedRiteStart,
+    consumeSelectedRiteStart,
     install,
     scheduleInstall
   });
