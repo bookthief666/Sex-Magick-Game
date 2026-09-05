@@ -19,10 +19,11 @@ const expectedProfiles: Record<string, string> = {
   'webkit-mobile-smoke': 'tall-phone'
 };
 
-async function openGame(page: import('@playwright/test').Page) {
+async function openGame(page: import('@playwright/test').Page, extraQuery = '') {
   const pageErrors: string[] = [];
   page.on('pageerror', error => pageErrors.push(error.message));
-  await page.goto('/index.html?assetMode=offline&renderDpr=native', { waitUntil: 'domcontentloaded' });
+  const query = `assetMode=offline&renderDpr=native${extraQuery ? `&${extraQuery}` : ''}`;
+  await page.goto(`/index.html?${query}`, { waitUntil: 'domcontentloaded' });
   await page.locator('#game-container').waitFor({ state: 'visible' });
   await page.locator('canvas').first().waitFor({ state: 'visible' });
   await page.waitForFunction(() => Boolean((window as any).__SEX_MAGICK_VIEWPORT__?.getSnapshot?.()));
@@ -147,8 +148,13 @@ test('release shell styling is identical with every CDN blocked', async ({ page,
     return route.continue();
   });
 
-  const onlinePageErrors = await openGame(page);
-  const blockedPageErrors = await openGame(blockedPage);
+  // The live global board fetches from the Worker on the online page but never on
+  // the CDN-blocked one, and its rendered rows sit above the title and buttons -
+  // so leaving it on makes this styling-parity check race the board fetch, not the
+  // font/CDN independence it exists to verify. The board is live network data and
+  // cannot belong in an online-vs-blocked comparison, so disable it on both sides.
+  const onlinePageErrors = await openGame(page, 'globalBoard=0');
+  const blockedPageErrors = await openGame(blockedPage, 'globalBoard=0');
   await Promise.all([
     page.evaluate(() => document.fonts?.ready),
     blockedPage.evaluate(() => document.fonts?.ready)
