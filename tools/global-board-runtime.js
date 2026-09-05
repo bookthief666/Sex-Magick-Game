@@ -41,7 +41,7 @@
   // Set once the Worker is deployed. Overridable per-load by `?globalBoardUrl=`,
   // which is how the browser suite points at a local stub without a deployment and
   // how the owner can try a preview deployment without editing the file.
-  const DEFAULT_BOARD_URL = '';
+  const DEFAULT_BOARD_URL = 'https://sex-magick-rite-board.manuel-orrantia.workers.dev';
 
   let installed = false;
   let installTimer = null;
