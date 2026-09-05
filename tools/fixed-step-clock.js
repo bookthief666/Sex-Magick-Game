@@ -138,6 +138,24 @@
       globalName: 'SexMagickAssetResilience'
     },
     {
+      // Installs after fixed-step/collision ownership exists and wraps the final
+      // gameplay entry seams. Selecting a rite now arms a render-only threshold;
+      // the deliberate second input begins physics and progression.
+      path: './rite-ready-runtime.js',
+      selector: 'script[data-sex-magick-rite-ready-runtime]',
+      attribute: 'data-sex-magick-rite-ready-runtime',
+      globalName: 'SexMagickRiteReady'
+    },
+    {
+      // A local-only profile control for the deployed global board. It shares the
+      // Worker's 18-character sanitisation contract and never blocks gameplay if
+      // storage is unavailable.
+      path: './leaderboard-profile-runtime.js',
+      selector: 'script[data-sex-magick-leaderboard-profile-runtime]',
+      attribute: 'data-sex-magick-leaderboard-profile-runtime',
+      globalName: 'SexMagickLeaderboardProfile'
+    },
+    {
       path: './monas-progression-runtime.js',
       selector: 'script[data-sex-magick-monas-progression-runtime]',
       attribute: 'data-sex-magick-monas-progression-runtime',
