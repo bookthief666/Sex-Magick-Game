@@ -81,6 +81,10 @@ try {
   // keeps WebAudio creation inside the user's start gesture on mobile browsers.
   await page.evaluate(() => document.getElementById('startHexBtn').click());
   await page.waitForFunction(() => document.documentElement.dataset.sephirah === 'MALKUTH', null, { timeout: 10000 });
+  // The current game deliberately separates rite selection from the actual run
+  // start. Release that ready state through the same deterministic gameplay input
+  // seam before exercising pause/resume below.
+  await page.evaluate(() => game.playerJump());
 
   const malkuth = await page.evaluate(() => ({
     snapshot: window.__SEX_MAGICK_M35_BOOTSTRAP__.getSnapshot(),
