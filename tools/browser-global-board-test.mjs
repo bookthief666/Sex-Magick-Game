@@ -6,9 +6,9 @@
 // in-memory KV. A run submitted by the browser is judged by the code that will
 // judge it in production.
 //
-// The first section is the one that matters most: with the flag absent, the page
-// must make zero external requests. That is the guarantee D-040 shipped and the
-// global board is not allowed to cost it.
+// The deployed board is now on by default. The first section therefore protects
+// the explicit emergency-off contract: `?globalBoard=0` must make zero board
+// requests and leave the local Rite board intact.
 import { chromium } from '@playwright/test';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -93,10 +93,10 @@ async function openGame(query) {
   return { context, page, external };
 }
 
-// --- flag off: the default build stays exactly as network-free as it was --------
+// --- explicit off: emergency switch must stay genuinely network-free ----------
 
 {
-  const { context, page, external } = await openGame('assetMode=offline&gateSlice=1');
+  const { context, page, external } = await openGame('assetMode=offline&gateSlice=1&globalBoard=0');
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITE_BOARD__), null, { timeout: 20000 });
   await sleep(1200);
 
@@ -107,19 +107,14 @@ async function openGame(query) {
     globalSection: Boolean(document.getElementById('global-rite-board'))
   }));
 
-  // The page has always loaded Tailwind, Google Fonts and its audio from CDNs, so
-  // the guarantee that matters is the one D-040 actually made and that
-  // browser-leaderboard-test.mjs already asserts: no *board* traffic. Anything
-  // reaching a board or score service is the regression this is watching for.
   const boardTraffic = external.filter(url => /board|leaderboard|score|lootlocker/i.test(url));
   report.flagOff = { external, boardTraffic, ...state };
 
   try {
     assert.deepEqual(boardTraffic, [],
-      `the default build must send no board traffic, saw: ${boardTraffic.join(', ')}`);
-    assert.equal(state.globalInstalled, false, 'the global board must not install without its flag');
-    assert.equal(state.scriptRequested, false, 'without the flag the script must not even be requested');
-    assert.equal(state.globalSection, false, 'no global board section may be rendered');
+      `globalBoard=0 must send no board traffic, saw: ${boardTraffic.join(', ')}`);
+    assert.equal(state.globalInstalled, false, 'the emergency-off flag must prevent global installation');
+    assert.equal(state.globalSection, false, 'no global board section may be rendered while explicitly off');
     assert.equal(state.localBoardPresent, true, 'the local Rite board must be unaffected');
   } catch (error) {
     failures.push(`flag off: ${error.message}`);
@@ -127,13 +122,14 @@ async function openGame(query) {
   await context.close();
 }
 
-// --- flag on: a real run submits, is judged by the real handler, and renders -----
+// --- production default on: a real run submits and renders --------------------
 
 {
   const { context, page } = await openGame(
-    `assetMode=offline&gateSlice=1&globalBoard=1&globalBoardUrl=${encodeURIComponent(WORKER_URL)}`
+    `assetMode=offline&gateSlice=1&globalBoardUrl=${encodeURIComponent(WORKER_URL)}`
   );
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GLOBAL_BOARD__), null, { timeout: 20000 });
+  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_RITE_READY__), null, { timeout: 20000 });
 
   const submission = await page.evaluate(async () => {
     const api = window.__SEX_MAGICK_GLOBAL_BOARD__;
@@ -148,12 +144,15 @@ async function openGame(query) {
     // startGame issues its own token through the installed hook; wait for it.
     await new Promise(resolve => setTimeout(resolve, 800));
     const tokenAfterStart = api.getRunToken();
+    const awaitingBeforeInput = Boolean(game.awaitingRiteInput);
+    const framesBeforeInput = game.frames;
+    game.playerJump();
+    const awaitingAfterInput = Boolean(game.awaitingRiteInput);
 
     // This run has to survive both bounds at once, which is the point: 10 gates
     // needs at least 4s to be a possible pace, and the claim may not exceed the age
     // of the token plus the clock grace. Nine seconds of play for ten gates sits
-    // comfortably inside both - and an earlier draft of this test, claiming 20
-    // gates in 0.8s, was correctly refused by the pace rule.
+    // comfortably inside both.
     game.gateSliceState.gatesCleared = 10;
     game.gateSliceState.bandIndex = 1;
     game.gateSliceState.gateOffers = 3;
@@ -174,6 +173,9 @@ async function openGame(query) {
       explicitToken: Boolean(explicitToken),
       tokenAfterStart: Boolean(tokenAfterStart),
       tokenBeforeSubmit: Boolean(tokenBeforeSubmit),
+      awaitingBeforeInput,
+      awaitingAfterInput,
+      framesBeforeInput,
       historyLength: window.__SEX_MAGICK_GATE_SLICE__?.getHistory?.()?.length ?? null,
       newestRunId: window.__SEX_MAGICK_GATE_SLICE__?.getHistory?.()?.[0]?.runId ?? null,
       result: api.getLastResult()
@@ -194,6 +196,12 @@ async function openGame(query) {
       'startGame must obtain a token through its hook, not only when called directly');
     assert.equal(submission.tokenBeforeSubmit, true,
       'the token must survive the run and still be held when the run ends');
+    assert.equal(submission.awaitingBeforeInput, true,
+      'selecting HEX must leave the avatar at the deliberate ready threshold');
+    assert.equal(submission.awaitingAfterInput, false,
+      'the first gameplay input must release the ready threshold');
+    assert.ok(submission.framesBeforeInput >= 0,
+      'the ready threshold may animate presentation but must remain a valid state');
     assert.equal(submission.historyLength, 1, 'the run must have been recorded by finishRun');
     assert.ok(submission.result, 'a completed run must produce a submission result');
     assert.equal(submission.result.accepted, true,
@@ -203,16 +211,16 @@ async function openGame(query) {
     assert.match(view.section, /NOT ANTI-CHEAT/,
       'the board must state what its verification does not establish');
   } catch (error) {
-    failures.push(`flag on: ${error.message}`);
+    failures.push(`default on: ${error.message}`);
   }
   await context.close();
 }
 
-// --- flag on: a tampered run is refused by the server and never reaches the DOM --
+// --- default on: a tampered run is refused and never reaches the DOM -----------
 
 {
   const { context, page } = await openGame(
-    `assetMode=offline&gateSlice=1&globalBoard=1&globalBoardUrl=${encodeURIComponent(WORKER_URL)}`
+    `assetMode=offline&gateSlice=1&globalBoardUrl=${encodeURIComponent(WORKER_URL)}`
   );
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GLOBAL_BOARD__), null, { timeout: 20000 });
 
@@ -223,6 +231,7 @@ async function openGame(query) {
     game.gameMode = 'HEX';
     game.startGame();
     await new Promise(resolve => setTimeout(resolve, 400));
+    game.playerJump();
 
     // The forgery D-040's local board already catches, now put to the server.
     game.gateSliceState.gatesCleared = 99999;
@@ -261,7 +270,7 @@ async function openGame(query) {
 // scored against the wrong thresholds.
 {
   const { context, page } = await openGame(
-    `assetMode=offline&globalBoard=1&globalBoardUrl=${encodeURIComponent(WORKER_URL)}`
+    `assetMode=offline&globalBoardUrl=${encodeURIComponent(WORKER_URL)}`
   );
   await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_GLOBAL_BOARD__), null, { timeout: 20000 });
 
@@ -270,6 +279,9 @@ async function openGame(query) {
     game.gameMode = 'MONAS';
     game.startGame();
     await new Promise(resolve => setTimeout(resolve, 800));
+    const awaitingBeforeInput = Boolean(game.awaitingRiteInput);
+    game.playerJump();
+    const awaitingAfterInput = Boolean(game.awaitingRiteInput);
 
     // Same shape of claim as the HEX case above: a pace the spawn rate allows, and
     // a duration the token's own age can support.
@@ -288,6 +300,7 @@ async function openGame(query) {
     const hexBoard = await api.fetchBoard('HEX');
     const monasBoard = await api.fetchBoard('MONAS');
     return { summaryRite: summary?.rite, historyLength, result,
+             awaitingBeforeInput, awaitingAfterInput,
              hexEntries: hexBoard?.entries?.length ?? null,
              hexRunIds: (hexBoard?.entries || []).map(entry => entry.runId),
              monasEntries: monasBoard?.entries?.length ?? null,
@@ -297,6 +310,8 @@ async function openGame(query) {
   report.monas = monas;
 
   try {
+    assert.equal(monas.awaitingBeforeInput, true, 'MONAS must share the deliberate ready threshold');
+    assert.equal(monas.awaitingAfterInput, false, 'first MONAS input must begin the hold/release rite');
     assert.equal(monas.summaryRite, 'MONAS', 'the recorder must stamp the rite');
     assert.equal(monas.historyLength, 1, 'the run must have been recorded');
     assert.equal(monas.result?.accepted, true,
@@ -304,12 +319,13 @@ async function openGame(query) {
     assert.equal(monas.monasEntries, 1, 'the MONAS board must hold exactly this run');
     // The HEX board is not empty here - an earlier block in this file submitted a
     // HEX run to the same Worker - so the separation to assert is that *this* run
-    // is absent from it, not that the board has nothing on it. The first draft
-    // asserted the latter and failed for the wrong reason.
+    // is absent from it, not that the board has nothing on it.
     assert.ok(monas.submittedRunId, 'the MONAS run must have an id to look for');
     assert.ok(!monas.hexRunIds.includes(monas.submittedRunId),
       `a MONAS run must never reach the HEX board - D-004 (HEX holds ${JSON.stringify(monas.hexRunIds)})`);
     assert.equal(monas.monasTop?.gatesCleared, 10);
+    assert.equal(monas.monasTop?.bandName, 'CURRENT-I',
+      'MONAS entries must carry MONAS band names rather than HEX Sephiroth labels');
   } catch (error) {
     failures.push(`MONAS board: ${error.message}`);
   }
