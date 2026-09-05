@@ -139,8 +139,11 @@ async function openGame(query) {
     const explicitToken = await api.beginRun('HEX');
     const hadToken = Boolean(api.getRunToken());
 
+    // Exercise the actual rite-selection control. The ready runtime deliberately
+    // arms only from this user-facing selection event; direct startGame() calls
+    // remain a programmatic seam for deterministic harnesses and must not arm it.
     game.gameMode = 'HEX';
-    game.startGame();
+    document.getElementById('startHexBtn').click();
     // startGame issues its own token through the installed hook; wait for it.
     await new Promise(resolve => setTimeout(resolve, 800));
     const tokenAfterStart = api.getRunToken();
@@ -277,7 +280,7 @@ async function openGame(query) {
   const monas = await page.evaluate(async () => {
     const api = window.__SEX_MAGICK_GLOBAL_BOARD__;
     game.gameMode = 'MONAS';
-    game.startGame();
+    document.getElementById('startMonasBtn').click();
     await new Promise(resolve => setTimeout(resolve, 800));
     const awaitingBeforeInput = Boolean(game.awaitingRiteInput);
     game.playerJump();
