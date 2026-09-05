@@ -14,7 +14,7 @@ function run(overrides = {}) {
     endedAt,
     endReason: 'crash',
     gatesCleared: 20,
-    bandIndex: 2,
+    bandIndex: 1,
     gnosis: 4,
     gnosisCapacity: 10,
     gateOffers: 3,
@@ -103,10 +103,10 @@ function run(overrides = {}) {
 {
   const thresholds = board.FALLBACK_THRESHOLDS;
   assert.equal(board.bandIndexFor(0, thresholds), 0);
-  assert.equal(board.bandIndexFor(5, thresholds), 0);
-  assert.equal(board.bandIndexFor(6, thresholds), 1);
-  assert.equal(board.bandIndexFor(119, thresholds), 6);
-  assert.equal(board.bandIndexFor(120, thresholds), 7);
+  assert.equal(board.bandIndexFor(8, thresholds), 0);
+  assert.equal(board.bandIndexFor(9, thresholds), 1);
+  assert.equal(board.bandIndexFor(151, thresholds), 6);
+  assert.equal(board.bandIndexFor(152, thresholds), 7);
   assert.equal(board.bandIndexFor(400, thresholds), 7);
 }
 
@@ -114,16 +114,16 @@ function run(overrides = {}) {
 
 {
   const history = [
-    run({ runId: 'a', gatesCleared: 20, bandIndex: 2, finalScore: 100 }),
-    run({ runId: 'b', gatesCleared: 50, bandIndex: 4, finalScore: 300, endedAt: '2026-08-13T10:20:00.000Z' }),
-    run({ runId: 'c', gatesCleared: 6, bandIndex: 1, finalScore: 40 })
+    run({ runId: 'a', gatesCleared: 20, bandIndex: 1, finalScore: 100 }),
+    run({ runId: 'b', gatesCleared: 50, bandIndex: 3, finalScore: 300, endedAt: '2026-08-13T10:20:00.000Z' }),
+    run({ runId: 'c', gatesCleared: 6, bandIndex: 0, finalScore: 40 })
   ];
   const result = board.rankRuns(history);
   assert.deepEqual(result.entries.map(entry => entry.runId), ['b', 'a', 'c']);
   assert.deepEqual(result.entries.map(entry => entry.rank), [1, 2, 3]);
   assert.equal(result.verifiedRuns, 3);
   assert.equal(result.totalRuns, 3);
-  assert.equal(result.entries[0].bandName, 'CHESED');
+  assert.equal(result.entries[0].bandName, 'GEBURAH');
 }
 
 {
