@@ -21,35 +21,121 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createObstacleGrammarApi(root) {
   'use strict';
 
-  const GRAMMAR_VERSION = 1;
+  const GRAMMAR_VERSION = 2;
   const STORAGE_KEY = 'sex_magick_patterns_v1';
   const DEFAULT_MAX_RUNS = 20;
   const DEFAULT_MAX_SPAWNS = 300;
   const MIN_TOP_RATIO = 0.22;
   const MAX_TOP_RATIO = 0.78;
   const MAX_RATIO_DELTA = 0.18;
+  // The base cycle, kept as the default and as the shape every fingerprint and
+  // replay tool already reports.
   const FAMILY_CYCLE = Object.freeze(['safe', 'pressure', 'recovery', 'pressure', 'climax', 'recovery']);
 
+  /**
+   * M40.3: the cycle now depends on how far the run has climbed.
+   *
+   * Until now a single fixed rotation ran from MALKUTH to KETHER, so the only
+   * thing that changed late in a run was speed and gap - the *shapes* were the
+   * same six beats a player had already seen in the first minute. That is why
+   * late play stopped surprising.
+   *
+   * Each tier keeps the same six-beat length, so the cursor arithmetic and the
+   * pattern-per-spawn cadence are unchanged; only which family is asked for on
+   * a given beat differs. Early tiers give recovery beats freely; late tiers
+   * spend them sparingly and stack climaxes.
+   */
+  const FAMILY_CYCLES = Object.freeze([
+    // MALKUTH, YESOD - learning the vocabulary. No climax at all.
+    Object.freeze(['safe', 'pressure', 'recovery', 'safe', 'pressure', 'recovery']),
+    // TIPHARETH, GEBURAH - the historical cycle, unchanged.
+    FAMILY_CYCLE,
+    // CHESED, BINAH - climaxes twice a cycle, one fewer rest.
+    Object.freeze(['pressure', 'climax', 'recovery', 'pressure', 'climax', 'safe']),
+    // CHOKMAH, KETHER - three climaxes and a single recovery beat.
+    Object.freeze(['pressure', 'climax', 'pressure', 'climax', 'recovery', 'climax'])
+  ]);
+
+  function cycleForBand(bandIndex) {
+    const band = Math.max(0, Math.floor(finiteNumber(bandIndex, 0)));
+    const tier = Math.min(FAMILY_CYCLES.length - 1, Math.floor(band / 2));
+    return FAMILY_CYCLES[tier];
+  }
+
+  // `motion` is the vertical swing in pixels a pattern asks its walls to make, and
+  // `gapScale` how open or tight it wants them. Both are properties of the named
+  // pattern rather than per-spawn rolls, so each pattern has a recognisable
+  // character and - critically - the seeded random stream is untouched, which
+  // keeps the existing 252-case reachability audit valid.
+  //
+  // Neither value is trusted at face value at runtime. The variety runtime clamps
+  // both so the corridor left after scaling and swing is never narrower than the
+  // gap the solver has verified, which is why the boldest values here are safe:
+  // they simply stop being reachable once a band's gap has nothing left to give.
   const PATTERN_LIBRARY = Object.freeze({
     HEX: Object.freeze([
-      Object.freeze({ id: 'hex.axis-hold', family: 'safe', kind: 'offsets', values: [0, 0, 0] }),
-      Object.freeze({ id: 'hex.gentle-step', family: 'safe', kind: 'offsets', values: [0, -0.05, -0.1, -0.05, 0], mirror: true }),
-      Object.freeze({ id: 'hex.staircase', family: 'pressure', kind: 'offsets', values: [0, -0.08, -0.16, -0.24, -0.16], mirror: true }),
-      Object.freeze({ id: 'hex.ascending-triad', family: 'pressure', kind: 'offsets', values: [0, -0.1, -0.2, -0.1, 0], mirror: true }),
-      Object.freeze({ id: 'hex.return-to-axis', family: 'recovery', kind: 'center', values: [0, 0.35, 0.7, 1] }),
-      Object.freeze({ id: 'hex.square-breath', family: 'recovery', kind: 'offsets', values: [0, 0.05, 0, -0.05, 0], mirror: true }),
-      Object.freeze({ id: 'hex.cross-quadrants', family: 'climax', kind: 'offsets', values: [0, -0.14, 0.02, 0.16, 0, -0.12, 0], mirror: true }),
-      Object.freeze({ id: 'hex.lightning-flash', family: 'climax', kind: 'offsets', values: [0, -0.12, -0.22, -0.08, 0.08, 0.18, 0], mirror: true })
+      Object.freeze({ id: 'hex.axis-hold', family: 'safe', kind: 'offsets', values: [0, 0, 0], motion: 0, gapScale: 1.12 }),
+      Object.freeze({ id: 'hex.gentle-step', family: 'safe', kind: 'offsets', values: [0, -0.05, -0.1, -0.05, 0], mirror: true, motion: 8, gapScale: 1.05 }),
+      Object.freeze({ id: 'hex.staircase', family: 'pressure', kind: 'offsets', values: [0, -0.08, -0.16, -0.24, -0.16], mirror: true, motion: 0, gapScale: 0.94 }),
+      Object.freeze({ id: 'hex.ascending-triad', family: 'pressure', kind: 'offsets', values: [0, -0.1, -0.2, -0.1, 0], mirror: true, motion: 14, gapScale: 1 }),
+      Object.freeze({ id: 'hex.return-to-axis', family: 'recovery', kind: 'center', values: [0, 0.35, 0.7, 1], motion: 6, gapScale: 1.15 }),
+      Object.freeze({ id: 'hex.square-breath', family: 'recovery', kind: 'offsets', values: [0, 0.05, 0, -0.05, 0], mirror: true, motion: 18, gapScale: 1.08 }),
+      Object.freeze({ id: 'hex.cross-quadrants', family: 'climax', kind: 'offsets', values: [0, -0.14, 0.02, 0.16, 0, -0.12, 0], mirror: true, motion: 20, gapScale: 0.95 }),
+      Object.freeze({ id: 'hex.lightning-flash', family: 'climax', kind: 'offsets', values: [0, -0.12, -0.22, -0.08, 0.08, 0.18, 0], mirror: true, motion: 26, gapScale: 0.9 }),
+
+      // M40.3. Every entry below was materialized across the whole legal anchor
+      // range (0.22-0.78) in both directions before being added; the envelope
+      // check in materializePattern is what makes that a proof rather than a
+      // hope. They exist because the owner asked for "more patterns for the
+      // player to learn" - the library had exactly two per family, so a player
+      // saw the same eight shapes from MALKUTH to KETHER.
+      Object.freeze({ id: 'hex.open-corridor', family: 'safe', kind: 'offsets', values: [0, 0, 0.03, 0, 0], motion: 4, gapScale: 1.14 }),
+      // Descends and *holds* there. Every other pressure shape returns toward
+      // the anchor; this one makes the player commit to low ground and stay.
+      Object.freeze({ id: 'hex.plunge', family: 'pressure', kind: 'offsets', values: [0, 0.09, 0.17, 0.17, 0.09], mirror: true, motion: 10, gapScale: 0.98 }),
+      // Alternating without a rest beat - the read is rhythm rather than slope.
+      Object.freeze({ id: 'hex.pendulum', family: 'pressure', kind: 'offsets', values: [0, -0.11, 0.06, -0.11, 0], mirror: true, motion: 16, gapScale: 0.97 }),
+      Object.freeze({ id: 'hex.settle-drift', family: 'recovery', kind: 'offsets', values: [0, 0.04, 0.06, 0.03, 0], mirror: true, motion: 10, gapScale: 1.12 }),
+      // Full-amplitude strikes back to the same line: punishing but learnable,
+      // because the return is always to where you started.
+      Object.freeze({ id: 'hex.serpent-strike', family: 'climax', kind: 'offsets', values: [0, -0.15, 0, -0.15, 0, -0.1, 0], mirror: true, motion: 24, gapScale: 0.92 }),
+      // serpent-strike inverted - the same rhythm driving down instead of up,
+      // so the learned shape has a mirror the player must also learn.
+      Object.freeze({ id: 'hex.hammerfall', family: 'climax', kind: 'offsets', values: [0, 0.16, 0.02, 0.17, 0.03, 0.12, 0], mirror: true, motion: 22, gapScale: 0.93 })
     ]),
     MONAS: Object.freeze([
-      Object.freeze({ id: 'monas.soft-orbit', family: 'safe', kind: 'offsets', values: [0, 0.04, 0, -0.04, 0], mirror: true }),
-      Object.freeze({ id: 'monas.still-point', family: 'safe', kind: 'offsets', values: [0, 0, 0, 0] }),
-      Object.freeze({ id: 'monas.mercurial-wave', family: 'pressure', kind: 'offsets', values: [0, -0.09, -0.16, -0.08, 0.04, 0.12, 0.06], mirror: true }),
-      Object.freeze({ id: 'monas.lunar-sweep', family: 'pressure', kind: 'offsets', values: [0, -0.07, -0.14, -0.08, 0.02, 0.1, 0.04], mirror: true }),
-      Object.freeze({ id: 'monas.return-flow', family: 'recovery', kind: 'center', values: [0, 0.25, 0.55, 0.8, 1] }),
-      Object.freeze({ id: 'monas.orbit-settle', family: 'recovery', kind: 'offsets', values: [0, 0.06, 0.03, 0, -0.03, 0], mirror: true }),
-      Object.freeze({ id: 'monas.serpent-current', family: 'climax', kind: 'offsets', values: [0, -0.12, -0.2, -0.08, 0.08, 0.18, 0.06, -0.06, 0], mirror: true }),
-      Object.freeze({ id: 'monas.caduceus-wave', family: 'climax', kind: 'offsets', values: [0, -0.1, -0.18, -0.06, 0.1, 0.16, 0.04, -0.08, 0], mirror: true })
+      Object.freeze({ id: 'monas.soft-orbit', family: 'safe', kind: 'offsets', values: [0, 0.04, 0, -0.04, 0], mirror: true, motion: 10, gapScale: 1.1 }),
+      Object.freeze({ id: 'monas.still-point', family: 'safe', kind: 'offsets', values: [0, 0, 0, 0], motion: 0, gapScale: 1.15 }),
+      Object.freeze({ id: 'monas.mercurial-wave', family: 'pressure', kind: 'offsets', values: [0, -0.09, -0.16, -0.08, 0.04, 0.12, 0.06], mirror: true, motion: 16, gapScale: 1 }),
+      Object.freeze({ id: 'monas.lunar-sweep', family: 'pressure', kind: 'offsets', values: [0, -0.07, -0.14, -0.08, 0.02, 0.1, 0.04], mirror: true, motion: 12, gapScale: 0.96 }),
+      Object.freeze({ id: 'monas.return-flow', family: 'recovery', kind: 'center', values: [0, 0.25, 0.55, 0.8, 1], motion: 8, gapScale: 1.14 }),
+      Object.freeze({ id: 'monas.orbit-settle', family: 'recovery', kind: 'offsets', values: [0, 0.06, 0.03, 0, -0.03, 0], mirror: true, motion: 5, gapScale: 1.06 }),
+      Object.freeze({ id: 'monas.serpent-current', family: 'climax', kind: 'offsets', values: [0, -0.12, -0.2, -0.08, 0.08, 0.18, 0.06, -0.06, 0], mirror: true, motion: 22, gapScale: 0.93 }),
+      Object.freeze({ id: 'monas.caduceus-wave', family: 'climax', kind: 'offsets', values: [0, -0.1, -0.18, -0.06, 0.1, 0.16, 0.04, -0.08, 0], mirror: true, motion: 24, gapScale: 0.9 }),
+
+      // M40.3. Four of these were rejected by the reachability solver on first
+      // submission - three invalid, one marginal - despite all of them passing
+      // the MAX_RATIO_DELTA envelope check. The envelope is necessary and not
+      // sufficient: it bounds how far a gap may move between pillars, while the
+      // solver asks whether a player can actually be in both places in time at
+      // 8.5 speed and a 110px corridor. The amplitudes below are the ones that
+      // came back verified, not the ones originally designed.
+      //
+      // Same envelope proof as the HEX additions above. MONAS glides
+      // rather than jumps, so these lean on sustained curvature where the HEX
+      // additions lean on sharp returns.
+      Object.freeze({ id: 'monas.long-glide', family: 'safe', kind: 'offsets', values: [0, 0.02, 0.04, 0.02, 0], motion: 6, gapScale: 1.16 }),
+      Object.freeze({ id: 'monas.spiral-tighten', family: 'pressure', kind: 'offsets', values: [0, -0.06, -0.11, -0.05, 0.02, 0.07], mirror: true, motion: 12, gapScale: 1.02 }),
+      // spiral-tighten's inverse: opens downward first, so the glide has to be
+      // fought rather than ridden.
+      Object.freeze({ id: 'monas.undertow', family: 'pressure', kind: 'offsets', values: [0, 0.07, 0.12, 0.06, -0.01, -0.06], mirror: true, motion: 11, gapScale: 1.02 }),
+      // A 'center' recovery here came back invalid from the solver even at the
+      // shipped return-flow's exact values - the motion/gapScale envelope, not
+      // the shape, is what MONAS refuses. This drifts gently *up* where
+      // orbit-settle drifts down, so recovery still gains a distinct third beat.
+      Object.freeze({ id: 'monas.rising-calm', family: 'recovery', kind: 'offsets', values: [0, -0.03, -0.05, -0.02, 0], mirror: true, motion: 9, gapScale: 1.15 }),
+      Object.freeze({ id: 'monas.double-helix', family: 'climax', kind: 'offsets', values: [0, -0.1, 0.02, 0.12, 0, -0.1, 0], mirror: true, motion: 20, gapScale: 0.95 }),
+      Object.freeze({ id: 'monas.vortex-fall', family: 'climax', kind: 'offsets', values: [0, 0.13, -0.01, 0.15, -0.02, 0.11, 0], mirror: true, motion: 23, gapScale: 0.92 })
     ])
   });
 
@@ -91,6 +177,25 @@
     };
   }
 
+  // One full swing of the wall motion takes 2*PI/0.05 frames. Phases are drawn
+  // from that period so neighbouring pillars sit at different points in their
+  // cycle instead of moving in lockstep as they did when the offset came from a
+  // single global sine.
+  const MOTION_PHASE_PERIOD = 126;
+
+  // Matches the swing the stock game applied to every pillar from one global
+  // sine, so a pattern that declares no `motion` behaves exactly as before.
+  const DEFAULT_MOTION_PX = 5;
+
+  // Deterministic per (seed, spawnIndex) and derived by hashing rather than by
+  // pulling from the scheduler's random stream. Consuming the stream here would
+  // shift every downstream pattern choice and invalidate the reachability audit,
+  // for a value that only needs to look uncorrelated.
+  function deriveMotionPhase(seed, spawnIndex) {
+    return hashStringToSeed(`${normalizeSeed(seed)}|motion|${Math.max(0, Math.floor(finiteNumber(spawnIndex, 0)))}`)
+      % MOTION_PHASE_PERIOD;
+  }
+
   function materializePattern(pattern, anchorRatio = 0.5, direction = 1) {
     if (!pattern || !Array.isArray(pattern.values) || pattern.values.length === 0) {
       throw new TypeError('Pattern must contain at least one value');
@@ -125,7 +230,10 @@
     const errors = [];
     for (const rite of ['HEX', 'MONAS']) {
       const patterns = library[rite] || [];
-      for (const family of FAMILY_CYCLE) {
+      // Every family any tier can request must be satisfiable, not just the
+      // ones the base cycle happens to name.
+      const requiredFamilies = new Set(FAMILY_CYCLES.flat());
+      for (const family of requiredFamilies) {
         if (!patterns.some(pattern => pattern.family === family)) {
           errors.push(`${rite} has no ${family} pattern`);
         }
@@ -139,6 +247,12 @@
           }
         } catch (error) {
           errors.push(error.message);
+        }
+        if (pattern.motion !== undefined && !(Number.isFinite(pattern.motion) && pattern.motion >= 0)) {
+          errors.push(`${pattern.id} declares a non-finite or negative motion`);
+        }
+        if (pattern.gapScale !== undefined && !(Number.isFinite(pattern.gapScale) && pattern.gapScale > 0)) {
+          errors.push(`${pattern.id} declares a non-positive gapScale`);
         }
       }
     }
@@ -181,8 +295,17 @@
       this.active = null;
     }
 
-    choosePattern() {
-      const family = FAMILY_CYCLE[this.familyCursor % FAMILY_CYCLE.length];
+    /**
+     * `bandIndex` defaults to 0 so every existing caller, replay tool and test
+     * behaves exactly as before; the live spawn path passes the run's real band.
+     * Note that the number of draws taken from `this.random()` per spawn is
+     * unchanged - only *which* family is requested moves - but selecting from a
+     * different candidate list still shifts the sequence, so the reachability
+     * audit must re-run for this as it must for any library change.
+     */
+    choosePattern(bandIndex = 0) {
+      const cycle = cycleForBand(bandIndex);
+      const family = cycle[this.familyCursor % cycle.length];
       this.familyCursor += 1;
       const candidates = PATTERN_LIBRARY[this.rite].filter(pattern => pattern.family === family);
       if (candidates.length === 0) throw new Error(`No ${this.rite} ${family} pattern available`);
@@ -205,6 +328,8 @@
         variant,
         serial: this.patternSerial,
         ratios,
+        motion: finiteNumber(pattern.motion, DEFAULT_MOTION_PX),
+        gapScale: finiteNumber(pattern.gapScale, 1),
         stepIndex: 0
       };
       return this.active;
@@ -212,7 +337,7 @@
 
     next(options = {}) {
       if (!this.active || this.active.stepIndex >= this.active.ratios.length) {
-        this.choosePattern();
+        this.choosePattern(options.bandIndex);
       }
 
       const active = this.active;
@@ -242,6 +367,9 @@
         topRatio,
         top: computeTopFromRatio(viewportHeight, gap, topRatio),
         gap,
+        motion: active.motion,
+        gapScale: active.gapScale,
+        motionPhase: deriveMotionPhase(this.seed, this.spawnIndex),
         orb,
         rotation,
         innerPattern,
@@ -467,41 +595,76 @@
       const spec = scheduler.next({
         viewportHeight: gameInstance.canvas?.height || window.innerHeight,
         gap,
-        orbChance: CONFIG.ORB_SPAWN_CHANCE
+        // M45: the progression-adjusted chance, decided by the scheduler's own
+        // seeded stream. M44 briefly applied the scarcity as a global-RNG
+        // veto *after* this decision, inside the orb block below - which broke
+        // replay determinism, because this stream is reproducible from a seed and
+        // that roll was not. The scheduler already took an `orbChance`; giving it
+        // the right number is one seeded decision instead of two rolls.
+        orbChance: typeof gameInstance.orbSpawnChance === 'function'
+          ? gameInstance.orbSpawnChance()
+          : CONFIG.ORB_SPAWN_CHANCE,
+        // M40.3: which family the next pattern comes from now depends on how far
+        // the run has climbed. Read from the live Gate state rather than stored
+        // on the scheduler, because the scheduler is built once per run and the
+        // band moves underneath it.
+        bandIndex: gameInstance.gateSliceState?.bandIndex
       });
 
-      // Construct once so global cosmetic Math.random consumption remains equivalent
-      // to the legacy pillar constructor. The legacy Orb roll is consumed and discarded;
-      // gameplay placement and Orb presence come from the per-run seeded stream.
-      const pillar = new Pillar(gameInstance.currentLevelIdx, gap);
-      const legacyOrbRoll = Math.random();
-      const legacyWouldSpawnOrb = legacyOrbRoll > (1 - CONFIG.ORB_SPAWN_CHANCE);
-      if (legacyWouldSpawnOrb) Math.random();
-      pillar.gap = gap;
-      pillar.top = spec.top;
-      pillar.baseTop = spec.top;
-      pillar.rotation = spec.rotation;
-      pillar.innerPattern = spec.innerPattern;
-      pillar.hasWarning = Boolean(gameInstance.isMobile && spec.warning);
+      // Seeded construction is a separate Pillar path: every authoritative field
+      // is initialized from the scheduler spec and no legacy global RNG draw is
+      // consumed. This keeps the grammar's entire spawn decision on its per-run
+      // stream instead of relying on later overwrites to hide global draws.
+      const pillar = new Pillar(gameInstance.currentLevelIdx, gap, spec);
+      // The variety runtime owns the safety clamps, so route geometry through it
+      // when present and fall back to the flat pattern placement when it is not.
+      const variety = root.SexMagickObstacleVariety;
+      if (variety) {
+        variety.applyPillarGeometry(pillar, variety.resolvePillarGeometry({
+          gap,
+          top: spec.top,
+          gapScale: spec.gapScale,
+          motionAmplitude: spec.motion,
+          motionPhase: spec.motionPhase,
+          minimumGap: variety.VERIFIED_STATIC_GAP
+        }));
+      } else {
+        pillar.gap = gap;
+        pillar.top = spec.top;
+        pillar.baseTop = spec.top;
+      }
       pillar.warningAlpha = 1;
-      pillar.patternId = spec.patternId;
-      pillar.patternFamily = spec.family;
-      pillar.patternStep = spec.patternStep;
-      pillar.patternSerial = spec.patternSerial;
-      pillar.patternSpawnIndex = spec.spawnIndex;
-      pillar.patternSeed = spec.seed;
       gameInstance.obstacles.push(pillar);
 
       if (spec.orb) {
-        const orb = Object.create(Orb.prototype);
-        orb.x = pillar.x + pillar.w / 2;
-        orb.y = pillar.top + pillar.gap / 2;
-        orb.r = 9;
-        orb.collected = false;
-        orb.float = spec.orbFloat;
-        orb.pulse = 0;
-        orb.rotation = 0;
-        gameInstance.collectibles.push(orb);
+        // Whether an orb exists was decided above, by the seeded stream, at the
+        // progression-adjusted chance. Nothing here may decide anything - this
+        // block only asks the game *where* the orb goes.
+        //
+        // The comment this replaces warned that building the orb by hand means
+        // "every field the constructor would set has to be set here too, and a new
+        // one is easy to forget". M44 forgot `offset` and every orb in this path -
+        // the shipped one - got a NaN height while the index.html fallback looked
+        // correct. Asking the game for the placement is what stops the two paths
+        // from drifting again; only the seeded phase stays local.
+        const placement = typeof gameInstance.orbPlacementFor === 'function'
+          ? gameInstance.orbPlacementFor(pillar, computeSpawnRate(gameInstance.gameSpeed, CONFIG.PILLAR_SPAWN_BASE))
+          : { x: pillar.x + pillar.w / 2, y: pillar.top + pillar.gap / 2, offset: 0 };
+        if (placement) {
+          const orb = Object.create(Orb.prototype);
+          orb.x = placement.x;
+          orb.y = placement.y;
+          orb.r = 9;
+          orb.collected = false;
+          orb.float = spec.orbFloat;
+          orb.pulse = 0;
+          orb.rotation = 0;
+          // The sweep needs the pillar it belongs to (M42), and the offset that
+          // holds it off the corridor line (M44).
+          orb.pillar = pillar;
+          orb.offset = placement.offset;
+          gameInstance.collectibles.push(orb);
+        }
       }
 
       ledger.recordSpawn(spec, gameInstance);
@@ -623,6 +786,8 @@
       version: GRAMMAR_VERSION,
       storageKey: STORAGE_KEY,
       familyCycle: FAMILY_CYCLE,
+      familyCycles: FAMILY_CYCLES,
+      familyCycleForBand: cycleForBand,
       transitionEnvelope: MAX_RATIO_DELTA,
       privacy: 'local-pattern-evidence-linked-only-by-local-run-id',
       setNextSeed(value) {
@@ -667,6 +832,8 @@
     console.info('[SEX MAGICK] Deterministic obstacle grammar installed', {
       grammarVersion: GRAMMAR_VERSION,
       familyCycle: FAMILY_CYCLE,
+      familyCycles: FAMILY_CYCLES,
+      familyCycleForBand: cycleForBand,
       transitionEnvelope: MAX_RATIO_DELTA,
       storageKey: STORAGE_KEY
     });
@@ -682,13 +849,18 @@
     MIN_TOP_RATIO,
     MAX_TOP_RATIO,
     MAX_RATIO_DELTA,
+    MOTION_PHASE_PERIOD,
+    DEFAULT_MOTION_PX,
     FAMILY_CYCLE,
+    FAMILY_CYCLES,
+    cycleForBand,
     PATTERN_LIBRARY,
     clamp,
     normalizeRite,
     normalizeSeed,
     hashStringToSeed,
     createSeededRandom,
+    deriveMotionPhase,
     materializePattern,
     validatePatternLibrary,
     computeTopFromRatio,

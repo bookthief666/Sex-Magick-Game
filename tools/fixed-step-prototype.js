@@ -194,6 +194,134 @@
   document.head.appendChild(script);
 })();
 
+// The art foundation loads before the field that consumes it. Neither touches
+// gameplay: the field replaces drawHyperspaceTunnel and nothing else.
+(function bootstrapOccultArtRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickOccultArt ||
+    document.querySelector('script[data-sex-magick-occult-art]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./occult-art-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickOccultArt = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Occult art runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapOccultFieldRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickOccultField ||
+    document.querySelector('script[data-sex-magick-occult-field]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./occult-field-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickOccultField = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Occult field runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+// Waits for the Gate slice before installing, so its gameOver wrapper is the
+// outermost one and still sees __gateSliceVoidActive when the shield decides
+// whether to absorb.
+// D-065: must load before any runtime that raises a transient notice, so the
+// first announce of a session already has the slot arbiter to claim. It is a
+// passive registry with no dependency on Game, so loading it first is free -
+// and every caller treats it as optional anyway, so a failed load degrades to
+// the pre-D-065 behaviour rather than breaking an announce.
+(function bootstrapNoticeSlot() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickNoticeSlot ||
+    document.querySelector('script[data-sex-magick-notice-slot]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./notice-slot.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickNoticeSlot = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Notice slot failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapPowerupRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickPowerups ||
+    document.querySelector('script[data-sex-magick-powerups]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./powerup-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickPowerups = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Power-up runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+// Observes the Gate slice rather than driving anything, so load order relative
+// to it does not matter; it installs once the Game prototype exists.
+(function bootstrapMissionsRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickMissions ||
+    document.querySelector('script[data-sex-magick-missions]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./missions-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickMissions = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Missions runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+// Loads ahead of the grammar because spawnPatternPillar routes pillar geometry
+// through the variety runtime's safety clamps when it is present.
+(function bootstrapObstacleVarietyRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickObstacleVariety ||
+    document.querySelector('script[data-sex-magick-obstacle-variety]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./obstacle-variety-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickObstacleVariety = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Obstacle variety runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
 (function bootstrapObstacleGrammarRuntime() {
   'use strict';
 
@@ -356,6 +484,50 @@
   loadPolicyWhenGrammarIsReady();
 })();
 
+// MONAS is a player-facing Rite, not a Gate-slice feature. M27-M29 accidentally
+// loaded its enhanced runtime only inside the `?gateSlice=1` bootstrap, so the
+// normal game URL still exposed the old base-mode behavior. Load it independently
+// on ordinary pages, but preserve the established Gate -> MONAS wrapper order when
+// `gateSlice=1`; that path remains owned by the Gate bootstrap below.
+(function bootstrapMonasRuntime() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('gateSlice') === '1') return;
+  // patternBrowserQa is the base obstacle-grammar fixture. It sets `gameMode` by
+  // hand and steps `updateGameObjects()` a frame at a time to assert the *base*
+  // grammar spawns exactly one deterministic pillar per interval. Loading the
+  // enhanced Rite here makes its MONAS arm measure hold/release glide and MONAS's
+  // own gap ownership instead, which is a different game and fails that assertion.
+  // The product behaviour above is correct and stays; the fixture just has to keep
+  // seeing the primitive it was written to test, the same way it is now held out of
+  // M33's Gate promotion.
+  //
+  // reachabilityBrowserQa and compositionBrowserQa need the same hold-out for a
+  // different reason: they drive the real Player against player-reachability.js and
+  // require exact agreement. That solver models MONAS as the pre-M27 tap-jump avatar
+  // (gravity 0.18, jumpImpulse -7.2), so loading the glide rite here fails parity at
+  // 400.1728 != 393.1204 on a difference that is deliberate, not a defect. MONAS's
+  // real evidence model is tools/monas-reachability.js (D-048). Holding these two out
+  // of *both* the Gate promotion and this bootstrap is what restores their base view;
+  // exempting only one leaves the other path still loading the enhanced rite.
+  if (query.has('patternBrowserQa') || query.has('reachabilityBrowserQa') || query.has('compositionBrowserQa')) return;
+
+  if (
+    globalThis.SexMagickMonas ||
+    document.querySelector('script[data-sex-magick-monas-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./monas-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickMonasRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Monas runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
 (function bootstrapVisualQaLocalOnlyPreflight() {
   'use strict';
 
@@ -409,7 +581,9 @@
     if (typeof Leaderboard !== 'undefined' && Leaderboard) {
       const localOnly = async function gateSliceLocalOnlyLeaderboard() {
         const list = document.getElementById('leaderboardList');
-        if (list) list.textContent = 'GATE SLICE — LOCAL ONLY';
+        // The Rite board owns this list once it is installed; without this guard a
+        // later fetchTop() would paint over a rendered board with the stub text.
+        if (list && !globalThis.__SEX_MAGICK_RITE_BOARD__) list.textContent = 'GATE SLICE — LOCAL ONLY';
         const status = document.getElementById('uploadStatus');
         if (status) status.textContent = 'GATE SLICE — LOCAL ONLY';
         return { localOnly: true };
@@ -449,6 +623,52 @@
   script.dataset.sexMagickGateSliceRuntime = 'true';
   script.onerror = () => console.error('[SEX MAGICK] Gate slice runtime failed to load', script.src);
   document.head.appendChild(script);
+
+  if (
+    globalThis.SexMagickRiteBoard ||
+    document.querySelector('script[data-sex-magick-rite-board-runtime]')
+  ) return;
+
+  if (!globalThis.SexMagickMonas && !document.querySelector('script[data-sex-magick-monas-runtime]')) {
+    const monasScript = document.createElement('script');
+    monasScript.src = new URL('./monas-runtime.js', currentSource).href;
+    monasScript.async = false;
+    monasScript.dataset.sexMagickMonasRuntime = 'true';
+    monasScript.onerror = () => console.error('[SEX MAGICK] Monas runtime failed to load', monasScript.src);
+    document.head.appendChild(monasScript);
+  }
+
+  // The validation core the board judges runs with, and which the global board's
+  // Worker runs the same copy of (D-044). Inserted first, and every one of these
+  // scripts sets async = false, which keeps insertion order as execution order -
+  // so the board never runs before its rules exist.
+  if (!globalThis.SexMagickRiteValidation && !document.querySelector('script[data-sex-magick-rite-validation]')) {
+    const validationScript = document.createElement('script');
+    validationScript.src = new URL('./rite-validation.js', currentSource).href;
+    validationScript.async = false;
+    validationScript.dataset.sexMagickRiteValidation = 'true';
+    validationScript.onerror = () => console.error('[SEX MAGICK] Rite validation failed to load', validationScript.src);
+    document.head.appendChild(validationScript);
+  }
+
+  const boardScript = document.createElement('script');
+  boardScript.src = new URL('./leaderboard-runtime.js', currentSource).href;
+  boardScript.async = false;
+  boardScript.dataset.sexMagickRiteBoardRuntime = 'true';
+  boardScript.onerror = () => console.error('[SEX MAGICK] Rite board runtime failed to load', boardScript.src);
+  document.head.appendChild(boardScript);
+
+  // The Worker has a production URL now, so load its client on ordinary builds.
+  // global-board-runtime.js remains the authority for activation and honours
+  // ?globalBoard=0 as the emergency network-off switch.
+  if (!document.querySelector('script[data-sex-magick-global-board]')) {
+    const globalScript = document.createElement('script');
+    globalScript.src = new URL('./global-board-runtime.js', currentSource).href;
+    globalScript.async = false;
+    globalScript.dataset.sexMagickGlobalBoard = 'true';
+    globalScript.onerror = () => console.error('[SEX MAGICK] Global board runtime failed to load', globalScript.src);
+    document.head.appendChild(globalScript);
+  }
 })();
 
 (function bootstrapViewportRuntime() {

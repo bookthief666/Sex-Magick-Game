@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   GRAMMAR_VERSION,
   STORAGE_KEY,
@@ -18,6 +20,8 @@ const {
   computeSpawnRate,
   isSpawnFrame,
   PatternScheduler,
+  FAMILY_CYCLES,
+  cycleForBand,
   createMemoryStorage,
   safeReadHistory,
   PatternRunLedger
@@ -36,28 +40,39 @@ function simplify(sequence) {
   }));
 }
 
-function generate(seed, rite, count = 72) {
+function generate(seed, rite, count = 72, bandIndex = 0) {
   const scheduler = new PatternScheduler({ seed, rite });
   return Array.from({ length: count }, () => scheduler.next({
     viewportHeight: 844,
     gap: 200,
-    orbChance: 0.5
+    orbChance: 0.5,
+    bandIndex
   }));
 }
 
 function testCatalogContracts() {
   assert.equal(validatePatternLibrary(PATTERN_LIBRARY).length, 0);
   for (const rite of ['HEX', 'MONAS']) {
-    for (const family of new Set(FAMILY_CYCLE)) {
-      assert.ok(PATTERN_LIBRARY[rite].some(pattern => pattern.family === family));
+    // Every family any tier can ask for, not just the base cycle's.
+    for (const family of new Set(FAMILY_CYCLES.flat())) {
+      assert.ok(
+        PATTERN_LIBRARY[rite].some(pattern => pattern.family === family),
+        `${rite} cannot satisfy the ${family} beat`
+      );
     }
   }
 }
 
 function testSeedDeterminism() {
-  const seed = hashStringToSeed('run_example|HEX|grammar-1');
-  assert.equal(seed, hashStringToSeed('run_example|HEX|grammar-1'));
-  assert.notEqual(seed, hashStringToSeed('run_other|HEX|grammar-1'));
+  // Track GRAMMAR_VERSION rather than a hardcoded "grammar-1", so this stays tied
+  // to the string the runtime actually derives seeds from.
+  const seedInput = `run_example|HEX|grammar-${GRAMMAR_VERSION}`;
+  const seed = hashStringToSeed(seedInput);
+  assert.equal(seed, hashStringToSeed(seedInput));
+  assert.notEqual(seed, hashStringToSeed(`run_other|HEX|grammar-${GRAMMAR_VERSION}`));
+  // A version bump must change every run's seed, which is the point of carrying
+  // the version in the derivation at all.
+  assert.notEqual(seed, hashStringToSeed(`run_example|HEX|grammar-${GRAMMAR_VERSION + 1}`));
 
   const first = simplify(generate(seed, 'HEX'));
   const second = simplify(generate(seed, 'HEX'));
@@ -95,16 +110,41 @@ function testTransitionEnvelope() {
 }
 
 function testFamilyPacing() {
-  const sequence = generate(0x0badc0de, 'HEX', 180);
-  const patternStarts = sequence.filter(item => item.patternStep === 0);
-  assert.ok(patternStarts.length >= FAMILY_CYCLE.length * 2);
+  // M40.3: the cycle depends on the band, so pacing is checked at every tier
+  // rather than only at the one the base cycle describes. A tier that scheduled
+  // two climaxes back to back would give the player no beat to recover in, and
+  // the top tier runs three climaxes per cycle - so this invariant matters more
+  // now than when there was a single rotation.
+  for (const bandIndex of [0, 2, 4, 6]) {
+    const cycle = cycleForBand(bandIndex);
+    for (const rite of ['HEX', 'MONAS']) {
+      const sequence = generate(0x0badc0de, rite, 180, bandIndex);
+      const patternStarts = sequence.filter(item => item.patternStep === 0);
+      assert.ok(patternStarts.length >= cycle.length * 2, `band ${bandIndex} produced too few patterns`);
 
-  for (let index = 0; index < patternStarts.length; index += 1) {
-    assert.equal(patternStarts[index].family, FAMILY_CYCLE[index % FAMILY_CYCLE.length]);
-    if (index > 0) {
-      assert.ok(!(patternStarts[index - 1].family === 'climax' && patternStarts[index].family === 'climax'));
+      for (let index = 0; index < patternStarts.length; index += 1) {
+        assert.equal(
+          patternStarts[index].family,
+          cycle[index % cycle.length],
+          `${rite} band ${bandIndex} beat ${index}`
+        );
+        if (index > 0) {
+          assert.ok(
+            !(patternStarts[index - 1].family === 'climax' && patternStarts[index].family === 'climax'),
+            `${rite} band ${bandIndex} scheduled two climaxes with no beat between them`
+          );
+        }
+      }
     }
   }
+
+  // The tiers must actually differ, or this is escalation in name only.
+  assert.notDeepEqual(cycleForBand(0), cycleForBand(7), 'the first and last tiers must differ');
+  assert.equal(cycleForBand(0).includes('climax'), false, 'the opening tier introduces no climax');
+  assert.ok(
+    cycleForBand(7).filter(beat => beat === 'climax').length >= 3,
+    'the crown tier stacks climaxes'
+  );
 }
 
 function testPatternMaterialization() {
@@ -178,6 +218,15 @@ function testMalformedHistoryFallback() {
   assert.deepEqual(safeReadHistory(storage), []);
 }
 
+function testGrammarSourceNeverCallsGlobalRandom() {
+  const source = fs.readFileSync(path.join(__dirname, 'obstacle-grammar.js'), 'utf8');
+  assert.equal(
+    /\bMath\s*\.\s*random\b/.test(source),
+    false,
+    'obstacle-grammar.js must not even name the global RNG; this stronger textual guard cannot hide a call in a template expression or comment'
+  );
+}
+
 testCatalogContracts();
 testSeedDeterminism();
 testRandomRange();
@@ -188,5 +237,6 @@ testResponsiveTopMapping();
 testSpawnCadencePreservation();
 testLedgerRetentionAndPrivacy();
 testMalformedHistoryFallback();
+testGrammarSourceNeverCallsGlobalRandom();
 
 console.log(`obstacle-grammar v${GRAMMAR_VERSION}: all deterministic contracts passed`);

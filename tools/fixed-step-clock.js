@@ -111,6 +111,15 @@
 
   const scripts = [
     {
+      // M33 must run before every other product runtime: it turns the completed
+      // Gate/HEX stack on for ordinary sessions and selects the Fold-open 2x
+      // backing policy before Gate/canvas bootstraps inspect the query string.
+      path: './product-integration-runtime.js',
+      selector: 'script[data-sex-magick-product-integration-runtime]',
+      attribute: 'data-sex-magick-product-integration-runtime',
+      globalName: 'SexMagickProductIntegration'
+    },
+    {
       path: './touch-target-runtime.js',
       selector: 'script[data-sex-magick-touch-target-runtime]',
       attribute: 'data-sex-magick-touch-target-runtime',
@@ -127,6 +136,30 @@
       selector: 'script[data-sex-magick-asset-resilience-runtime]',
       attribute: 'data-sex-magick-asset-resilience-runtime',
       globalName: 'SexMagickAssetResilience'
+    },
+    {
+      // Installs after fixed-step/collision ownership exists and wraps the final
+      // gameplay entry seams. Selecting a rite now arms a render-only threshold;
+      // the deliberate second input begins physics and progression.
+      path: './rite-ready-runtime.js',
+      selector: 'script[data-sex-magick-rite-ready-runtime]',
+      attribute: 'data-sex-magick-rite-ready-runtime',
+      globalName: 'SexMagickRiteReady'
+    },
+    {
+      // A local-only profile control for the deployed global board. It shares the
+      // Worker's 18-character sanitisation contract and never blocks gameplay if
+      // storage is unavailable.
+      path: './leaderboard-profile-runtime.js',
+      selector: 'script[data-sex-magick-leaderboard-profile-runtime]',
+      attribute: 'data-sex-magick-leaderboard-profile-runtime',
+      globalName: 'SexMagickLeaderboardProfile'
+    },
+    {
+      path: './monas-progression-runtime.js',
+      selector: 'script[data-sex-magick-monas-progression-runtime]',
+      attribute: 'data-sex-magick-monas-progression-runtime',
+      globalName: 'SexMagickMonasProgression'
     },
     {
       path: './performance-budget-runtime.js',

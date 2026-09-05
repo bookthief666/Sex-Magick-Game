@@ -100,7 +100,26 @@
     for (const id of ['startScreen', 'gameOverScreen', 'pauseScreen', 'settingsScreen']) setHidden(id, true);
     for (const id of ['scoreUi', 'pauseBtn', 'instructions', 'mobileControls']) setHidden(id, true);
     const telegraph = document.getElementById('gate-slice-telegraph');
-    if (telegraph) telegraph.hidden = true;
+    if (telegraph) {
+      clearTimeout(telegraph.__gateSliceTimer);
+      telegraph.hidden = true;
+    }
+  }
+
+  /**
+   * `setTelegraph()` hides its box on a 1100ms `setTimeout`, so whether the Gate
+   * telegraph is still on screen at capture time depended on how long the settle
+   * loop happened to take — measured, the three gate states hash differently at
+   * 200ms and at 1400ms after the pose while the standard states do not. That is
+   * what made `chromium-desktop` disagree on exactly `gate-offer`, `gate-bank` and
+   * `void`: the largest geometry takes the longest to settle and screenshot, so it
+   * crossed the boundary while the three smaller ones stayed under it. Cancelling
+   * the pending hide makes visibility a function of the pose alone. Every pose
+   * starts with `resetUi()`, which hides it again, so nothing leaks between states.
+   */
+  function pinTelegraph() {
+    const telegraph = document.getElementById('gate-slice-telegraph');
+    if (telegraph) clearTimeout(telegraph.__gateSliceTimer);
   }
 
   function ensureLevel() {
@@ -146,6 +165,9 @@
       ];
       game.player.update = () => {};
     }
+    ambientBaseline = null;
+    offerPhase = null;
+    flashPhase = null;
   }
 
   function createPillar(xRatio, topRatio, gap, rotation) {
@@ -165,8 +187,74 @@
     return pillar;
   }
 
+  /**
+   * Ambient layers advance one step per `drawScene()` — `game.stars` drift and
+   * twinkle, `game.backgroundParticles` fall. `stars` is rebuilt by `startGame()`
+   * on every pose, but `backgroundParticles` is created once at page init, so its
+   * phase is a running total of every draw since load. That made each signature
+   * depend on how many times the scene happened to be drawn before the capture,
+   * and a single stray draw anywhere in the suite shifted the hash. Poses record
+   * the phase; every draw restores it, so a state renders identically no matter
+   * how many draws precede it.
+   */
+  let ambientBaseline = null;
+  let offerPhase = null;
+  let flashPhase = null;
+
+  /**
+   * The Gate offer's ring pulse advances 0.08 per draw, so it needs the same
+   * treatment. It is spawned during the pose rather than by `startGame()`, so its
+   * phase is pinned by identity: the first draw that sees a given offer records
+   * its pulse, and every later draw of the same offer restores it.
+   */
+  function lockOfferPhase() {
+    const offer = game.gateSliceOffer;
+    if (!offer) { offerPhase = null; return; }
+    if (!offerPhase || offerPhase.offer !== offer) offerPhase = { offer, pulse: Number(offer.pulse || 0) };
+    else offer.pulse = offerPhase.pulse;
+  }
+
+  /**
+   * The Void entry leaves a live screen flash whose `duration` counts down one per
+   * draw, fading the overlay. Pinned by identity for the same reason as the offer:
+   * the pose decides the flash, not the number of times it has been rendered.
+   */
+  function lockFlashPhase() {
+    const flash = game.screenFlash;
+    if (!flash) { flashPhase = null; return; }
+    if (!flashPhase || flashPhase.flash !== flash) flashPhase = { flash, duration: flash.duration, intensity: flash.intensity };
+    else { flash.duration = flashPhase.duration; flash.intensity = flashPhase.intensity; }
+  }
+
+  function ambientLayers() {
+    const layers = [['stars', game.stars], ['warpStars', game.warpStars], ['backgroundParticles', game.backgroundParticles]];
+    try {
+      // The Void's glyph rain is seeded lazily on the first Void draw, which is why
+      // layers are recorded on first sight rather than all at pose time.
+      const rain = root.SexMagickOccultField?.getGlyphRain?.();
+      if (Array.isArray(rain)) layers.push(['glyphRain', rain]);
+    } catch (_error) {}
+    return layers.filter(([, list]) => Array.isArray(list) && list.length > 0);
+  }
+
+  function syncAmbientPhase() {
+    if (!ambientBaseline) ambientBaseline = new Map();
+    for (const [name, list] of ambientLayers()) {
+      const saved = ambientBaseline.get(name);
+      if (!saved || saved.length !== list.length) {
+        ambientBaseline.set(name, list.map(item => ({ ...item })));
+        continue;
+      }
+      for (let index = 0; index < list.length; index += 1) Object.assign(list[index], saved[index]);
+    }
+  }
+
   function drawNow() {
     ensureLevel();
+    syncAmbientPhase();
+    lockOfferPhase();
+    lockFlashPhase();
+    pinTelegraph();
     if (typeof game.drawScene === 'function') game.drawScene();
     if (typeof root.__SEX_MAGICK_GATE_SLICE__?.getSnapshot === 'function') {
       const hud = document.getElementById('gate-slice-hud');
@@ -389,6 +477,20 @@
       showGateBank,
       showVoid,
       snapshot,
+      /**
+       * Repaint the posed scene onto the canvas.
+       *
+       * Every pose ends in `drawNow()`, but the suite then settles geometry with
+       * `__SEX_MAGICK_RENDER__.refresh()`, and resizing a canvas clears it. The
+       * screenshot was therefore taken of a blank canvas: measured, the posed
+       * gameplay canvas is 100% painted before the refresh and 0% after. That is
+       * why the M14 signatures covered DOM, HUD and layout but never the field.
+       * Callers settle first, then call this, then capture.
+       */
+      redraw() {
+        drawNow();
+        return snapshot();
+      },
       clearRafQueue() { rafQueue = []; return 0; }
     });
 

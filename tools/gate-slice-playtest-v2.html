@@ -231,7 +231,48 @@
         const inputStats = gameWindow?.__SEX_MAGICK_COLLISION__?.getInputStats?.() || null;
         const preflight = gameWindow?.__SEX_MAGICK_GATE_PREFLIGHT__?.getSnapshot?.() || null;
         const viewport = gameWindow?.__SEX_MAGICK_VIEWPORT__?.getSnapshot?.() || null;
-        return { evidence, current, inputStats, preflight, viewport };
+        // Which build actually ran. The 2026-08-12 session reported cleanly while
+        // executing a cached pre-M16 Gate slice, and diagnosing that took three
+        // separate inferences from the event data. Now the report says so itself.
+        const runtime = {
+          gateSlice: gameWindow?.__SEX_MAGICK_GATE_SLICE__?.getFingerprint?.() || null,
+          grammarVersion: gameWindow?.__SEX_MAGICK_PATTERNS__?.version ?? null,
+          varietyVersion: gameWindow?.__SEX_MAGICK_OBSTACLE_VARIETY__?.version ?? null,
+          missionsVersion: gameWindow?.__SEX_MAGICK_MISSIONS__?.version ?? null,
+          powerupsVersion: gameWindow?.__SEX_MAGICK_POWERUPS__?.version ?? null,
+          // M32-M35. Without these the guard above has a hole exactly the shape of
+          // the work nobody has played yet: the Gate fingerprint and the four
+          // versions above are identical with or without them, so a session that
+          // silently ran a checkout predating the ritual ascent HUD or Living
+          // Sephiroth would produce a report that looks completely valid. That is
+          // the 2026-08-12 failure this block exists to prevent, reopened by the
+          // four newest modules. `null` here means the module did not load.
+          monasProgressionVersion: gameWindow?.__SEX_MAGICK_MONAS_PROGRESSION__?.version ?? null,
+          productIntegrationVersion: gameWindow?.__SEX_MAGICK_PRODUCT_DEFAULTS__?.version ?? null,
+          ritualAscentVersion: gameWindow?.__SEX_MAGICK_RITUAL_ASCENT__?.version ?? null,
+          sephirahIdentityVersion: gameWindow?.__SEX_MAGICK_SEPHIRAH_IDENTITY__?.version ?? null
+        };
+        // M18 and M19 state. Captured optionally rather than gated on, so a
+        // runtime that fails to load costs a section of the report instead of
+        // stranding the owner mid-session. `installed` records which were present,
+        // so a missing section can be told apart from an empty one.
+        const missionsApi = gameWindow?.__SEX_MAGICK_MISSIONS__;
+        const powerupApi = gameWindow?.__SEX_MAGICK_POWERUPS__;
+        const missions = missionsApi ? {
+          installed: true,
+          snapshot: missionsApi.getSnapshot?.() || null,
+          active: missionsApi.getActive?.() || null
+        } : { installed: false };
+        const powerups = powerupApi ? {
+          installed: true,
+          snapshot: powerupApi.getSnapshot?.() || null,
+          state: powerupApi.getPowerups?.() || null,
+          // Per-run counters reset with every run, so at session end they only
+          // describe the last one. These accumulate across the whole session.
+          sessionTotals: powerupApi.getSessionTotals?.() || null,
+          gatesPerCharge: powerupApi.gatesPerCharge ?? null
+        } : { installed: false };
+        return { runtime, evidence, current, inputStats, preflight, viewport, missions, powerups };
       }
 
       function endSession(reason) {

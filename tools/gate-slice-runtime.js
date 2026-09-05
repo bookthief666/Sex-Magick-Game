@@ -19,7 +19,57 @@
   const STORAGE_KEY = 'sex_magick_gate_slice_v1';
   const HISTORY_LIMIT = 20;
   const GNOSIS_CAPACITY = 10;
+  // The shipped Void length, and the first band's.
+  //
+  // M44: the owner asked for challenge sections that start short and lengthen as a
+  // run goes on, in both rites. This constant stays the *first* band's duration and
+  // the default everywhere a caller does not say otherwise, so nothing that already
+  // depended on 480 frames changes meaning. `voidDurationForBand` is the ladder.
+  //
+  // Length is an escalation that needs no new solver evidence: it is more frames of
+  // a wager already clamped to MAX_VALIDATED_SPEED and MIN_VALIDATED_GAP, not a
+  // harder configuration. What it does change is the reward maths - see
+  // `completeVoidState`, which can no longer divide by this constant.
   const VOID_DURATION_STEPS = 8 * 60;
+  const VOID_DURATION_STEPS_LAST = 15 * 60;
+
+  // --- the descent ----------------------------------------------------------
+  //
+  // What happens after KETHER, which until M44 was: nothing. `getBandIndex`
+  // saturates at the last band, so speed, gap, and the spawn rate derived from
+  // speed all froze there for the rest of the run - the owner's report that the
+  // game stops building, and why a late run could continue indefinitely.
+  //
+  // M44 chose the corridor for the post-KETHER descent because speed is already
+  // at the raised ceiling. Its claim that wall spacing had no headroom was a
+  // replay-harness artifact: search used the requested base, then witness replay
+  // silently rebuilt default-base walls. D-075 replays the exact gates and finds
+  // bases 132, 124 and 116 all 450/450 verified at 10.0/110; 108 is the first
+  // rejection. That reopens spacing as a future lever but does not retune this
+  // release. The existing descent still closes KETHER's 122 toward the separately
+  // proven 110 corridor floor, two pixels every thirty gates.
+  const DESCENT_GATES_PER_STEP = 30;
+  const DESCENT_GAP_PER_STEP = 2;
+
+  function descentStepsAt(gatesCleared) {
+    const last = BANDS[BANDS.length - 1];
+    const beyond = Math.max(0, Math.floor(finiteNumber(Number(gatesCleared), 0)) - last.gateThreshold);
+    return Math.floor(beyond / DESCENT_GATES_PER_STEP);
+  }
+
+  /** The nominal corridor at this gate count, band and descent included. */
+  function nominalGapFor(gatesCleared) {
+    const band = BANDS[getBandIndex(gatesCleared)] || BANDS[0];
+    const narrowed = band.gap - (descentStepsAt(gatesCleared) * DESCENT_GAP_PER_STEP);
+    return Math.max(MIN_VALIDATED_GAP, narrowed);
+  }
+
+  function voidDurationForBand(bandIndex) {
+    const total = BANDS.length;
+    const index = Math.min(Math.max(0, Math.floor(finiteNumber(Number(bandIndex), 0))), total - 1);
+    const ratio = total <= 1 ? 0 : index / (total - 1);
+    return Math.round(VOID_DURATION_STEPS + ((VOID_DURATION_STEPS_LAST - VOID_DURATION_STEPS) * ratio));
+  }
   const VOID_SPEED_MULTIPLIER = 1.5;
   const VOID_GAP_REDUCTION = 20;
   const BANK_MULTIPLIER = 3;
@@ -28,11 +78,89 @@
   const EFFECTIVE_PLAYER_HALF = 12;
   const REQUIRED_QUERY_VALUE = '1';
 
+  // The Gate is entered when the player's centre reaches GATE_ENTRY_RADIUS of the
+  // offer's centre, and that circle is the one drawn brightly, so the ring the
+  // player aims at is the ring they hit. The 2026-08-12 Fold 6 pilot ran with an
+  // entry radius of 31 against an outer ring drawn at 52 and produced a clean
+  // bimodal miss distribution: five banks between 31.08 and 41.95 px, then
+  // nothing until 82.17 px. Those five were failed entries, not declines - one
+  // missed by 0.08 px. A 44 px aperture captures that whole near population and
+  // still sits 16 px inside the outer glow, so aim is still required.
+  const GATE_ENTRY_RADIUS = 44;
+  const GATE_OUTER_RADIUS = 60;
+
+  // Vertical placement bounds for a Gate offer, as a fraction of canvas height,
+  // plus a hard pixel margin so the offer never hugs the ceiling clamp or floor.
+  const GATE_MIN_RATIO = 0.2;
+  const GATE_MAX_RATIO = 0.8;
+  const GATE_EDGE_MARGIN_PX = 96;
+  // Consecutive Gates must differ by at least this fraction of canvas height,
+  // so a seeded stream cannot accidentally reproduce the fixed two-position
+  // alternation it replaces.
+  const GATE_MIN_SEPARATION_RATIO = 0.12;
+  // Measured, not guessed: in the 2026-08-12 pilot the owner closed 289.65 px of
+  // vertical error inside the 133 frames a Gate stayed visible. Holding placement
+  // within this sustained rate keeps every offer physically reachable from
+  // wherever the player happens to be when it spawns.
+  const GATE_VERTICAL_PX_PER_FRAME = 2.2;
+  const GATE_MIN_REACH_PX = 60;
+
+  // The hardest configuration the reachability solver proves clearable.
+  //
+  // M44 raises this from 8.5 to 10.0 on evidence D-072 already gathered and could
+  // not use. 8.5 was never a discovered maximum - every hard scenario in
+  // `DEFAULT_SCENARIOS` is pinned to `speed: 8.5, gap: 110`, so 8.5 was simply the
+  // fastest the solver had ever been *asked* about. Asked properly it verified
+  // 9.0, 9.5 and 10.0 across gaps 110/118/126/134, 450 of 450 clean at each, and
+  // located its actual boundary at gap 122 between 12.0 (verified) and 14.0
+  // (rejected). Each ladder coordinate below was proven at its own value rather
+  // than interpolated from a neighbour.
+  //
+  // What blocked the raise was not HEX. The shipped band audit required every
+  // pattern in *both* rites to clear every post-GEBURAH band, and this is HEX's
+  // ladder - seven MONAS patterns cannot hold KETHER. But the Gate slice is
+  // HEX-only (`updateGameObjects` returns early unless `gameMode === 'HEX'`) and
+  // MONAS runs its own ladder, so that check constrained the ceiling with a
+  // condition the game cannot produce. D-072 left the call to the owner; M44's
+  // per-rite audit is that call, and it covers MONAS's own top band, which the
+  // old shared audit never did.
+  const MAX_VALIDATED_SPEED = 10.0;
+  const MIN_VALIDATED_GAP = 110;
+
+  // The 2026-08-12 pilot cleared 507 gates and 196 of them - 38.7 percent of all
+  // play - happened past GEBURAH, where the curve simply stopped. Runs of 81, 78,
+  // 64, 64 and 53 gates all finished on flat difficulty. These four bands
+  // continue the ascent to the edge of the proven envelope: KETHER sits exactly
+  // at speed 8.5, and its 122 px gap stays at or above CONFIG.MIN_PILLAR_GAP even
+  // at the bottom of the +/-10 px breathing that getCurrentGap applies.
+  // D-067 re-spaced these thresholds. Speeds and gaps are untouched - every pair
+  // is still an audited coordinate - only *when* the player arrives changed.
+  //
+  // The old spacing (0/6/16/32/48/68/92/120) was front-loaded: +0.9, +1.2, +1.2
+  // across the first 32 gates, then +0.7, +0.6, +0.5, +0.5 across the next 88.
+  // The owner reported speed that "kept increasing until it sortve topped off",
+  // and that is this deceleration, felt at gate 32 rather than at the real
+  // ceiling. Intervals now widen monotonically - 9, 13, 18, 22, 26, 30, 34 - so
+  // each band lasts longer than the one before it and the ascent reads as a long
+  // arc instead of a sprint into a plateau. KETHER moves 120 -> 152, keeping the
+  // crown attainable in a strong run (the 2026-08-12 pilot's best was 507 gates,
+  // with good runs of 81, 78, 64, 64 and 53).
+  //
+  // The deceleration in *speed* is unchanged and cannot be fixed by re-spacing:
+  // it exists because 8.5 is the top of the proven envelope. Raising it is a
+  // search, not an edit - see MAX_VALIDATED_SPEED.
   const BANDS = Object.freeze([
     Object.freeze({ name: 'MALKUTH', gateThreshold: 0, speed: 2.9, gap: 220, riskActive: false }),
-    Object.freeze({ name: 'YESOD', gateThreshold: 6, speed: 3.8, gap: 190, riskActive: true }),
-    Object.freeze({ name: 'TIPHARETH', gateThreshold: 16, speed: 5.0, gap: 165, riskActive: true }),
-    Object.freeze({ name: 'GEBURAH', gateThreshold: 32, speed: 6.2, gap: 145, riskActive: true })
+    Object.freeze({ name: 'YESOD', gateThreshold: 9, speed: 3.8, gap: 190, riskActive: true }),
+    Object.freeze({ name: 'TIPHARETH', gateThreshold: 22, speed: 5.0, gap: 165, riskActive: true }),
+    Object.freeze({ name: 'GEBURAH', gateThreshold: 40, speed: 6.2, gap: 145, riskActive: true }),
+    // M44: the four post-GEBURAH speeds take D-072's proven coordinates. Gaps are
+    // unchanged - the raise is in speed alone, so the corridor a player has
+    // learned stays the width they learned it at while the run keeps accelerating.
+    Object.freeze({ name: 'CHESED', gateThreshold: 62, speed: 7.3, gap: 138, riskActive: true }),
+    Object.freeze({ name: 'BINAH', gateThreshold: 88, speed: 8.2, gap: 132, riskActive: true }),
+    Object.freeze({ name: 'CHOKMAH', gateThreshold: 118, speed: 9.1, gap: 127, riskActive: true }),
+    Object.freeze({ name: 'KETHER', gateThreshold: 152, speed: MAX_VALIDATED_SPEED, gap: 122, riskActive: true })
   ]);
 
   let installed = false;
@@ -40,7 +168,6 @@
   let currentRun = null;
   let history = [];
   let gateSerial = 0;
-  let originalLeaderboardSubmit = null;
 
   function finiteNumber(value, fallback = 0) {
     return Number.isFinite(value) ? value : fallback;
@@ -54,6 +181,22 @@
     return Math.round(finiteNumber(Number(value), 0) * 2) / 2;
   }
 
+  // The Void multiplies band speed and shrinks the gap. Left uncapped that runs
+  // straight out of the envelope the reachability solver has proven: even at
+  // GEBURAH it already reached 9.3, and the old gap floor of 100 sat below the
+  // game's own CONFIG.MIN_PILLAR_GAP. The Void stays a sharp escalation at low
+  // bands and saturates at the hardest provably clearable configuration instead
+  // of running off into difficulty nobody has shown is survivable.
+  function voidSpeedFor(bandSpeed) {
+    const base = Math.max(0, finiteNumber(Number(bandSpeed), 0));
+    return Math.min(MAX_VALIDATED_SPEED, base * VOID_SPEED_MULTIPLIER);
+  }
+
+  function voidGapFor(baseGap) {
+    const base = finiteNumber(Number(baseGap), MIN_VALIDATED_GAP);
+    return Math.max(MIN_VALIDATED_GAP, base - VOID_GAP_REDUCTION);
+  }
+
   function getBandIndex(gatesCleared) {
     const gates = Math.max(0, Math.floor(finiteNumber(Number(gatesCleared), 0)));
     let index = 0;
@@ -65,6 +208,24 @@
 
   function getBand(gatesCleared) {
     return BANDS[getBandIndex(gatesCleared)];
+  }
+
+  /**
+   * The shared edge economy, from the page or from Node.
+   *
+   * The browser gets it from a script tag; the unit suites `require` this file
+   * directly with no page around it, so `root` is empty and a bare global read
+   * throws. Resolved lazily rather than at load so the script-tag order stays
+   * free, and cached by the module's own attach on first require.
+   */
+  function gnosisEdge() {
+    if (root.SexMagickGnosisEdge) return root.SexMagickGnosisEdge;
+    try {
+      if (typeof module === 'object' && module.exports && typeof require === 'function') {
+        return require('./gnosis-edge.js');
+      }
+    } catch (_error) { /* fall through to the throw below */ }
+    throw new Error('SexMagickGnosisEdge is required for the Gate slice edge economy');
   }
 
   function familyWeight(family) {
@@ -124,6 +285,59 @@
     };
   }
 
+  // Samples a point from `intervals` (a list of [low, high] pairs) in proportion
+  // to their widths, so a window with a hole in it stays uniformly distributed.
+  function sampleIntervals(intervals, unitRandom) {
+    const usable = intervals.filter(([low, high]) => high > low);
+    const total = usable.reduce((sum, [low, high]) => sum + (high - low), 0);
+    if (total <= 0) return null;
+    let cursor = clamp(unitRandom, 0, 1) * total;
+    for (const [low, high] of usable) {
+      const width = high - low;
+      if (cursor <= width) return low + cursor;
+      cursor -= width;
+    }
+    const [low, high] = usable[usable.length - 1];
+    return high === low ? low : high;
+  }
+
+  // Chooses where a Gate offer sits vertically. Replaces the `gateSerial % 2`
+  // alternation that put all 28 offers of the 2026-08-12 pilot on exactly two Y
+  // values. Pure and deterministic given `unitRandom`, so it is unit-testable and
+  // reproducible from a run seed.
+  function chooseGateY(options = {}) {
+    const height = Math.max(1, finiteNumber(Number(options.canvasHeight), 0));
+    const unitRandom = clamp(finiteNumber(Number(options.unitRandom), 0.5), 0, 1);
+    const centre = height / 2;
+
+    const margin = Math.min(GATE_EDGE_MARGIN_PX, height / 2);
+    let low = Math.max(margin, height * GATE_MIN_RATIO);
+    let high = Math.min(height - margin, height * GATE_MAX_RATIO);
+    if (high <= low) return centre;
+
+    // Keep the offer within reach of where the player actually is right now.
+    const travelFrames = Math.max(1, finiteNumber(Number(options.travelFrames), 1));
+    const reach = Math.max(GATE_MIN_REACH_PX, travelFrames * GATE_VERTICAL_PX_PER_FRAME);
+    const playerY = finiteNumber(Number(options.playerY), centre);
+    const reachLow = Math.max(low, playerY - reach);
+    const reachHigh = Math.min(high, playerY + reach);
+    // If the player is outside the corridor entirely, the reach window can come
+    // out empty. Fall back to the nearest legal point rather than to the centre.
+    if (reachHigh <= reachLow) return clamp(playerY, low, high);
+
+    // Carve out a band around the previous Gate so consecutive offers differ.
+    const previousY = Number(options.previousY);
+    if (!Number.isFinite(previousY)) return reachLow + unitRandom * (reachHigh - reachLow);
+    const separation = height * GATE_MIN_SEPARATION_RATIO;
+    const sampled = sampleIntervals([
+      [reachLow, Math.min(reachHigh, previousY - separation)],
+      [Math.max(reachLow, previousY + separation), reachHigh]
+    ], unitRandom);
+    // A window narrower than the separation band leaves nothing to carve; take
+    // the whole window rather than refusing to place a Gate.
+    return sampled === null ? reachLow + unitRandom * (reachHigh - reachLow) : sampled;
+  }
+
   function createSliceState(options = {}) {
     return {
       version: SLICE_VERSION,
@@ -170,43 +384,35 @@
     const family = String(options.family || 'safe').toLowerCase();
     const riskActive = options.riskActive !== false;
     const nearMissThreshold = Math.max(0, finiteNumber(Number(options.nearMissThreshold), NEAR_MISS_PX));
-    const isRisk = riskActive && (classification.zone === 'risk-top' || classification.zone === 'risk-bottom');
-    const isNearMiss = classification.minimumClearance >= 0 && classification.minimumClearance < nearMissThreshold;
-    let gnosisGained = 0;
-    let gnosisDecayed = 0;
-    let bonusScore = 0;
-    let precisionBonus = 0;
+    // M42: the edge economy itself now lives in `gnosis-edge.js`, because MONAS
+    // banks Gnosis the same way and a second copy of these rules would drift.
+    // What stays here is the part that is HEX's alone - the gate count and the
+    // band index off HEX's own ladder, which is exactly what MONAS must not
+    // inherit.
+    const applied = gnosisEdge().applyEdgeClear(
+      { gnosis: next.gnosis, gnosisCapacity: next.gnosisCapacity,
+        riskStreak: next.riskStreak, timidGates: next.timidGates },
+      { classification, family, riskActive, nearMissThreshold }
+    );
+    const isRisk = applied.isRisk;
+    const isNearMiss = applied.nearMiss;
+    const gnosisGained = applied.gnosisGained;
+    const gnosisDecayed = applied.gnosisDecayed;
+    const precisionBonus = applied.precisionBonus;
+    const bonusScore = applied.bonusScore;
 
     next.gatesCleared += 1;
     next.scoreBreakdown.gate += 1;
     next.bandIndex = getBandIndex(next.gatesCleared);
 
+    next.gnosis = applied.edge.gnosis;
+    next.riskStreak = applied.edge.riskStreak;
+    next.timidGates = applied.edge.timidGates;
     if (isRisk) {
-      gnosisGained = familyWeight(family);
-      next.gnosis = roundHalf(Math.min(next.gnosisCapacity, next.gnosis + gnosisGained));
-      next.riskStreak += 1;
-      next.timidGates = 0;
       next.scoreBreakdown.risk += 2;
-      bonusScore += 2;
-      precisionBonus = streakBonus(next.riskStreak);
       next.scoreBreakdown.streak += precisionBonus;
-      bonusScore += precisionBonus;
-    } else {
-      next.riskStreak = 0;
-      if (riskActive) {
-        next.timidGates += 1;
-        if (next.timidGates >= 3 && next.gnosis > 0) {
-          gnosisDecayed = Math.min(1, next.gnosis);
-          next.gnosis = roundHalf(Math.max(0, next.gnosis - gnosisDecayed));
-          next.timidGates = 0;
-        }
-      }
     }
-
-    if (isNearMiss) {
-      next.scoreBreakdown.nearMiss += 1;
-      bonusScore += 1;
-    }
+    if (isNearMiss) next.scoreBreakdown.nearMiss += 1;
 
     if (next.gnosis >= next.gnosisCapacity) next.gateReady = true;
 
@@ -271,11 +477,23 @@
     return { state: next, result: { wager } };
   }
 
-  function completeVoidState(state, survivedSteps = VOID_DURATION_STEPS) {
+  /**
+   * @param {number} [survivedSteps] frames actually survived.
+   * @param {number} [plannedSteps]  how long *this* Void was meant to run.
+   *
+   * M44: the third argument is not decoration. `durationFraction` used to divide by
+   * the `VOID_DURATION_STEPS` constant, which was correct only while every Void was
+   * that length. Now that duration scales with the band, dividing by the constant
+   * would pay a short early Void a fraction under 1 for surviving all of it, and
+   * would let a long late Void reach 1 before it ended. It defaults to the constant
+   * so every existing caller keeps its exact behaviour.
+   */
+  function completeVoidState(state, survivedSteps = VOID_DURATION_STEPS, plannedSteps = VOID_DURATION_STEPS) {
     const next = cloneState(state);
     const wager = roundHalf(next.currentWager);
+    const planned = Math.max(1, finiteNumber(Number(plannedSteps), VOID_DURATION_STEPS));
     const durationFraction = clamp(
-      finiteNumber(Number(survivedSteps), 0) / VOID_DURATION_STEPS,
+      finiteNumber(Number(survivedSteps), 0) / planned,
       0,
       1
     );
@@ -378,20 +596,47 @@
       }
       #gate-slice-telegraph {
         position: fixed;
-        left: 50%; top: 42%; transform: translate(-50%, -50%);
-        z-index: 29;
+        left: 50%;
+        /* D-065: the shared transient-notice band. Every transient message in
+           the game sits at exactly this offset and notice-slot.js guarantees
+           only one is visible at a time, so a single line of text at a small
+           fixed offset can never migrate into the corridor - which is what
+           D-064's "stack them upward" approach did (304px from the bottom of a
+           643px viewport is 47% up: the middle). Clears the persistent
+           #sex-magick-missions list (bottom:46px, up to ~70px tall). */
+        bottom: max(128px, calc(env(safe-area-inset-bottom) + 122px));
+        transform: translateX(-50%);
+        z-index: 33;
         width: min(560px, calc(100vw - 30px));
-        padding: 12px 16px;
-        border: 1px solid rgba(0,229,255,.75);
-        background: rgba(0,0,0,.82);
+        /* D-066: was a 1px box with a solid slab behind it. The owner called the
+           box "unnecessary" and it is - a hard rectangle over the play field
+           reads as a modal, not a whisper. An edge-faded scrim keeps the text
+           legible over any artwork while having no perceivable edges. */
+        padding: 7px 16px;
+        border: none;
+        background: linear-gradient(90deg,
+          transparent, rgba(0,0,0,.72) 18%, rgba(0,0,0,.72) 82%, transparent);
         color: #eaffff;
         text-align: center;
         font: 12px/1.55 'Orbitron', monospace;
         letter-spacing: 3px;
         pointer-events: none;
         text-shadow: 0 0 12px #00e5ff;
+        --gate-slice-telegraph-flash: #00e5ff;
       }
       #gate-slice-telegraph[hidden] { display:none !important; }
+      #gate-slice-telegraph.gate-slice-telegraph-flash { animation: gate-slice-telegraph-flash .4s ease-out; }
+      @keyframes gate-slice-telegraph-flash {
+        0% {
+          color: var(--gate-slice-telegraph-flash);
+          text-shadow: 0 0 20px var(--gate-slice-telegraph-flash);
+        }
+        100% {
+          color: #eaffff;
+          text-shadow: 0 0 12px #00e5ff;
+        }
+      }
+      html.sex-magick-reduced-motion #gate-slice-telegraph.gate-slice-telegraph-flash { animation: none; }
       html.sex-magick-reduced-motion #gate-slice-meter-fill { transition: none; }
       #gate-slice-local-note {
         margin-top: 10px;
@@ -412,7 +657,7 @@
       hud.id = 'gate-slice-hud';
       hud.hidden = true;
       hud.innerHTML = `
-        <div class="gate-slice-row"><span id="gate-slice-band">MALKUTH</span><span id="gate-slice-streak">STREAK 0</span></div>
+        <div class="gate-slice-row"><span id="gate-slice-band">MALKUTH</span><span id="gate-slice-streak"></span></div>
         <div class="gate-slice-row"><span>GNOSIS</span><span id="gate-slice-value">0 / ${GNOSIS_CAPACITY}</span></div>
         <div class="gate-slice-meter"><div id="gate-slice-meter-fill"></div></div>
         <div class="gate-slice-row" style="margin-top:5px"><span id="gate-slice-status">SEEK THE EDGE</span><span id="gate-slice-void"></span></div>
@@ -431,11 +676,42 @@
     return { hud, telegraph };
   }
 
-  function setTelegraph(text, durationMs = 1100) {
+  // Unreserved against M7: hazard pink/Hexagram cyan/Monas gold/ward purple are all
+  // spoken for elsewhere, so every kind below except 'danger' (which deliberately
+  // reuses hazard pink - a wager lost *is* a danger event) picks a colour none of
+  // those systems already own.
+  const TELEGRAPH_FLASH_COLORS = {
+    info: '#00e5ff',
+    progress: '#8f7bff',
+    bonus: '#ffb347',
+    success: '#5dffb0',
+    danger: '#ff2f6d'
+  };
+
+
+  /**
+   * D-065: hand the shared transient-notice slot to this element before showing
+   * it, so no two notices are ever on screen at once. Optional by design - the
+   * module is a plain script and a page that somehow loads without it still
+   * announces, it just loses the mutual exclusion.
+   */
+  function claimNoticeSlot(id) {
+    try { root.SexMagickNoticeSlot?.register(id); root.SexMagickNoticeSlot?.claim(id); }
+    catch (_error) { /* never let slot arbitration break an announce */ }
+  }
+
+  function setTelegraph(text, durationMs = 1100, kind = 'info') {
     const element = document.getElementById('gate-slice-telegraph');
     if (!element) return;
     element.textContent = text;
+    claimNoticeSlot('gate-slice-telegraph');
     element.hidden = false;
+    element.style.setProperty('--gate-slice-telegraph-flash', TELEGRAPH_FLASH_COLORS[kind] || TELEGRAPH_FLASH_COLORS.info);
+    // Restart the flash animation even if a telegraph of the same kind is already
+    // mid-flash - remove the class, force a reflow, then re-add it.
+    element.classList.remove('gate-slice-telegraph-flash');
+    void element.offsetWidth;
+    element.classList.add('gate-slice-telegraph-flash');
     clearTimeout(element.__gateSliceTimer);
     element.__gateSliceTimer = setTimeout(() => { element.hidden = true; }, durationMs);
   }
@@ -450,7 +726,17 @@
     const band = BANDS[state.bandIndex] || BANDS[0];
     const fill = clamp(state.gnosis / state.gnosisCapacity, 0, 1) * 100;
     document.getElementById('gate-slice-band').textContent = band.name;
-    document.getElementById('gate-slice-streak').textContent = `STREAK ${state.riskStreak}`;
+
+    // `riskStreak` counts consecutive clears taken through the risk zone, and it
+    // resets on any centred clear - so on a readout that is always on screen it
+    // reads zero for most of a run, and the owner reasonably asked what it was
+    // for. It is shown now only while it is actually paying, which is where
+    // `streakBonus` starts (3), and it names the bonus rather than the count, so
+    // the number on screen is one the player can act on. The mechanic itself is
+    // unchanged: the bonus is scored either way, it simply stops being silent.
+    const streakPay = streakBonus(state.riskStreak);
+    document.getElementById('gate-slice-streak').textContent =
+      streakPay > 0 ? `EDGE ${state.riskStreak} · +${streakPay}` : '';
     document.getElementById('gate-slice-value').textContent = `${state.gnosis.toFixed(1).replace('.0', '')} / ${state.gnosisCapacity}`;
     document.getElementById('gate-slice-meter-fill').style.width = `${fill}%`;
 
@@ -468,17 +754,43 @@
     }
   }
 
+  // One seeded stream per run, derived from the run id, so Gate placement is
+  // reproducible from a recorded run rather than dependent on Math.random.
+  function nextGateRandom(gameInstance) {
+    if (typeof gameInstance.__gateSliceRandom !== 'function') {
+      const grammar = root.SexMagickObstacleGrammar;
+      const runId = gameInstance.gateSliceState?.runId || '';
+      if (typeof grammar?.createSeededRandom === 'function' && typeof grammar?.hashStringToSeed === 'function') {
+        gameInstance.__gateSliceRandom = grammar.createSeededRandom(grammar.hashStringToSeed(runId));
+      } else {
+        gameInstance.__gateSliceRandom = Math.random;
+      }
+    }
+    return gameInstance.__gateSliceRandom();
+  }
+
   function createGateOffer(gameInstance) {
     gateSerial += 1;
-    const upper = gateSerial % 2 === 1;
-    const targetRatio = upper ? 0.36 : 0.64;
-    const y = clamp(gameInstance.canvas.height * targetRatio, 96, gameInstance.canvas.height - 96);
+    const spawnX = gameInstance.canvas.width + 68;
+    const playerX = finiteNumber(Number(gameInstance.player?.x), 0);
+    const speed = Math.max(0.1, finiteNumber(Number(gameInstance.gameSpeed), 1));
+    const y = chooseGateY({
+      canvasHeight: gameInstance.canvas.height,
+      playerY: gameInstance.player?.y,
+      previousY: gameInstance.__gateSlicePreviousOfferY,
+      travelFrames: Math.max(1, (spawnX - playerX) / speed),
+      unitRandom: nextGateRandom(gameInstance)
+    });
+    gameInstance.__gateSlicePreviousOfferY = y;
     const offer = {
       serial: gateSerial,
-      x: gameInstance.canvas.width + 68,
+      x: spawnX,
       y,
-      outerRadius: 52,
-      innerRadius: 31,
+      outerRadius: GATE_OUTER_RADIUS,
+      entryRadius: GATE_ENTRY_RADIUS,
+      // Retained as an alias so older evidence readers keep working. It now
+      // reports the true aperture rather than a decorative inner circle.
+      innerRadius: GATE_ENTRY_RADIUS,
       pulse: 0,
       resolved: false,
       offeredAtFrame: gameInstance.frames
@@ -487,7 +799,7 @@
     const offered = offerGateState(gameInstance.gateSliceState, { frame: gameInstance.frames, y });
     gameInstance.gateSliceState = offered.state;
     gameInstance.gateSliceOffer = offer;
-    setTelegraph('THE GATE OPENS  ·  ENTER TO WAGER  /  PASS TO BANK', 1500);
+    setTelegraph('THE GATE OPENS  ·  ENTER TO WAGER  /  PASS TO BANK', 1500, 'info');
     try {
       if (gameInstance.settings.sfx && typeof SFX?.playTone === 'function') {
         SFX.playTone(220, 'sine', 0.18, 0.06);
@@ -496,6 +808,21 @@
     } catch (_error) {}
     renderHud(gameInstance);
     return offer;
+  }
+
+  /**
+   * HEX's own glitch signatures, gated the same way `installEffectPolicy` gates
+   * `triggerOrbGlitch`/`triggerLevelUpGlitch`/`triggerDeathGlitch`/
+   * `triggerGlitchEffect` in collision-runtime.js - reduced motion means no effect
+   * at all, low flash means a shorter one - except these are raw `GlitchFX.trigger`
+   * calls the policy wrap never reaches (it only wraps those named methods), so the
+   * check has to happen here instead.
+   */
+  function triggerHexGlitch(duration, type, tint) {
+    const accessibility = root.__SEX_MAGICK_COLLISION__?.getAccessibility?.() || {};
+    if (accessibility.reducedMotion) return;
+    const effectiveDuration = accessibility.lowFlash ? Math.min(duration, 70) : duration;
+    try { GlitchFX.trigger(effectiveDuration, type, tint); } catch (_error) {}
   }
 
   function drawGateOffer(ctx, offer, gameInstance) {
@@ -513,16 +840,20 @@
     ctx.beginPath();
     ctx.arc(0, 0, offer.outerRadius * pulse, 0, Math.PI * 2);
     ctx.stroke();
+    // The bright circle is the aperture itself, not decoration. Anything that
+    // changes the entry radius must change this arc with it.
+    const entryRadius = finiteNumber(Number(offer.entryRadius), GATE_ENTRY_RADIUS);
     ctx.strokeStyle = '#f8fbff';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(0, 0, offer.innerRadius, 0, Math.PI * 2);
+    ctx.arc(0, 0, entryRadius, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.lineWidth = 2;
     ctx.rotate(Math.PI / 6);
     for (let index = 0; index < 6; index += 1) {
       ctx.rotate(Math.PI / 3);
       ctx.beginPath();
-      ctx.moveTo(offer.innerRadius + 5, 0);
+      ctx.moveTo(entryRadius + 5, 0);
       ctx.lineTo(offer.outerRadius - 5, 0);
       ctx.stroke();
     }
@@ -559,26 +890,164 @@
 
   function applyBand(gameInstance, announce = false) {
     const state = gameInstance.gateSliceState;
-    if (!state) return;
+    if (!state) return null;
     const band = BANDS[state.bandIndex] || BANDS[0];
     const matching = gameInstance.gameLevels.find(level => String(level.name).toUpperCase() === band.name);
+    // The wagered Void owns the level readout for its duration - `startVoidMode`
+    // writes 'THE VOID' in cyan, and that is the player's only confirmation that a
+    // wager is live. Difficulty still belongs to the band underneath (the speed
+    // assignment below applies the Void multiplier to it), so only the
+    // *presentation* half stands down here.
+    //
+    // This split exists because M46's resize guard made it matter. Before it,
+    // applyBand ran only on band transitions, which cannot happen inside a Void, so
+    // the label was safe by accident. Reasserting band speed after every resize
+    // meant the label was reasserted too, and rotating the phone mid-Void silently
+    // reverted 'THE VOID' to the band name while the wager was still running -
+    // found by eye-reviewing regenerated baselines, which is the second defect that
+    // review has caught.
+    const voidOwnsPresentation = Boolean(gameInstance.__gateSliceVoidActive);
     if (matching) {
-      document.getElementById('levelUi').textContent = matching.name;
-      document.getElementById('levelUi').style.color = matching.accent;
-      document.getElementById('levelUi').style.textShadow = `0 0 15px ${matching.accent}`;
-      gameInstance.root.style.setProperty('--primary', matching.accent);
-    } else {
+      // Everything visual reads currentLevelIdx, not the band: drawLevelArtwork,
+      // drawScene's tunnelColor, and the accent wash all look up
+      // gameLevels[currentLevelIdx]. Until this assignment existed the pointer sat
+      // at 0 for an entire session, so ascending the Tree changed the HUD text and
+      // nothing else - roughly 24 band changes in a ten-minute session, none of
+      // them visible.
+      const matchedIndex = gameInstance.gameLevels.indexOf(matching);
+      if (matchedIndex >= 0) gameInstance.currentLevelIdx = matchedIndex;
+      if (!voidOwnsPresentation) {
+        document.getElementById('levelUi').textContent = matching.name;
+        document.getElementById('levelUi').style.color = matching.accent;
+        document.getElementById('levelUi').style.textShadow = `0 0 15px ${matching.accent}`;
+        gameInstance.root.style.setProperty('--primary', matching.accent);
+      }
+    } else if (!voidOwnsPresentation) {
       document.getElementById('levelUi').textContent = band.name;
     }
     gameInstance.gameSpeed = gameInstance.__gateSliceVoidActive
-      ? band.speed * VOID_SPEED_MULTIPLIER
+      ? voidSpeedFor(band.speed)
       : band.speed;
-    gameInstance.currentBaseGap = band.gap;
+    // The descent's corridor, not the band's, so the run keeps closing in past
+    // KETHER instead of freezing at 122 for the rest of the session.
+    gameInstance.currentBaseGap = nominalGapFor(state.gatesCleared);
     if (announce) {
-      setTelegraph(`${band.name}  ·  ${band.riskActive ? 'THE EDGE AWAKENS' : 'LEARN THE CURRENT'}`, 950);
+      setTelegraph(`${band.name}  ·  ${band.riskActive ? 'THE EDGE AWAKENS' : 'LEARN THE CURRENT'}`, 950, 'progress');
       try { if (gameInstance.settings.sfx) SFX.levelUp(); } catch (_error) {}
     }
     renderHud(gameInstance);
+    return matching || null;
+  }
+
+  /**
+   * The background gallery.
+   *
+   * Bands own progression - difficulty, speed, gap, the Sephirah name - and there
+   * are only eight of them, drawn from the eleven Sephirah-named images. The
+   * original game cycled the whole ~71-image pool as you played, and
+   * `prepareOrderedLevels` narrowing `gameLevels` to eight is what removed that.
+   *
+   * So the picture gets its own rotation, independent of the band, over the full
+   * pool. The index is derived from `gatesCleared` rather than tracked, so it
+   * cannot drift out of sync and resets with the run for free.
+   */
+  const GALLERY_ADVANCE_GATES = 4;
+  let gallery = [];
+
+  function buildGallery() {
+    // Referenced, never copied: `preloadAllImages` mutates `img`/`loaded` on the
+    // pool entries themselves, so a copy taken at startGame could hold a stale
+    // `loaded: false` for anything that finished loading later.
+    const pool = typeof MASTER_POOL !== 'undefined' && Array.isArray(MASTER_POOL) ? MASTER_POOL : [];
+    const shuffled = [...pool];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swap = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[swap]] = [shuffled[swap], shuffled[index]];
+    }
+    gallery = shuffled;
+    return gallery;
+  }
+
+  function galleryEntryFor(gatesCleared) {
+    if (!gallery.length) return null;
+    const step = Math.floor(Math.max(0, finiteNumber(Number(gatesCleared), 0)) / GALLERY_ADVANCE_GATES);
+    return gallery[step % gallery.length] || null;
+  }
+
+  function currentGalleryEntry(gameInstance) {
+    const state = gameInstance?.gateSliceState;
+    if (!state) return null;
+    return galleryEntryFor(state.gatesCleared);
+  }
+
+  /**
+   * The pentagram bonus corridor.
+   *
+   * The original ran one of these between levels: obstacles stopped and spinning
+   * pentagrams flew past at +10 each. M16 reused the name "Void" for the Gate
+   * wager and the bonus section was lost with it - `pentagrams.push` sits inside
+   * `if (this.voidMode ...)`, and the Gate slice's Void branch clears that flag so
+   * pillars spawn instead, making the line unreachable in HEX mode.
+   *
+   * This is a separate state from `__gateSliceVoidActive` on purpose: the wager
+   * stays exactly as it is, and the reward corridor comes back alongside it.
+   */
+  // The original ran a bonus every 5 levels, and levels advanced every 5 score -
+  // so roughly every 25 pillars. Gates cleared are this game's pillars (367 in the
+  // owner's ten-minute session, about one every 1.6s), which makes 25 the faithful
+  // translation: a corridor every ~40s of play. Every 5 would have handed the
+  // player a bonus every eight seconds.
+  const BONUS_EVERY_GATES = 25;
+  const BONUS_DURATION_FRAMES = 5 * 60;
+
+  /**
+   * `?bonusEvery=N` - QA and playtest only.
+   *
+   * A corridor every 25 gates is right for play and wrong for testing: checking
+   * the star section meant clearing 25 gates first, every time, which is about
+   * forty seconds of unrelated play before the thing under test appears. That
+   * cost is what makes a section go unverified. Clamped to at least 1 and
+   * ignored when absent, so the shipped cadence is what a normal load gets.
+   */
+  function bonusEveryGates() {
+    try {
+      const raw = new URLSearchParams(root.location?.search || '').get('bonusEvery');
+      if (raw === null) return BONUS_EVERY_GATES;
+      const parsed = Math.floor(Number(raw));
+      return Number.isFinite(parsed) && parsed >= 1 ? parsed : BONUS_EVERY_GATES;
+    } catch (_error) {
+      return BONUS_EVERY_GATES;
+    }
+  }
+
+  function tickBonusCorridor(gameInstance) {
+    const state = gameInstance.gateSliceState;
+    if (!state) return false;
+
+    if (gameInstance.__bonusCorridorFrames > 0) {
+      gameInstance.__bonusCorridorFrames -= 1;
+      if (gameInstance.__bonusCorridorFrames === 0) setTelegraph('THE PATH RESUMES', 700, 'info');
+      return gameInstance.__bonusCorridorFrames > 0;
+    }
+
+    // Never inside the wager or while an offer is on screen - those are the
+    // player's decision moments and a bonus corridor would talk over them.
+    if (gameInstance.__gateSliceVoidActive || gameInstance.gateSliceOffer) return false;
+
+    const gates = Math.max(0, Math.floor(finiteNumber(Number(state.gatesCleared), 0)));
+    if (gates <= 0 || gates % bonusEveryGates() !== 0) return false;
+    if (gameInstance.__bonusCorridorLastGate === gates) return false;
+
+    gameInstance.__bonusCorridorLastGate = gates;
+    gameInstance.__bonusCorridorFrames = BONUS_DURATION_FRAMES;
+    setTelegraph('GATHER THE SIGILS', 900, 'bonus');
+    return true;
+  }
+
+  function resetBonusCorridor(gameInstance) {
+    gameInstance.__bonusCorridorFrames = 0;
+    gameInstance.__bonusCorridorLastGate = -1;
+    gameInstance.pentagrams = [];
   }
 
   function prepareOrderedLevels(gameInstance, originalPrepareLevels) {
@@ -602,7 +1071,8 @@
     const player = gameInstance.player;
     if (!player) return;
     const distance = Math.hypot(player.x - offer.x, player.y - offer.y);
-    if (distance <= offer.innerRadius) {
+    const entryRadius = finiteNumber(Number(offer.entryRadius), GATE_ENTRY_RADIUS);
+    if (distance <= entryRadius) {
       offer.resolved = true;
       const entered = enterGateState(gameInstance.gateSliceState);
       gameInstance.gateSliceState = entered.state;
@@ -618,7 +1088,7 @@
       gameInstance.score += banked.result.reward;
       const scoreUi = document.getElementById('scoreUi');
       if (scoreUi) scoreUi.textContent = String(gameInstance.score);
-      setTelegraph(`GNOSIS BANKED  +${banked.result.reward}`, 850);
+      setTelegraph(`GNOSIS BANKED  +${banked.result.reward}`, 850, 'success');
       try { if (gameInstance.settings.sfx) SFX.collect(); } catch (_error) {}
       renderHud(gameInstance);
     }
@@ -639,15 +1109,47 @@
     try { return callback(); } finally { CONFIG.PILLAR_SPAWN_BASE = previous; }
   }
 
+  // Records, for every live pillar, the player's position at the frame of closest
+  // horizontal approach. Must run every frame after the pillars and the player
+  // have moved.
+  //
+  // Without this, `handleClearedPillars` classified a clear using `player.y` read
+  // once the pillar was already marked passed. At fall speeds up to
+  // CONFIG.MAX_FALL_SPEED that samples the player well below where they actually
+  // threaded the gap, which misattributes the risk zone of every clear and was
+  // the sole cause of the four phantom "unsafe crossings" in the 2026-08-12
+  // pilot. Pillar geometry breathes too, so `top` and `gap` are captured in the
+  // same instant as `playerY` rather than read live later.
+  function samplePillarApproaches(gameInstance) {
+    const player = gameInstance.player;
+    if (!player) return;
+    const playerX = finiteNumber(Number(player.x), 0);
+    for (const pillar of gameInstance.obstacles || []) {
+      const centre = finiteNumber(Number(pillar.x), 0) + finiteNumber(Number(pillar.w), 0) / 2;
+      const dx = Math.abs(playerX - centre);
+      const best = pillar.__gateSliceApproach;
+      if (best && dx >= best.dx) continue;
+      pillar.__gateSliceApproach = {
+        dx,
+        playerY: finiteNumber(Number(player.y), 0),
+        gapTop: finiteNumber(Number(pillar.top), 0),
+        gapSize: finiteNumber(Number(pillar.gap), 0)
+      };
+    }
+  }
+
   function handleClearedPillars(gameInstance, previouslyMarked) {
     const state = gameInstance.gateSliceState;
     if (!state) return;
     for (const pillar of gameInstance.obstacles) {
       if (!pillar.marked || previouslyMarked.has(pillar)) continue;
+      // Classify from the closest-approach snapshot. Live values are only a
+      // fallback for a pillar that was somehow marked before it was ever sampled.
+      const approach = pillar.__gateSliceApproach;
       const classification = classifyGateClear({
-        playerY: gameInstance.player?.y,
-        gapTop: pillar.top,
-        gapSize: pillar.gap,
+        playerY: approach ? approach.playerY : gameInstance.player?.y,
+        gapTop: approach ? approach.gapTop : pillar.top,
+        gapSize: approach ? approach.gapSize : pillar.gap,
         playerHalf: EFFECTIVE_PLAYER_HALF
       });
       const band = BANDS[state.bandIndex] || BANDS[0];
@@ -671,7 +1173,20 @@
           }
         } catch (_error) {}
       }
-      if (applied.result.gateReady) setTelegraph('GNOSIS FULL  ·  THE GATE APPROACHES', 1050);
+      if (applied.result.nearMiss) {
+        // The graze pass is HEX's whole risk model, and until now it had no visual
+        // signature of its own beyond the score tick - a harder-edged tear than the
+        // ambient rgbSplit, in hazard pink, so the edge itself reads as felt.
+        const accessibility = root.__SEX_MAGICK_COLLISION__?.getAccessibility?.() || {};
+        if (!accessibility.reducedMotion && (!gameInstance.screenFlash || !gameInstance.screenFlash.active)) {
+          gameInstance.screenFlash = {
+            active: true, duration: 8, color: '#ff2f6d',
+            intensity: accessibility.lowFlash ? 0.08 : 0.14
+          };
+        }
+        triggerHexGlitch(140, 'shear', '#ff2f6d');
+      }
+      if (applied.result.gateReady) setTelegraph('GNOSIS FULL  ·  THE GATE APPROACHES', 1050, 'progress');
       const nextBandIndex = getBandIndex(gameInstance.gateSliceState.gatesCleared);
       if (nextBandIndex !== state.bandIndex) {
         gameInstance.gateSliceState.bandIndex = nextBandIndex;
@@ -698,33 +1213,29 @@
     safeStorageWrite(history);
   }
 
-  function installLocalOnlyLeaderboard() {
-    try {
-      if (typeof Leaderboard === 'undefined' || !Leaderboard || Leaderboard.__gateSliceLocalOnly) return;
-      originalLeaderboardSubmit = Leaderboard.submit;
-      Leaderboard.submit = async function gateSliceLocalOnlySubmit() {
-        const status = document.getElementById('uploadStatus');
-        if (status) status.textContent = 'GATE SLICE — LOCAL ONLY';
-        return { localOnly: true };
-      };
-      Leaderboard.__gateSliceLocalOnly = true;
-    } catch (_error) {}
-  }
+  // `installLocalOnlyLeaderboard()` stood here. It overwrote `Leaderboard.submit`
+  // to stop the LootLocker client shipping an arbitrary integer to a shared board
+  // (D-004, M16). D-044 removed that client from index.html outright, so there is
+  // nothing left to neuter - the object is inert at its source now, which is a
+  // stronger guarantee than an override that only applied when this slice loaded.
+  // The preflight in fixed-step-prototype.js still declares the invariant and still
+  // owns the status line; the global board updates it when it is the one in play.
 
   function configureMenu() {
     const monas = document.getElementById('startMonasBtn');
     if (monas) {
-      monas.disabled = true;
-      monas.textContent = 'RITE OF MONAS — SEALED';
-      monas.title = 'The Gate slice validates Hexagram before Monas returns.';
+      monas.disabled = false;
+      monas.textContent = 'RITE OF MONAS — THE GLIDE';
+      monas.title = 'Hold to rise, release to fall. Hold the centre to build Coherence.';
     }
     const hex = document.getElementById('startHexBtn');
     if (hex) {
       hex.textContent = 'RITE OF HEXAGRAM — THE GATE';
       hex.title = 'Sharp, precise, unforgiving. Court the edge to summon the Gate.';
     }
-    const leaderboard = document.querySelector('.leaderboard-container');
-    if (leaderboard) leaderboard.hidden = true;
+    // The board itself is no longer hidden - the Rite board fills it from local
+    // run history (D-040). Only the network connection test stays gone, because
+    // shared submission is still an open owner decision.
     const testButton = document.querySelector('button[onclick="testLeaderboardConnection()"]');
     if (testButton) testButton.hidden = true;
     const menuButtons = document.getElementById('menuButtons');
@@ -745,7 +1256,6 @@
     history = safeStorageRead();
     ensureHud();
     configureMenu();
-    installLocalOnlyLeaderboard();
 
     const originalPrepareLevels = Game.prototype.prepareLevels;
     const originalStartGame = Game.prototype.startGame;
@@ -756,6 +1266,7 @@
     const originalDrawGameObjects = Game.prototype.drawGameObjects;
     const originalPillarDraw = Pillar.prototype.draw;
     const originalGetCurrentGap = Game.prototype.getCurrentGap;
+    const originalAdjustForScreenSize = Game.prototype.adjustForScreenSize;
 
     Game.prototype.prepareLevels = function prepareGateSliceLevels() {
       return prepareOrderedLevels(this, originalPrepareLevels);
@@ -766,12 +1277,44 @@
       applyBand(this, false);
     };
 
+    // The base responsive path assigns a portrait fallback speed after every
+    // resize. That is correct before a rite starts, but once HEX owns difficulty
+    // it overwrites the current band (10.0 -> 2.61 at KETHER) while leaving the
+    // band and corridor unchanged. Reapply the exact current Gate state after the
+    // base method, including the wagered Void multiplier when that section owns
+    // the frame. MONAS installs its own outer wrapper and never enters this guard.
+    Game.prototype.adjustForScreenSize = function adjustGateSliceForScreen(...args) {
+      const result = originalAdjustForScreenSize.apply(this, args);
+      if (this.gameMode === 'HEX' && this.gateSliceState) applyBand(this, false);
+      return result;
+    };
+
     Game.prototype.checkLevel = function checkGateSliceBand() {
       if (!this.gateSliceState) return;
       const nextBand = getBandIndex(this.gateSliceState.gatesCleared);
       if (nextBand !== this.gateSliceState.bandIndex) {
         this.gateSliceState.bandIndex = nextBand;
-        applyBand(this, true);
+        const matching = applyBand(this, true);
+        // The original score-based checkLevel() gave every level-up this
+        // spectacle - shake, a freeze frame, an RGB-split glitch, a particle
+        // burst, and haptics. Ascending a band replaced levelling as the visual
+        // event, and it lost all of that in the rewrite; this restores it on the
+        // one event the Gate slice actually has left. triggerLevelUpGlitch
+        // already goes through the reduced-motion policy in
+        // collision-runtime.js's installEffectPolicy, so nothing here needs to
+        // re-check accessibility settings.
+        this.shake = 12;
+        this.hitStop = 3;
+        this.triggerLevelUpGlitch();
+        const burstColor = matching ? matching.accent : '#ffffff';
+        for (let i = 0; i < 30; i += 1) {
+          this.particles.push(new Particle(
+            this.canvas.width / 2, this.canvas.height / 2,
+            burstColor, 12,
+            Math.random() > 0.5 ? 'hexagram' : 'triangle'
+          ));
+        }
+        Haptics.levelUp();
       }
     };
 
@@ -781,18 +1324,30 @@
       const band = BANDS[this.gateSliceState.bandIndex] || BANDS[0];
       const breathing = Math.sin(this.frames * 0.05) * 10;
       const base = band.gap + breathing;
-      return this.__gateSliceVoidActive ? Math.max(100, base - VOID_GAP_REDUCTION) : base;
+      return this.__gateSliceVoidActive ? voidGapFor(base) : base;
     };
 
     Game.prototype.startGame = function startGateSlice(...args) {
-      if (this.gameMode !== 'HEX') return undefined;
+      // MONAS was sealed here, and this line was the seal: returning without calling
+      // the original meant pressing the button did nothing at all. The Gate slice
+      // still owns HEX only - every override below guards on gateSliceState, which a
+      // MONAS run never creates - so handing the other rite straight to the original
+      // is all that unsealing takes. See D-041.
+      if (this.gameMode !== 'HEX') return originalStartGame.apply(this, args);
       const result = originalStartGame.apply(this, args);
       currentRun = createSliceState({ runId: `gate_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}` });
       this.gateSliceState = currentRun;
       this.gateSliceOffer = null;
       this.__gateSliceVoidActive = false;
       this.__gateSliceVoidStartedAt = 0;
+      // Reseed Gate placement from the new run id and forget the previous run's
+      // last offer, so run N+1 does not inherit run N's separation constraint.
+      this.__gateSliceRandom = null;
+      this.__gateSlicePreviousOfferY = null;
       this.collectibles = [];
+      // A fresh shuffle per run, so two runs do not walk the same picture order.
+      buildGallery();
+      resetBonusCorridor(this);
       applyBand(this, false);
       renderHud(this);
       return result;
@@ -806,7 +1361,14 @@
       this.gateSliceOffer = null;
       this.__gateSliceVoidActive = false;
       this.__gateSliceVoidStartedAt = 0;
+      // Reseed Gate placement from the new run id and forget the previous run's
+      // last offer, so run N+1 does not inherit run N's separation constraint.
+      this.__gateSliceRandom = null;
+      this.__gateSlicePreviousOfferY = null;
       this.collectibles = [];
+      // A fresh shuffle per run, so two runs do not walk the same picture order.
+      buildGallery();
+      resetBonusCorridor(this);
       applyBand(this, false);
       renderHud(this);
       return result;
@@ -817,9 +1379,13 @@
       this.__gateSliceVoidActive = true;
       this.__gateSliceVoidStartedAt = this.frames;
       this.voidMode = true;
-      this.voidTimer = VOID_DURATION_STEPS;
+      // M44: this Void's own length, held on the instance because `endVoidMode`
+      // has to divide the reward by the duration *this* wager was set, not by the
+      // constant that used to be every wager's length.
+      this.__gateSliceVoidPlannedSteps = voidDurationForBand(this.gateSliceState.bandIndex);
+      this.voidTimer = this.__gateSliceVoidPlannedSteps;
       this.preVoidSpeed = (BANDS[this.gateSliceState.bandIndex] || BANDS[0]).speed;
-      this.gameSpeed = this.preVoidSpeed * VOID_SPEED_MULTIPLIER;
+      this.gameSpeed = voidSpeedFor(this.preVoidSpeed);
       this.gateSliceState.currentWager = roundHalf(wager);
       this.screenFlash = { active: true, duration: 16, color: '#00ffff', intensity: 0.32 };
       document.getElementById('game-container')?.classList.add('void-active');
@@ -828,7 +1394,7 @@
         levelUi.textContent = 'THE VOID';
         levelUi.style.color = '#00ffff';
       }
-      setTelegraph(`WAGER ACCEPTED  × ${this.gateSliceState.currentWager}`, 900);
+      setTelegraph(`WAGER ACCEPTED  × ${this.gateSliceState.currentWager}`, 900, 'progress');
       try { if (this.settings.sfx) SFX.voidEnter(); } catch (_error) {}
       renderHud(this);
     };
@@ -836,7 +1402,8 @@
     Game.prototype.endVoidMode = function endWageredVoid() {
       if (!this.gateSliceState || !this.__gateSliceVoidActive) return;
       const elapsed = Math.max(0, this.frames - this.__gateSliceVoidStartedAt);
-      const completed = completeVoidState(this.gateSliceState, elapsed);
+      const planned = finiteNumber(this.__gateSliceVoidPlannedSteps, VOID_DURATION_STEPS);
+      const completed = completeVoidState(this.gateSliceState, elapsed, planned);
       this.gateSliceState = completed.state;
       this.score += completed.result.reward;
       const scoreUi = document.getElementById('scoreUi');
@@ -846,13 +1413,17 @@
       this.voidTimer = 0;
       this.gameSpeed = (BANDS[this.gateSliceState.bandIndex] || BANDS[0]).speed;
       document.getElementById('game-container')?.classList.remove('void-active');
-      setTelegraph(`VOID SURVIVED  +${completed.result.reward}`, 1200);
+      setTelegraph(`VOID SURVIVED  +${completed.result.reward}`, 1200, 'success');
+      // The wager paying off deserves its own reading, distinct from an ordinary
+      // band ascent - a bright sweep in the Hexagram's own reserved cyan.
+      triggerHexGlitch(170, 'sweep', '#00e5ff');
       applyBand(this, false);
       renderHud(this);
     };
 
     Game.prototype.gameOver = function gameOverGateSlice(...args) {
-      if (this.__gateSliceVoidActive && this.gateSliceState) {
+      const wagerLost = Boolean(this.__gateSliceVoidActive && this.gateSliceState);
+      if (wagerLost) {
         const elapsed = Math.max(0, this.frames - this.__gateSliceVoidStartedAt);
         const failed = failVoidState(this.gateSliceState, elapsed);
         this.gateSliceState = failed.state;
@@ -861,10 +1432,16 @@
         this.voidTimer = 0;
         this.gameSpeed = (BANDS[this.gateSliceState.bandIndex] || BANDS[0]).speed;
         document.getElementById('game-container')?.classList.remove('void-active');
-        setTelegraph(`WAGER LOST  × ${failed.result.wager}`, 950);
+        setTelegraph(`WAGER LOST  × ${failed.result.wager}`, 950, 'danger');
       }
       const previousState = this.state;
       const result = originalGameOver.apply(this, args);
+      if (wagerLost) {
+        // The original's own gameOver() just fired its generic 'death' rgbSplit via
+        // triggerDeathGlitch - this fires after it specifically so the wager's own
+        // harsher tear wins the frame instead of being overwritten by the generic one.
+        triggerHexGlitch(190, 'shear', '#ff2f6d');
+      }
       if (previousState !== GameState.GAME_OVER && this.state === GameState.GAME_OVER) {
         finishRun(this, 'death');
       }
@@ -888,8 +1465,17 @@
       const offerActive = Boolean(this.gateSliceOffer);
       const shouldSpawnOffer = this.gateSliceState.gateReady && !offerActive && !this.__gateSliceVoidActive && isSpawnFrame(this);
       const forceVoidSpawn = this.__gateSliceVoidActive;
+      const bonusActive = tickBonusCorridor(this);
+      // Held by reference: the original marks `collected` before splicing, so any
+      // entry still flagged in this snapshot after the call was taken this frame.
+      const pentagramsBefore = this.pentagrams?.length ? [...this.pentagrams] : null;
       const previousOrbChance = CONFIG.ORB_SPAWN_CHANCE;
-      CONFIG.ORB_SPAWN_CHANCE = 0;
+      // Orbs are suppressed only where they would interfere: while a Gate offer is
+      // on screen and inside the Void wager. Outside those, they are the original
+      // game's constant source of glitch, hit-stop and gold particles, and killing
+      // them everywhere is what made the effects feel absent.
+      const suppressOrbs = offerActive || shouldSpawnOffer || forceVoidSpawn || bonusActive;
+      if (suppressOrbs) CONFIG.ORB_SPAWN_CHANCE = 0;
 
       try {
         if (shouldSpawnOffer) createGateOffer(this);
@@ -905,11 +1491,35 @@
           } finally {
             this.voidMode = visibleVoid;
           }
+        } else if (bonusActive) {
+          // The mirror image of the Void branch above. Pentagrams only spawn
+          // inside the original's `if (this.voidMode ...)` arm, so the bonus
+          // corridor borrows that flag for the spawn and suppresses pillars,
+          // which is exactly the shape the original's between-levels bonus had.
+          const visibleVoid = this.voidMode;
+          this.voidMode = true;
+          try {
+            result = withSpawnSuppressed(() => originalUpdateGameObjects.apply(this, args));
+          } finally {
+            this.voidMode = visibleVoid;
+          }
         } else {
           result = originalUpdateGameObjects.apply(this, args);
         }
 
-        this.collectibles = [];
+        if (suppressOrbs) this.collectibles = [];
+
+        // Orb pickup was the original's constant source of glitch and hit-stop.
+        // Pentagrams award score, particles and sound but never had that punch,
+        // because in the original they only appeared in a mode that had its own.
+        // Giving it to them restores the cadence inside bonus corridors.
+        if (pentagramsBefore && pentagramsBefore.some(pentagram => pentagram.collected)) {
+          this.hitStop = 3;
+          this.triggerOrbGlitch();
+        }
+        // Ordering matters: sample before classifying, so the pillar being marked
+        // this frame already carries its closest-approach snapshot.
+        samplePillarApproaches(this);
         handleClearedPillars(this, previouslyMarked);
         updateOffer(this);
         renderHud(this);
@@ -936,6 +1546,34 @@
       version: SLICE_VERSION,
       storageKey: STORAGE_KEY,
       query: 'gateSlice=1',
+      /**
+       * Identifies which build of this file is actually executing.
+       *
+       * The 2026-08-12 session reported cleanly while running a cached
+       * pre-M16 copy of this module, and it took three separate inferences
+       * from the event data to notice. Every value here is read live from the
+       * constants above rather than written as a literal, so a playtest report
+       * states its own provenance and that failure can never be silent again.
+       */
+      /**
+       * The stored run history, newest first. Exposed so the Rite board can rank
+       * runs without a second copy of the storage key to drift out of step.
+       */
+      getHistory() {
+        return history.map(entry => JSON.parse(JSON.stringify(entry)));
+      },
+      getFingerprint() {
+        return {
+          sliceVersion: SLICE_VERSION,
+          gateEntryRadius: GATE_ENTRY_RADIUS,
+          gateOuterRadius: GATE_OUTER_RADIUS,
+          bandCount: BANDS.length,
+          bandNames: BANDS.map(band => band.name),
+          maxValidatedSpeed: MAX_VALIDATED_SPEED,
+          minValidatedGap: MIN_VALIDATED_GAP,
+          gnosisCapacity: GNOSIS_CAPACITY
+        };
+      },
       getSnapshot() {
         if (typeof game === 'undefined' || !game) return null;
         return {
@@ -946,6 +1584,22 @@
           gateEntryRate: gateEntryRate(game.gateSliceState),
           band: game.gateSliceState ? { ...BANDS[game.gateSliceState.bandIndex] } : null,
           bufferFrames: root.__SEX_MAGICK_COLLISION__?.getInputBufferFrames?.() ?? null
+        };
+      },
+      /**
+       * The picture currently on screen, which is the background gallery's, not
+       * the band's. Read by occult-field-runtime so the artwork, the tunnel
+       * colour and the accent wash all follow the same rotation.
+       */
+      getBackgroundEntry() {
+        if (typeof game === 'undefined' || !game) return null;
+        return currentGalleryEntry(game);
+      },
+      getGalleryInfo() {
+        return {
+          size: gallery.length,
+          advanceEveryGates: GALLERY_ADVANCE_GATES,
+          names: gallery.slice(0, 12).map(entry => entry?.name ?? null)
         };
       },
       getHistory() { return cloneState(history); },
@@ -974,6 +1628,8 @@
       query: 'gateSlice=1',
       gnosisCapacity: GNOSIS_CAPACITY,
       voidDurationSteps: VOID_DURATION_STEPS,
+      voidDurationStepsLast: VOID_DURATION_STEPS_LAST,
+      voidDurationByBand: BANDS.map((band, index) => voidDurationForBand(index)),
       storageKey: STORAGE_KEY
     });
 
@@ -1004,12 +1660,31 @@
     HISTORY_LIMIT,
     GNOSIS_CAPACITY,
     VOID_DURATION_STEPS,
+    VOID_DURATION_STEPS_LAST,
+    voidDurationForBand,
+    DESCENT_GATES_PER_STEP,
+    DESCENT_GAP_PER_STEP,
+    descentStepsAt,
+    nominalGapFor,
     VOID_SPEED_MULTIPLIER,
     VOID_GAP_REDUCTION,
+    // M44: exported so the shipped band audit asserts each band against the
+    // envelope constant rather than against a literal that has to be remembered
+    // and updated in two places - which is how 8.5 came to be hardcoded in the
+    // audit's own assertion.
+    MAX_VALIDATED_SPEED,
+    MIN_VALIDATED_GAP,
     BANK_MULTIPLIER,
     VOID_MULTIPLIER,
     NEAR_MISS_PX,
     EFFECTIVE_PLAYER_HALF,
+    GATE_ENTRY_RADIUS,
+    GATE_OUTER_RADIUS,
+    GATE_MIN_RATIO,
+    GATE_MAX_RATIO,
+    GATE_EDGE_MARGIN_PX,
+    GATE_MIN_SEPARATION_RATIO,
+    GATE_VERTICAL_PX_PER_FRAME,
     BANDS,
     clamp,
     roundHalf,
@@ -1017,6 +1692,9 @@
     getBand,
     familyWeight,
     streakBonus,
+    sampleIntervals,
+    chooseGateY,
+    samplePillarApproaches,
     classifyGateClear,
     createSliceState,
     applyGateClearState,

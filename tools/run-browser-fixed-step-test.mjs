@@ -1,3 +1,5 @@
+await import('./qa-chrome-env.mjs');
+
 const nativeFetch = globalThis.fetch;
 
 if (typeof nativeFetch !== 'function') {

@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - develop/sex-magick-2.0
     types:
       - ready_for_review
   schedule:
@@ -17,14 +18,47 @@ on:
       - 'playwright.config.ts'
       - 'tools/visual-state-runtime.js'
       - 'tools/canvas-render-runtime.js'
+      # Bootstrap changes can alter which player-visible runtime is present even
+      # when the renderer itself is untouched.
+      - 'tools/fixed-step-prototype.js'
+      # Both affect what the page renders: the variety runtime moves pillar
+      # geometry, and the missions runtime adds a HUD layer that must stay out of
+      # the signature screenshots and inside the safe area at every geometry.
+      - 'tools/obstacle-variety-runtime.js'
+      - 'tools/missions-runtime.js'
+      - 'tools/powerup-runtime.js'
+      - 'tools/gate-slice-runtime.js'
+      - 'tools/monas-runtime.js'
+      - 'tools/leaderboard-runtime.js'
+      - 'tools/occult-art-runtime.js'
+      - 'tools/occult-field-runtime.js'
       - '.github/workflows/cross-screen-qa.yml'
   workflow_dispatch:
+    inputs:
+      update_snapshots:
+        description: >-
+          Regenerate M14 visual baseline PNGs and open a PR for review, instead of
+          comparing against the existing ones. Does not run the comparison job.
+        required: false
+        type: boolean
+        default: false
+      max_diff_pixel_ratio:
+        description: >-
+          Override M14's screenshot tolerance for this run only. Set to 0 to make
+          every comparison fail and report its true pixel ratio - Playwright only
+          prints that number on failure, so this is how the tolerance gets
+          calibrated against real data instead of guessed (D-046). Leave blank to
+          use the committed default.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   visual-state:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.update_snapshots != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -48,6 +82,10 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Run cross-screen and visual-state matrix
+        env:
+          # Blank leaves playwright.config.ts's committed default in force; the
+          # config ignores anything that is not a finite non-negative number.
+          M14_MAX_DIFF_PIXEL_RATIO: ${{ github.event.inputs.max_diff_pixel_ratio }}
         run: npm run test:cross-screen
 
       - name: Upload Playwright report
@@ -59,7 +97,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload traces, videos, screenshots, signatures, and JSON
+      - name: Upload traces, videos, screenshots, and JSON
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
@@ -67,3 +105,107 @@ jobs:
           path: test-results
           if-no-files-found: ignore
           retention-days: 14
+
+  # Runs only when explicitly dispatched with update_snapshots: true. Regenerates
+  # the M14 baseline PNGs and opens a PR rather than committing them directly -
+  # D-024 requires a baseline change to be explicit and reviewed, and this is that
+  # review step, done against the actual pictures via the PR's own diff view.
+  #
+  # This does not rely on downloading the m15-test-results artifact: that host
+  # (productionresultssa0.blob.core.windows.net) returns 403 under this project's
+  # egress policy in at least one known environment, and is not something to route
+  # around. A `git push` to the repository's own remote is a different path
+  # entirely from the Actions artifacts backend, so it is unaffected.
+  update-visual-baselines:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.update_snapshots == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify QA supply chain
+        run: npm run test:supply-chain
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Regenerate visual baselines
+        run: npm run test:cross-screen:update
+
+      - name: Open a review PR for the regenerated baselines
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          CHANGED="$(git status --porcelain -- 'tests/*-snapshots/**')"
+          if [ -z "$CHANGED" ]; then
+            echo "No baseline changes produced - nothing to open a PR for."
+            exit 0
+          fi
+
+          BASE_BRANCH="${GITHUB_REF_NAME}"
+          UPDATE_BRANCH="m14-baseline-refresh-${GITHUB_RUN_ID}"
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          # Written to files with `printf`, one line at a time, rather than a
+          # heredoc: a heredoc terminator must be flush against column 0 to be
+          # recognised (barring `<<-`, which strips leading *tabs* only, and this
+          # file is indented with spaces throughout) - but a YAML block scalar
+          # rejects any line indented *less* than its first line, ending the block
+          # early instead of joining it. Those two constraints can't both be
+          # satisfied by a heredoc here. `printf` has no terminator to satisfy, so
+          # it has no such conflict; each call is indented to match the
+          # surrounding step like any other command. Backticks are backslash-
+          # escaped because they are still inside a double-quoted string, which
+          # would otherwise try to run them as command substitution.
+          commit_message="$(mktemp)"
+          pr_body="$(mktemp)"
+
+          {
+            printf '%s\n' "M14: regenerate visual baseline screenshots"
+            printf '\n'
+            printf '%s\n' "Produced by the update_snapshots workflow_dispatch run ${RUN_URL},"
+            printf '%s\n' "off ${BASE_BRANCH}@${GITHUB_SHA}."
+          } > "$commit_message"
+
+          {
+            printf '%s\n' "Automated baseline refresh from workflow run ${RUN_URL}, off \`${BASE_BRANCH}\`@\`${GITHUB_SHA}\`."
+            printf '\n'
+            printf '%s\n' "**Review every PNG in this diff before merging.** D-024 requires a"
+            printf '%s\n' "baseline change to be explicit and reviewed; this is that step, done"
+            printf '%s\n' "against the actual pictures via this PR's own diff view rather than a"
+            printf '%s\n' "hash."
+            printf '\n'
+            printf '%s\n' "Once merged, re-run this workflow (update_snapshots left off) twice on"
+            printf '%s\n' "the merged commit: it should be green both times, and the real diff"
+            printf '%s\n' "percentages Playwright reports are what calibrates \`maxDiffPixelRatio\`"
+            printf '%s\n' "in playwright.config.ts — see docs/decisions/d046-*.md."
+          } > "$pr_body"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$UPDATE_BRANCH"
+          git add -- 'tests/*-snapshots/**'
+          git commit -F "$commit_message"
+          git push origin "$UPDATE_BRANCH"
+
+          gh pr create \
+            --base "$BASE_BRANCH" \
+            --head "$UPDATE_BRANCH" \
+            --title "M14: regenerate visual baseline screenshots" \
+            --body-file "$pr_body"

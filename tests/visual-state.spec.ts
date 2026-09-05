@@ -1,9 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 
-const BASELINE_PATH = path.join(process.cwd(), 'tests', 'visual-baselines', 'm14-signatures.json');
 const visualReferenceProjects = new Set([
   'chromium-small-phone',
   'chromium-fold-cover',
@@ -24,11 +20,6 @@ const expectedLayers: Record<string, string> = {
   void: 'gameplay'
 };
 
-function baselineData(): Record<string, Record<string, string>> | null {
-  if (!fs.existsSync(BASELINE_PATH)) return null;
-  return JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
-}
-
 async function seedPage(page: Page) {
   if (seededPages.has(page)) return;
   seededPages.add(page);
@@ -43,6 +34,13 @@ async function seedPage(page: Page) {
       value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
       return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
     };
+    // installAccessibilityControls() in collision-runtime.js shows a one-time
+    // sensitivity notice ("VISUAL INTENSITY... ACKNOWLEDGE") on any fresh browser
+    // profile - correct for a real first-time player, but every QA capture is a
+    // fresh profile, so without this it would be glued to the bottom of every
+    // baseline screenshot forever. Pre-seeding the same key it checks makes this
+    // context look like a returning player who already dismissed it.
+    localStorage.setItem('sex_magick_sensitivity_notice_v1', '1');
   });
 }
 
@@ -207,6 +205,10 @@ async function showState(page: Page, state: string) {
   await resetStateRandom(page, state);
   const snapshot = await page.evaluate(stateName => (window as any).__SEX_MAGICK_VISUAL_QA__.showState(stateName), state);
   await waitForVisualSettlement(page);
+  // Settling calls __SEX_MAGICK_RENDER__.refresh(), and resizing a canvas clears
+  // it - so without this repaint every signature was hashing a blank canvas over
+  // the DOM. Repaint after the geometry has settled, before anything is captured.
+  await page.evaluate(() => (window as any).__SEX_MAGICK_VISUAL_QA__.redraw?.());
   if (state === 'menu') {
     await expect(page.locator('#leaderboardList')).toHaveText('VISUAL QA · LOCAL ONLY');
     await page.waitForTimeout(50);
@@ -224,19 +226,6 @@ async function warmVisualStates(page: Page, states: readonly string[]) {
       scale: 'css'
     });
   }
-}
-
-async function visualHash(page: Page, project: string, state: string) {
-  const outputDir = path.join(process.cwd(), 'test-results', 'm14-visual', project);
-  fs.mkdirSync(outputDir, { recursive: true });
-  const outputPath = path.join(outputDir, `${state}.png`);
-  const buffer = await page.locator('#game-container').screenshot({
-    path: outputPath,
-    animations: 'disabled',
-    caret: 'hide',
-    scale: 'css'
-  });
-  return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
 test('standard visual states remain reachable and internally consistent', async ({ page }) => {
@@ -296,28 +285,50 @@ test('Gate offer, bank, and Void states remain reachable', async ({ page }, test
   expect(lootLockerRequests).toEqual([]);
 });
 
+// Whole-container art regression, compared with a per-pixel tolerance rather than
+// byte-for-byte. Three real rounds of fixes against a sha256-of-the-screenshot
+// version of this test each found something genuine (phase-dependent ambient
+// animation, a telegraph hide-timer racing the capture, a blank-canvas capture
+// racing settlement) - but a fourth failure mode was never a defect in the page:
+// chromium-fold-cover and chromium-fold-inner disagreed with themselves at roughly
+// a coin-flip rate between otherwise-identical CI runs of the same commit, ruled
+// out as random spawning, animation phase, and elapsed wall-clock time by direct
+// measurement (see docs/decisions/d046-*.md). That is sub-pixel rasterisation
+// jitter, which a byte-identical hash cannot tell apart from a real change to the
+// field, pillars, avatar, or level art - both fail identically. `toHaveScreenshot`
+// is the same net with a per-pixel tolerance (configured once, in
+// playwright.config.ts) that absorbs the jitter while still failing on a real
+// regression, which is the whole point of this test.
+//
+// Baselines live under `visual-state.spec.ts-snapshots/` and are regenerated only
+// via CI's `update_snapshots` workflow_dispatch input, which opens a PR rather than
+// committing directly - the explicit human review D-024 requires, now done by eye
+// against the actual pictures instead of by eye against a hash diff. They are not
+// regenerated locally: this sandbox runs a different Chromium build than the
+// Playwright version pinned for CI, so local screenshots cannot be expected to
+// match the CI-generated baseline regardless of tolerance.
 test('deterministic visual signatures match the M14 reference baseline', async ({ page }, testInfo) => {
   test.skip(!visualReferenceProjects.has(testInfo.project.name), 'Visual signatures use four representative geometries.');
-  const baseline = baselineData();
-  const signatures: Record<string, string> = {};
 
   await openVisualController(page, false);
   await warmVisualStates(page, standardStates);
   for (const state of standardStates) {
     await showState(page, state);
-    signatures[state] = await visualHash(page, testInfo.project.name, state);
+    await expect(page.locator('#game-container')).toHaveScreenshot(`${state}.png`, {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css'
+    });
   }
 
   await openVisualController(page, true);
   await warmVisualStates(page, gateStates);
   for (const state of gateStates) {
     await showState(page, state);
-    signatures[state] = await visualHash(page, testInfo.project.name, state);
-  }
-
-  console.log(`M14_VISUAL_SIGNATURE ${JSON.stringify({ project: testInfo.project.name, signatures })}`);
-
-  if (baseline) {
-    expect(signatures).toEqual(baseline[testInfo.project.name]);
+    await expect(page.locator('#game-container')).toHaveScreenshot(`${state}.png`, {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css'
+    });
   }
 });

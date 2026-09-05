@@ -27,7 +27,6 @@
       hudFontSize: '9px',
       hudLetterSpacing: '1px',
       telegraphWidth: 'calc(100vw - 20px)',
-      telegraphTop: '39%',
       telegraphFontSize: '10px',
       telegraphLetterSpacing: '1.8px',
       scoreScale: 0.88,
@@ -38,7 +37,6 @@
       hudFontSize: '9px',
       hudLetterSpacing: '1px',
       telegraphWidth: 'calc(100vw - 18px)',
-      telegraphTop: '36%',
       telegraphFontSize: '10px',
       telegraphLetterSpacing: '1.6px',
       scoreScale: 0.86,
@@ -49,7 +47,6 @@
       hudFontSize: '8px',
       hudLetterSpacing: '0.8px',
       telegraphWidth: 'calc(100vw - 14px)',
-      telegraphTop: '34%',
       telegraphFontSize: '9px',
       telegraphLetterSpacing: '1.25px',
       scoreScale: 0.8,
@@ -60,7 +57,6 @@
       hudFontSize: '11px',
       hudLetterSpacing: '1.5px',
       telegraphWidth: '580px',
-      telegraphTop: '41%',
       telegraphFontSize: '13px',
       telegraphLetterSpacing: '2.6px',
       scoreScale: 1.05,
@@ -71,7 +67,6 @@
       hudFontSize: '10px',
       hudLetterSpacing: '1.4px',
       telegraphWidth: '560px',
-      telegraphTop: '41%',
       telegraphFontSize: '12px',
       telegraphLetterSpacing: '2.4px',
       scoreScale: 1,
@@ -82,7 +77,6 @@
       hudFontSize: '10px',
       hudLetterSpacing: '1.5px',
       telegraphWidth: '560px',
-      telegraphTop: '42%',
       telegraphFontSize: '12px',
       telegraphLetterSpacing: '3px',
       scoreScale: 1,
@@ -169,7 +163,6 @@
         --sm-hud-font-size: 10px;
         --sm-hud-letter-spacing: 1.5px;
         --sm-telegraph-width: 560px;
-        --sm-telegraph-top: 42%;
         --sm-telegraph-font-size: 12px;
         --sm-telegraph-letter-spacing: 3px;
         --sm-score-scale: 1;
@@ -180,9 +173,14 @@
         font-size: var(--sm-hud-font-size) !important;
         letter-spacing: var(--sm-hud-letter-spacing) !important;
       }
+      /* D-063: this predates D-060/D-062 and independently pinned the
+         telegraph to a percentage from the *top* on every device profile,
+         with !important - which silently overrode the bottom-anchored fix
+         those decisions made, on every profile, the whole time. Width, font
+         size and letter spacing are legitimate per-profile responsiveness and
+         stay; vertical position is gate-slice-runtime.js's alone to own now. */
       #gate-slice-telegraph {
         width: min(var(--sm-telegraph-width), calc(100vw - 12px)) !important;
-        top: var(--sm-telegraph-top) !important;
         font-size: var(--sm-telegraph-font-size) !important;
         letter-spacing: var(--sm-telegraph-letter-spacing) !important;
       }
@@ -211,7 +209,6 @@
     html.style.setProperty('--sm-hud-font-size', config.hudFontSize);
     html.style.setProperty('--sm-hud-letter-spacing', config.hudLetterSpacing);
     html.style.setProperty('--sm-telegraph-width', config.telegraphWidth);
-    html.style.setProperty('--sm-telegraph-top', config.telegraphTop);
     html.style.setProperty('--sm-telegraph-font-size', config.telegraphFontSize);
     html.style.setProperty('--sm-telegraph-letter-spacing', config.telegraphLetterSpacing);
     html.style.setProperty('--sm-score-scale', String(config.scoreScale));

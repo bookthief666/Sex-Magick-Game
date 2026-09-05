@@ -13,6 +13,8 @@ const {
   DEFAULT_INPUT_BUFFER_FRAMES,
   MAX_INPUT_BUFFER_FRAMES
 } = require('./collision-runtime.js');
+const riteReady = require('./rite-ready-runtime.js');
+const leaderboardProfile = require('./leaderboard-profile-runtime.js');
 
 function testNormalization() {
   assert.deepEqual(
@@ -144,6 +146,78 @@ function testBufferedInputAdvance() {
   });
 }
 
+function testRiteReadyLifecycle() {
+  const monas = {
+    state: 'playing',
+    gameMode: 'MONAS',
+    canvas: { height: 1000 },
+    player: {
+      y: 132,
+      vy: 4.5,
+      jumpCooldown: 3,
+      __sexMagickPendingJumpFrames: 2
+    },
+    frames: 222,
+    tunnelOffset: 77,
+    monasState: {
+      startedAt: '2026-09-05T00:00:00.000Z',
+      endedAt: null
+    },
+    resetFixedStepTiming() { this.fixedStepResets = (this.fixedStepResets || 0) + 1; }
+  };
+
+  riteReady.prepareRiteReadyState(monas);
+  assert.equal(riteReady.isReady(monas), true, 'selecting a rite must arm a suspended threshold');
+
+  const activation = riteReady.activateRiteReadyState(monas, '2026-09-05T03:00:00.000Z');
+  assert.equal(activation.activated, true);
+  assert.equal(activation.rite, 'MONAS');
+  assert.equal(riteReady.isReady(monas), false, 'first gameplay input must release the threshold');
+  assert.equal(monas.player.y, 500, 'ready activation starts from the viewport centre');
+  assert.equal(monas.player.vy, 0, 'no gravity or stale velocity may leak across the threshold');
+  assert.equal(monas.player.jumpCooldown, 0);
+  assert.equal(monas.player.__sexMagickPendingJumpFrames, 0);
+  assert.equal(monas.frames, 0, 'presentation-only ready frames are not gameplay frames');
+  assert.equal(monas.tunnelOffset, 0);
+  assert.equal(monas.monasState.startedAt, '2026-09-05T03:00:00.000Z',
+    'MONAS duration begins on deliberate input, not the rite-selection click');
+  assert.equal(monas.fixedStepResets, 1, 'fixed-step accumulation must be cleared at activation');
+
+  const hex = {
+    state: 'playing',
+    gameMode: 'HEX',
+    canvas: { height: 800 },
+    player: { y: 300, vy: 2, jumpCooldown: 1 },
+    frames: 9,
+    tunnelOffset: 18,
+    gateSliceState: {
+      startedAt: '2026-09-05T00:00:00.000Z',
+      endedAt: null
+    }
+  };
+  riteReady.prepareRiteReadyState(hex);
+  const hexActivation = riteReady.activateRiteReadyState(hex, '2026-09-05T03:01:00.000Z');
+  assert.equal(hexActivation.rite, 'HEX');
+  assert.equal(hex.player.y, 400);
+  assert.equal(hex.gateSliceState.startedAt, '2026-09-05T03:01:00.000Z',
+    'HEX duration begins on deliberate input too');
+
+  assert.deepEqual(riteReady.activateRiteReadyState(hex, '2026-09-05T03:02:00.000Z'), { activated: false },
+    'a second input must not rebase an already-active run');
+  assert.equal(hex.gateSliceState.startedAt, '2026-09-05T03:01:00.000Z');
+}
+
+function testLeaderboardHandleSanitisation() {
+  assert.equal(leaderboardProfile.MAX_HANDLE_LENGTH, 18);
+  assert.equal(leaderboardProfile.sanitiseHandle('Nuit 93'), 'NUIT 93');
+  assert.equal(leaderboardProfile.sanitiseHandle("  nuit!93/a-a  "), 'NUIT93A-A');
+  assert.equal(leaderboardProfile.sanitiseHandle("A.B C-D'E"), "A.B C-D'E");
+  assert.equal(leaderboardProfile.sanitiseHandle(''), 'ANON');
+  assert.equal(leaderboardProfile.sanitiseHandle('', ''), '', 'live editing may keep an empty field without inventing ANON');
+  assert.equal(leaderboardProfile.sanitiseHandle('abcdefghijklmnopqrstuvwxyz'), 'ABCDEFGHIJKLMNOPQR',
+    'the browser profile must enforce the same 18-character ceiling as the Worker');
+}
+
 testNormalization();
 testStrictOverlapPolicy();
 testPlayerInset();
@@ -153,5 +227,7 @@ testRenderedEdgeTruth();
 testSingleFeedbackJumpDispatch();
 testBufferedInputClassification();
 testBufferedInputAdvance();
+testRiteReadyLifecycle();
+testLeaderboardHandleSanitisation();
 
-console.log('collision-runtime: all geometry and input contracts passed');
+console.log('collision-runtime: all geometry, input, rite-ready, and board-profile contracts passed');

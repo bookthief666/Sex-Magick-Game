@@ -1,0 +1,368 @@
+{
+  "artifactVersion": 1,
+  "purpose": "Correct D-073 spacing evidence after witness replay dropped pillarSpawnBase",
+  "solverVersion": 2,
+  "policyVersion": 1,
+  "shippedBase": 140,
+  "gridBases": [
+    132,
+    124,
+    116,
+    108,
+    100,
+    92,
+    84
+  ],
+  "coordinates": {
+    "HEX": {
+      "speed": 10,
+      "gap": 110,
+      "model": "shipped HEX tap physics",
+      "scenarioIds": [
+        "phone-hard",
+        "fold-closed-hard",
+        "fold-open-hard",
+        "desktop-hard"
+      ]
+    },
+    "MONAS": {
+      "speed": 7,
+      "gap": 160,
+      "model": "legacy tap-model policy/spacing diagnostic; not shipped HOLD/RELEASE evidence",
+      "scenarioIds": [
+        "phone-hard",
+        "fold-closed-hard",
+        "fold-open-hard",
+        "desktop-hard"
+      ]
+    }
+  },
+  "rites": {
+    "HEX": {
+      "control": {
+        "total": 450,
+        "counts": {
+          "verified": 450,
+          "marginal": 0,
+          "invalid": 0
+        },
+        "clean": true,
+        "worst": []
+      },
+      "absurd": {
+        "total": 450,
+        "counts": {
+          "verified": 295,
+          "marginal": 51,
+          "invalid": 104
+        },
+        "clean": false,
+        "worst": [
+          "HEX/hex.gentle-step@phone-hard:marginal",
+          "HEX/hex.gentle-step@fold-closed-hard:marginal",
+          "HEX/hex.gentle-step@fold-open-hard:invalid",
+          "HEX/hex.gentle-step@fold-open-hard:invalid"
+        ]
+      },
+      "results": [
+        {
+          "base": 132,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 124,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 116,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 108,
+          "total": 450,
+          "counts": {
+            "verified": 448,
+            "marginal": 0,
+            "invalid": 2
+          },
+          "clean": false,
+          "worst": [
+            "HEX/hex.return-to-axis@fold-open-hard:invalid",
+            "HEX/hex.return-to-axis@fold-open-hard:invalid"
+          ]
+        },
+        {
+          "base": 100,
+          "total": 450,
+          "counts": {
+            "verified": 441,
+            "marginal": 4,
+            "invalid": 5
+          },
+          "clean": false,
+          "worst": [
+            "HEX/hex.staircase@fold-open-hard:invalid",
+            "HEX/hex.staircase@fold-open-hard:invalid",
+            "HEX/hex.staircase@fold-open-hard:invalid",
+            "HEX/hex.staircase@fold-open-hard:invalid"
+          ]
+        },
+        {
+          "base": 92,
+          "total": 450,
+          "counts": {
+            "verified": 421,
+            "marginal": 11,
+            "invalid": 18
+          },
+          "clean": false,
+          "worst": [
+            "HEX/hex.staircase@phone-hard:invalid",
+            "HEX/hex.staircase@phone-hard:invalid",
+            "HEX/hex.staircase@fold-closed-hard:invalid",
+            "HEX/hex.staircase@fold-open-hard:marginal"
+          ]
+        },
+        {
+          "base": 84,
+          "total": 450,
+          "counts": {
+            "verified": 406,
+            "marginal": 13,
+            "invalid": 31
+          },
+          "clean": false,
+          "worst": [
+            "HEX/hex.staircase@fold-open-hard:invalid",
+            "HEX/hex.staircase@fold-open-hard:invalid",
+            "HEX/hex.staircase@desktop-hard:marginal",
+            "HEX/hex.staircase@fold-open-hard:invalid"
+          ]
+        }
+      ],
+      "admissible": [
+        {
+          "base": 132,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 124,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 116,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        }
+      ]
+    },
+    "MONAS": {
+      "control": {
+        "total": 450,
+        "counts": {
+          "verified": 450,
+          "marginal": 0,
+          "invalid": 0
+        },
+        "clean": true,
+        "worst": []
+      },
+      "absurd": {
+        "total": 450,
+        "counts": {
+          "verified": 387,
+          "marginal": 22,
+          "invalid": 41
+        },
+        "clean": false,
+        "worst": [
+          "MONAS/monas.soft-orbit@phone-hard:marginal",
+          "MONAS/monas.soft-orbit@phone-hard:marginal",
+          "MONAS/monas.soft-orbit@phone-hard:invalid",
+          "MONAS/monas.soft-orbit@fold-closed-hard:marginal"
+        ]
+      },
+      "results": [
+        {
+          "base": 132,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 124,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 116,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 108,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 100,
+          "total": 450,
+          "counts": {
+            "verified": 432,
+            "marginal": 16,
+            "invalid": 2
+          },
+          "clean": false,
+          "worst": [
+            "MONAS/monas.mercurial-wave@fold-open-hard:marginal",
+            "MONAS/monas.mercurial-wave@fold-open-hard:marginal",
+            "MONAS/monas.mercurial-wave@fold-open-hard:marginal",
+            "MONAS/monas.mercurial-wave@fold-open-hard:marginal"
+          ]
+        },
+        {
+          "base": 92,
+          "total": 450,
+          "counts": {
+            "verified": 420,
+            "marginal": 16,
+            "invalid": 14
+          },
+          "clean": false,
+          "worst": [
+            "MONAS/monas.mercurial-wave@phone-hard:marginal",
+            "MONAS/monas.mercurial-wave@fold-open-hard:invalid",
+            "MONAS/monas.mercurial-wave@fold-open-hard:marginal",
+            "MONAS/monas.mercurial-wave@phone-hard:marginal"
+          ]
+        },
+        {
+          "base": 84,
+          "total": 450,
+          "counts": {
+            "verified": 391,
+            "marginal": 49,
+            "invalid": 10
+          },
+          "clean": false,
+          "worst": [
+            "MONAS/monas.mercurial-wave@phone-hard:marginal",
+            "MONAS/monas.mercurial-wave@phone-hard:marginal",
+            "MONAS/monas.mercurial-wave@fold-closed-hard:marginal",
+            "MONAS/monas.mercurial-wave@fold-open-hard:marginal"
+          ]
+        }
+      ],
+      "admissible": [
+        {
+          "base": 132,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 124,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 116,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        },
+        {
+          "base": 108,
+          "total": 450,
+          "counts": {
+            "verified": 450,
+            "marginal": 0,
+            "invalid": 0
+          },
+          "clean": true,
+          "worst": []
+        }
+      ]
+    }
+  }
+}
