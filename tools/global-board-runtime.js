@@ -11,13 +11,12 @@
  * provably incapable of phoning anywhere. So submission lives here instead, and the
  * local board keeps its invariant untouched.
  *
- * ## Opt-in, and off by default
+ * ## Activation
  *
- * Enabled only by `?globalBoard=1`, the same shape as `?gateSlice=1`. With the flag
- * absent this module installs nothing, registers no hooks, and issues no requests -
- * asserted by `browser-global-board-test.mjs`, which checks the default page still
- * makes zero external requests. It stays off until the Worker is deployed and the
- * owner turns it on.
+ * The global board installs when a deployed board URL is configured. The
+ * `?globalBoard=1` flag can still force it on for tests/previews and
+ * `?globalBoard=0` remains the emergency off switch. With the board disabled this
+ * module registers no hooks and issues no board requests.
  *
  * ## What submission claims
  *
@@ -38,14 +37,15 @@
   const INSTALL_TIMEOUT_MS = 12_000;
   const REQUEST_TIMEOUT_MS = 8_000;
 
-  // Set once the Worker is deployed. Overridable per-load by `?globalBoardUrl=`,
-  // which is how the browser suite points at a local stub without a deployment and
-  // how the owner can try a preview deployment without editing the file.
+  // Live Worker. Overridable per-load by `?globalBoardUrl=`, which is how the
+  // browser suite points at a local stub and how a preview deployment can be tried
+  // without editing the file.
   const DEFAULT_BOARD_URL = 'https://sex-magick-rite-board.manuel-orrantia.workers.dev';
 
   let installed = false;
   let installTimer = null;
   let runToken = null;
+  let runTokenRite = null;
   let lastSubmittedRunId = null;
   let lastResult = null;
 
@@ -60,18 +60,13 @@
   /**
    * Whether the global board runs.
    *
-   * M42 turns it on for the live build, but not by flipping a default to `true` -
-   * that would arm it before there was anywhere to send a run, and the failure
-   * would be a silent one. It is on **when a board URL is configured**, which is
-   * the condition that actually matters: `DEFAULT_BOARD_URL` is set once, after
-   * the Worker is deployed (see docs/qa/m42-board-deploy-runbook.md), and the
-   * board cannot precede its own server.
+   * It is on when a board URL is configured, because that is the condition that
+   * actually matters: a shared board cannot precede its own server.
    *
    * The flag survives as an override in both directions. `?globalBoard=1` forces
    * it on, which is how the browser suite drives a local stub through
-   * `?globalBoardUrl=` with nothing deployed; `?globalBoard=0` forces it off,
-   * which is the fastest way to take the board out of a live build without a
-   * redeploy.
+   * `?globalBoardUrl=`; `?globalBoard=0` forces it off, which is the fastest way to
+   * take the board out of a live build without changing the Worker.
    */
   function queryEnabled() {
     const flag = queryValue('globalBoard');
@@ -98,8 +93,8 @@
 
   /**
    * Every request goes through here so that a Worker that is slow, down, or simply
-   * not deployed yet can never hang the menu or throw into a game hook. A failed
-   * global board degrades to the local one, which is always present.
+   * unavailable can never hang the menu or throw into a game hook. A failed global
+   * board degrades to the local one, which is always present.
    */
   async function request(path, options = {}) {
     const base = boardUrl();
@@ -132,34 +127,33 @@
    * submission time would prove nothing about how long the run took.
    */
   async function beginRun(rite = 'HEX') {
+    const resolvedRite = rite === 'MONAS' ? 'MONAS' : 'HEX';
     runToken = null;
+    runTokenRite = resolvedRite;
     const result = await request('/run/start', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ rite })
+      body: JSON.stringify({ rite: resolvedRite })
     });
     if (result.ok && result.body?.token) runToken = result.body.token;
+    else runTokenRite = null;
     return runToken;
   }
 
   /**
-   * The run that just ended, from whichever rite ended it.
-   *
-   * Both recorders unshift, so each history's newest run is first; the later
-   * `endedAt` decides between them. Comparing timestamps rather than trusting the
-   * current `gameMode` matters because this is called from the *menu* render,
-   * after the rite has already been left behind - reading the mode there would
-   * attribute a MONAS run to whatever the player picked next.
+   * The newest finished run. When a token rite is known, restrict the lookup to
+   * that rite so a stale run from the other history can never be paired with the
+   * current token while lifecycle wrappers are settling.
    */
-  function newestRun() {
+  function newestRun(rite = null) {
     const candidates = [];
     try {
       const hex = root.__SEX_MAGICK_GATE_SLICE__?.getHistory?.();
-      if (Array.isArray(hex) && hex.length > 0) candidates.push(hex[0]);
+      if ((!rite || rite === 'HEX') && Array.isArray(hex) && hex.length > 0) candidates.push(hex[0]);
     } catch (_error) { /* a rite that is not installed simply has no runs */ }
     try {
       const monas = root.__SEX_MAGICK_MONAS__?.getHistory?.();
-      if (Array.isArray(monas) && monas.length > 0) candidates.push(monas[0]);
+      if ((!rite || rite === 'MONAS') && Array.isArray(monas) && monas.length > 0) candidates.push(monas[0]);
     } catch (_error) {}
 
     if (candidates.length === 0) return null;
@@ -172,12 +166,11 @@
 
   /**
    * Submit the run that just ended, if there is one and it has not already gone up.
-   * Guarding on runId matters because several paths finish a run - death, retry and
-   * returning to the menu all call `finishRun` - and the menu render that triggers
-   * this can fire more than once for the same run.
+   * Guarding on runId matters because death, retry and returning to the menu can all
+   * finish the same run through different wrappers.
    */
   async function submitNewestRun() {
-    const summary = newestRun();
+    const summary = newestRun(runTokenRite);
     if (!summary || !summary.runId) return { skipped: 'no completed run' };
     if (summary.runId === lastSubmittedRunId) return { skipped: 'already submitted' };
     if (!runToken) return { skipped: 'no run token' };
@@ -185,6 +178,7 @@
     lastSubmittedRunId = summary.runId;
     const token = runToken;
     runToken = null;
+    runTokenRite = null;
 
     const result = await request('/run/submit', {
       method: 'POST',
@@ -193,8 +187,13 @@
     });
 
     lastResult = result.ok
-      ? { accepted: true, rank: result.body?.rank ?? null }
-      : { accepted: false, reasons: result.body?.reasons || [result.error || `HTTP ${result.status}`] };
+      ? { accepted: true, rank: result.body?.rank ?? null, rite: summary.rite, runId: summary.runId }
+      : {
+          accepted: false,
+          reasons: result.body?.reasons || [result.error || `HTTP ${result.status}`],
+          rite: summary.rite,
+          runId: summary.runId
+        };
     return lastResult;
   }
 
@@ -247,6 +246,24 @@
     return renderInto(await fetchBoard(rite));
   }
 
+  /**
+   * A run recorder can wrap `gameOver` either inside or outside this module. Queue
+   * submission to the next task so every outer wrapper has had a chance to write
+   * its finished summary first. This closes the real-device hole where MONAS could
+   * finish and remain on GAME OVER without ever reaching the only old submission
+   * hook (`returnToMenu`).
+   */
+  function queueCompletedRunSubmission() {
+    setTimeout(() => {
+      const completedRun = newestRun(runTokenRite);
+      if (!completedRun?.runId || !completedRun?.endedAt) return;
+      const completedRite = completedRun.rite === 'MONAS' ? 'MONAS' : 'HEX';
+      submitNewestRun()
+        .then(() => refresh(completedRite))
+        .catch(() => {});
+    }, 0);
+  }
+
   function dependenciesReady() {
     return typeof document !== 'undefined'
       && typeof Game !== 'undefined'
@@ -258,6 +275,7 @@
     if (Game.prototype.__globalBoardInstalled) return;
 
     const originalStartGame = Game.prototype.startGame;
+    const originalGameOver = Game.prototype.gameOver;
     const originalReturnToMenu = Game.prototype.returnToMenu;
 
     Game.prototype.startGame = function globalBoardStartGame(...args) {
@@ -268,16 +286,20 @@
       return result;
     };
 
+    if (typeof originalGameOver === 'function') {
+      Game.prototype.gameOver = function globalBoardGameOver(...args) {
+        const result = originalGameOver.apply(this, args);
+        queueCompletedRunSubmission();
+        return result;
+      };
+    }
+
     Game.prototype.returnToMenu = function globalBoardReturnToMenu(...args) {
       const result = originalReturnToMenu.apply(this, args);
-      // `returnToMenu` may reset or change the active mode. Read the completed
-      // recorder after it finishes instead, then refresh the same rite that was
-      // submitted so a MONAS player never lands on the HEX global board.
-      const completedRun = newestRun();
-      const completedRite = completedRun?.rite === 'MONAS' ? 'MONAS' : 'HEX';
-      try {
-        submitNewestRun().then(() => refresh(completedRite)).catch(() => {});
-      } catch (_error) {}
+      // Menu is still a submission seam for runs ended without `gameOver`. The
+      // helper also refreshes the same rite that was submitted, so a MONAS player
+      // never lands on the HEX global board merely because the menu is generic.
+      queueCompletedRunSubmission();
       return result;
     };
 
@@ -312,7 +334,8 @@
       fetchBoard,
       refresh,
       getLastResult() { return lastResult; },
-      getRunToken() { return runToken; }
+      getRunToken() { return runToken; },
+      getRunTokenRite() { return runTokenRite; }
     });
     return root.__SEX_MAGICK_GLOBAL_BOARD__;
   }
