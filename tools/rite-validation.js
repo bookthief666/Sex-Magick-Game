@@ -25,43 +25,39 @@
   const VALIDATION_VERSION = 1;
   const BOARD_SIZE = 5;
 
-  // Mirrors the Gate slice's own thresholds. Callers that have the slice to hand
-  // pass its live values through `options`; these are the fallback for pure use.
+  // Mirrors the live Gate slice ladder in gate-slice-runtime.js. These values are
+  // duplicated here because this same file must execute unchanged in the browser,
+  // Node tests and the Worker bundle. Whenever the live ladder moves, the parity
+  // tests must move this copy in the same change or honest runs will be rejected.
   const FALLBACK_BANDS = Object.freeze([
     'MALKUTH', 'YESOD', 'TIPHARETH', 'GEBURAH', 'CHESED', 'BINAH', 'CHOKMAH', 'KETHER'
   ]);
-  const FALLBACK_THRESHOLDS = Object.freeze([0, 6, 16, 32, 48, 68, 92, 120]);
+  const FALLBACK_THRESHOLDS = Object.freeze([0, 9, 22, 40, 62, 88, 118, 152]);
 
   // Gates arrive on a spawn interval, so a run cannot clear them arbitrarily fast.
   // The floor is generous - the owner's fastest measured pace is about one gate per
   // 1.6s - and exists to catch a fabricated total, not to judge play.
   const DEFAULT_MIN_MS_PER_GATE = 400;
 
-  // Only the Rite of Hexagram records runs today: `finishRun` in gate-slice-runtime.js
-  // fires only when `gateSliceState` exists and stamps `rite: 'HEX'`. The rite is a
-  // parameter rather than a constant so a MONAS board needs a recorder, not a rewrite
-  // of these rules - D-004 requires separate Rite categories, and this is where that
-  // separation is enforced.
+  // The default remains HEX for callers that predate rite-aware validation. MONAS
+  // has its own recorder and ladder and is selected explicitly by the Worker from
+  // the token's rite; D-004 requires the two categories to remain separate.
   const DEFAULT_RITE = 'HEX';
 
-  // MONAS's own ladder (`monas-progression-runtime.js`), which is nine bands
-  // rather than eight and spaced differently. M42 gives MONAS the edge meter and a portal, so it
-  // records runs now, and validating a MONAS run against HEX's thresholds would
-  // reject every honest one. Selected here **by rite** rather than accepted from the
-  // caller: a client-supplied threshold list would make the band check meaningless,
-  // since a forger would simply send thresholds its lie satisfies.
+  // MONAS's own live ladder in `monas-progression-runtime.js`, which is nine bands
+  // rather than eight and spaced differently. The Worker chooses this ladder by
+  // rite rather than accepting thresholds from the client: client-supplied
+  // thresholds would make the band check meaningless.
   //
-  // These must track `monas-progression-runtime.js`'s BANDS exactly. They are
-  // duplicated rather than imported because this file is shared byte-for-byte with
-  // the Worker (D-044), which has no access to a browser runtime - so the coupling
-  // is asserted by `test-rite-validation`/the parity test instead of enforced by the
-  // module system. M43 added ASCENT; leaving it out here would have rejected every
-  // honest run past gate 110 as a band mismatch.
+  // These values intentionally mirror `monas-progression-runtime.js`'s BANDS. The
+  // source ladder reached TORRENT at 108 and MAELSTROM at 138 in the current live
+  // tuning; keeping an older threshold copy here rejects honest MONAS runs exactly
+  // when they cross a band boundary.
   const MONAS_BANDS = Object.freeze([
     'STILL', 'CURRENT-I', 'CURRENT-II', 'AXIS', 'ORBIT', 'CROWN', 'ASCENT',
     'TORRENT', 'MAELSTROM'
   ]);
-  const MONAS_THRESHOLDS = Object.freeze([0, 8, 20, 36, 56, 80, 110, 145, 185]);
+  const MONAS_THRESHOLDS = Object.freeze([0, 6, 15, 27, 42, 60, 82, 108, 138]);
 
   const RITE_LADDERS = Object.freeze({
     HEX: { bands: FALLBACK_BANDS, thresholds: FALLBACK_THRESHOLDS },
