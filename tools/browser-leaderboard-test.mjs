@@ -24,7 +24,7 @@ function makeRun(overrides = {}) {
     endedAt: '2026-08-13T10:05:00.000Z',
     endReason: 'crash',
     gatesCleared: 20,
-    bandIndex: 2,
+    bandIndex: 1,
     gnosis: 4,
     gnosisCapacity: 10,
     gateOffers: 3,
@@ -40,8 +40,8 @@ function makeRun(overrides = {}) {
 }
 
 const SEEDED = [
-  makeRun({ runId: 'mid', gatesCleared: 20, bandIndex: 2, finalScore: 140 }),
-  makeRun({ runId: 'best', gatesCleared: 147, bandIndex: 7, finalScore: 900, endedAt: '2026-08-13T10:30:00.000Z' }),
+  makeRun({ runId: 'mid', gatesCleared: 20, bandIndex: 1, finalScore: 140 }),
+  makeRun({ runId: 'best', gatesCleared: 160, bandIndex: 7, finalScore: 900, endedAt: '2026-08-13T10:30:00.000Z' }),
   makeRun({ runId: 'low', gatesCleared: 3, bandIndex: 0, finalScore: 20 }),
   // Internally inconsistent: the band does not follow from the gates, and the pace
   // is impossible. It must not appear on the board.
@@ -110,7 +110,7 @@ async function openGame(query, seed = true) {
     );
     assert.equal(view.rows.length, 3, 'the rendered rows match the ranked entries');
     assert.match(view.rows[0], /#1 KETHER/, 'the top row names the band reached');
-    assert.match(view.rows[0], /147 GATES/, 'the top row reports the gates cleared');
+    assert.match(view.rows[0], /160 GATES/, 'the top row reports the gates cleared');
     assert.ok(
       !view.rows.join(' ').includes('99999'),
       'a rejected run must never reach the rendered board'
@@ -130,7 +130,7 @@ async function openGame(query, seed = true) {
   const text = await page.evaluate(() => document.getElementById('leaderboardList')?.textContent?.trim() ?? null);
   report.emptyState = text;
   try {
-    assert.match(text, /NO RUNS YET|NO VERIFIED RUNS/, 'an empty history says so plainly');
+    assert.match(text, /NO (?:HEX |MONAS )?RUNS YET|NO VERIFIED (?:HEX |MONAS )?RUNS/, 'an empty history says so plainly');
   } catch (error) {
     failures.push(`empty state: ${error.message}`);
   }
@@ -195,6 +195,9 @@ async function openGame(query, seed = true) {
       // eslint-disable-next-line no-global-assign
       Date = RealDate;
     }
+    // returnToMenu now schedules the board render on a macrotask (see
+    // installMenuRefresh), so yield once and let it paint before we read.
+    await new Promise(resolve => setTimeout(resolve, 0));
     return {
       totalRuns: window.__SEX_MAGICK_RITE_BOARD__.getBoard().totalRuns,
       entries: window.__SEX_MAGICK_RITE_BOARD__.getBoard().entries.map(entry => ({
