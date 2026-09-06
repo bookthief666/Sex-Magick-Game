@@ -56,6 +56,55 @@ function testCollisionWindows() {
   }
 }
 
+function testSpawnTimelineReplayIdentity() {
+  assert.equal(reachability.SOLVER_VERSION, 2,
+    'exact-timeline replay changes the evidence semantics and requires solver v2');
+  const pattern = grammar.PATTERN_LIBRARY.HEX.find(item => item.id === 'hex.axis-hold');
+  const ratios = grammar.materializePattern(pattern, 0.22, 1);
+  const base140 = reachability.buildGateWindows(ratios, {
+    viewportWidth: 390,
+    viewportHeight: 844,
+    speed: 8.5,
+    gap: 110,
+    pillarSpawnBase: 140
+  });
+  const base132 = reachability.buildGateWindows(ratios, {
+    viewportWidth: 390,
+    viewportHeight: 844,
+    speed: 8.5,
+    gap: 110,
+    pillarSpawnBase: 132
+  });
+  assert.equal(Object.isFrozen(base132), true, 'the searched gate sequence must be immutable');
+  assert.ok(base132.every(Object.isFrozen), 'every searched gate must be immutable');
+  assert.notDeepEqual(
+    base140.map(gate => gate.spawnFrame),
+    base132.map(gate => gate.spawnFrame),
+    'negative control: bases 140 and 132 must produce different wall timelines'
+  );
+
+  const solved = reachability.solveGateSequence({
+    rite: 'HEX',
+    ratios,
+    viewportWidth: 390,
+    viewportHeight: 844,
+    mobile: true,
+    speed: 8.5,
+    gap: 110,
+    pillarSpawnBase: 132,
+    breathPhase: 0,
+    beamWidth: 2500,
+    margin: 8
+  });
+  assert.equal(solved.solvable, true,
+    'the corrected base-132 witness must not be rejected by replaying default-base walls');
+  assert.equal(solved.witnessValid, true);
+  assert.equal(solved.replayUsedSearchGates, true,
+    'witness replay must consume the exact immutable array produced for search');
+  assert.deepEqual(solved.replaySpawnFrames, solved.searchSpawnFrames,
+    'search and replay must observe identical spawnFrame arrays');
+}
+
 function testReachabilityMatrix() {
   const unsafeReturnFlow = grammar.PATTERN_LIBRARY.MONAS.find(pattern => pattern.id === 'monas.return-flow');
   const unsafeResult = reachability.classifyGateSequence({
@@ -95,12 +144,109 @@ function testReachabilityMatrix() {
     scenarios: auditScenarios,
     beamWidth: 1000
   });
-  assert.equal(audit.totalCases, 252);
-  assert.deepEqual(audit.summary, { verified: 252, marginal: 0, invalid: 0 });
-  assert.equal(Object.keys(audit.patternVerdicts).length, 16);
+  // Derived rather than hardcoded: M40.3 grew the library from 16 patterns to
+  // 28, and a literal case count asserts the library's size rather than its
+  // reachability. What must hold is that *every* case verifies and none is
+  // marginal or invalid - that is the property new patterns have to earn.
+  const libraryPatternCount =
+    grammar.PATTERN_LIBRARY.HEX.length + grammar.PATTERN_LIBRARY.MONAS.length;
+  assert.equal(Object.keys(audit.patternVerdicts).length, libraryPatternCount);
+  assert.ok(audit.totalCases >= 252, `audit coverage shrank to ${audit.totalCases} cases`);
+  assert.deepEqual(
+    audit.summary,
+    { verified: audit.totalCases, marginal: 0, invalid: 0 },
+    'every pattern in the library must be provably clearable at the hard scenarios'
+  );
   assert.ok(Object.values(audit.patternVerdicts).every(value => value === 'verified'));
   assert.ok(audit.cases.every(entry => entry.witnessValid));
   assert.ok(audit.cases.every(entry => entry.verifiedMargin === 8));
+
+  // M17 extended the difficulty curve past GEBURAH, where it used to stop. Every
+  // new band is audited at its own speed and at the bottom of the +/-10px
+  // breathing getCurrentGap applies, because those are the configurations the
+  // game can now actually reach - the 2026-08-12 pilot spent 196 of its 507 gate
+  // clears past the old ceiling.
+  //
+  // The variety runtime guarantees that scaling and wall motion never leave a
+  // corridor narrower than VERIFIED_STATIC_GAP, and that floor is the phone-hard
+  // scenario already audited above, so these scenarios cover the static geometry
+  // and the clamp covers the moving geometry on top of it.
+  const gate = require('./gate-slice-runtime.js');
+  const variety = require('./obstacle-variety-runtime.js');
+  // Identify the bands M17 added by position, not by gate threshold. D-067
+  // re-spaced the thresholds and a `> 32` filter silently changed which bands
+  // this audit covered - the audit must track the bands themselves, not where
+  // the ladder happens to place them this week.
+  const extendedBands = gate.BANDS.slice(4);
+  assert.equal(extendedBands.length, 4, 'M17 added four bands past GEBURAH');
+  assert.deepEqual(
+    extendedBands.map(band => band.name),
+    ['CHESED', 'BINAH', 'CHOKMAH', 'KETHER'],
+    'the four post-GEBURAH bands'
+  );
+
+  // M44: each rite is audited against the ladder it actually runs.
+  //
+  // This used to build scenarios from HEX's bands alone and hand them to both
+  // rites. That is what pinned the speed ceiling at 8.5: D-072 proved HEX clean at
+  // 9.0, 9.5 and 10.0, but the raise failed this assertion because seven MONAS
+  // patterns cannot hold KETHER - at a speed MONAS never reaches, since the Gate
+  // slice returns early unless `gameMode === 'HEX'` and MONAS has its own ladder in
+  // `monas-progression-runtime.js`. The audit was constraining the ceiling with a
+  // condition the game cannot produce.
+  //
+  // The replacement is stricter, not looser. MONAS's own bands were never
+  // specifically covered here - they were only ever incidentally cleared by being
+  // easier than HEX's - so this adds coverage the audit did not have while
+  // removing coverage of a state that cannot exist.
+  const monasProgression = require('./monas-progression-runtime.js');
+
+  function bandScenariosFor(bands, label, speedCeiling) {
+    return bands.flatMap(band => {
+      const gap = band.gap - 10;
+      const name = band.name || band.id;
+      assert.ok(
+        gap >= variety.VERIFIED_STATIC_GAP,
+        `${label} ${name} breathes below the verified corridor floor at ${gap}px`
+      );
+      assert.ok(
+        band.speed <= speedCeiling,
+        `${label} ${name} exceeds its audited speed envelope at ${band.speed}`
+      );
+      return [
+        { id: `${name}-phone`, width: 390, height: 844, mobile: true, speed: band.speed, gap, breathPhases: [0] },
+        { id: `${name}-fold`, width: 884, height: 1104, mobile: false, speed: band.speed, gap, breathPhases: [0, 31] }
+      ];
+    });
+  }
+
+  const hexBandScenarios = bandScenariosFor(extendedBands, 'HEX', gate.MAX_VALIDATED_SPEED);
+  // MONAS's whole ladder, not a tail of it: it is short enough that auditing all of
+  // it costs little, and picking a slice would reintroduce exactly the positional
+  // fragility the `extendedBands` comment above warns about.
+  const monasBandScenarios = bandScenariosFor(
+    monasProgression.BANDS, 'MONAS', monasProgression.MAX_VALIDATED_SPEED
+  );
+
+  const bandAudit = reachability.auditPatternLibrary(grammar, {
+    patternResolver: policy.applyPatternOverride,
+    scenariosByRite: { HEX: hexBandScenarios, MONAS: monasBandScenarios },
+    // Kept as the fallback so a rite this forgets to describe is over-constrained
+    // rather than silently skipped.
+    scenarios: hexBandScenarios,
+    beamWidth: 1000
+  });
+  // Derived for the same reason as the library audit above: the case count
+  // tracks the library's size, the contract is that every case verifies.
+  assert.ok(bandAudit.totalCases >= 1008, `band audit coverage shrank to ${bandAudit.totalCases}`);
+  assert.deepEqual(
+    bandAudit.summary,
+    { verified: bandAudit.totalCases, marginal: 0, invalid: 0 },
+    'every pattern must clear every post-GEBURAH band'
+  );
+  assert.ok(bandAudit.cases.every(entry => entry.witnessValid));
+  assert.ok(bandAudit.cases.every(entry => entry.verifiedMargin === 8));
+  assert.ok(bandAudit.cases.every(entry => entry.minimumClearance >= 8 - 1e-9));
   assert.ok(audit.cases.every(entry => entry.minimumClearance >= 8 - 1e-9));
 
   const representativePatterns = [
@@ -177,11 +323,24 @@ function testFallbackPolicy() {
   assert.equal(event.reachabilityPolicyVersion, policy.POLICY_VERSION);
   assert.equal(event.reachabilityVerdict, 'verified');
   assert.equal(event.reachabilityFallback, true);
-  assert.equal(event.rejectedPatternId, 'hex.gentle-step');
+  // M40.3: which pattern the seeded scheduler reaches for first depends on the
+  // library's size, so naming it here asserted the catalogue rather than the
+  // fallback behaviour. What must hold is that whatever was rejected was a real
+  // catalogue pattern, and that the fallback stood in for it.
+  assert.ok(
+    catalogIds.includes(event.rejectedPatternId),
+    `rejected id ${event.rejectedPatternId} is not a catalogue pattern`
+  );
+  assert.notEqual(
+    event.rejectedPatternId,
+    policy.FALLBACK_PATTERN_IDS.HEX,
+    'the fallback cannot be the thing that was rejected'
+  );
 }
 
 testPhysicsProfiles();
 testCollisionWindows();
+testSpawnTimelineReplayIdentity();
 const audit = testReachabilityMatrix();
 testFallbackPolicy();
 

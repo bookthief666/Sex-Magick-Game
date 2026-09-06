@@ -193,7 +193,29 @@
           finish(reject, new Error('empty-image'));
           return;
         }
-        finish(resolve, image);
+        // `decoding = 'async'` above is only a hint for the <img> render path.
+        // A bitmap that has loaded but never been decoded is decoded
+        // *synchronously on the main thread* the first time ctx.drawImage()
+        // touches it - so with a real gallery, every level whose art appears
+        // for the first time costs a frame hitch mid-run. M36's physical Fold 6
+        // probe measured exactly that: frame intervals pinned at 16.7ms across
+        // p50/p95/p99 with isolated long tasks up to 92ms and 100ms of dropped
+        // simulation, clustered like level transitions (see D-060).
+        //
+        // Decoding here moves that cost onto the loading screen, where a
+        // progress bar already sets the expectation. The attempt timer above is
+        // still running, so a decode that hangs is bounded exactly like a fetch
+        // that hangs, and a decode that *fails* still yields a usable image -
+        // the browser will simply decode it later the old way - so this
+        // resolves rather than rejecting on decode error.
+        if (typeof image.decode !== 'function') {
+          finish(resolve, image);
+          return;
+        }
+        image.decode().then(
+          () => finish(resolve, image),
+          () => finish(resolve, image)
+        );
       };
       image.onerror = () => finish(reject, new Error('network-or-decode-error'));
       image.src = url;

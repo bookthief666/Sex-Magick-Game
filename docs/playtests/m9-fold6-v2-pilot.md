@@ -1,7 +1,15 @@
 # M9 Fold 6 Pilot — Complete-Session Evidence and Viewport Profiles
 
 Date prepared: 2026-08-04  
-Status: ready to run after the owner chooses to revisit Gate testing
+Status: **first block completed 2026-08-12** (fold-open, `buffer=3`) — see
+[`m8-fold6-owner-pilot-results.md`](./m8-fold6-owner-pilot-results.md).
+This protocol remains the standing harness for every future block.
+
+> **Superseded section:** the input-buffer comparison below is closed. The
+> 2026-08-12 block recorded 1768 immediate inputs and zero buffered, rejected, or
+> expired ones, so a `buffer=6` arm would produce identical counters. Keep three
+> frames and do not run the comparison. Future blocks should vary **posture**
+> (fold-open vs fold-closed), not buffer length.
 
 ## Purpose
 
@@ -17,27 +25,75 @@ Running this protocol is not required before direction-independent M9 asset/runt
 ## Required branch
 
 ```text
-develop/sex-magick-2.0
+claude/sex-magick-2-0-review-atdnu8
 ```
 
-M9–M15 were a linear branch stack and have been fast-forwarded into
-`develop/sex-magick-2.0`. The former `develop/m9-runtime-hardening`
-branch is superseded; use the consolidated branch instead.
+**This changed, and following the old instruction would test the wrong game.**
+This document used to say `develop/sex-magick-2.0`, which was correct through
+M15. Every milestone since — M16–M21 (Gate aperture, obstacle variety, missions,
+power-ups, the occult art pass), M25–M29 (MONAS as a second rite), M30–M35 (the
+Rite Board, MONAS progression, full-product integration, ritual ascent, Living
+Sephiroth) — landed on the branch above instead. As of 2026-08-19
+`develop/sex-magick-2.0` is **118 commits behind** it and contains none of that
+work, so a session run from it would report cleanly on a game without the Gate
+loop, missions, power-ups or MONAS at all.
+
+Check the `runtime` block of any report against
+["Confirming the build that ran"](#confirming-the-build-that-ran) below before
+trusting a session.
 
 ## Update Termux checkout
 
 ```bash
 cd ~/Sex-Magick-Game
 git fetch origin
-git switch develop/sex-magick-2.0
-git pull --ff-only origin develop/sex-magick-2.0
+git switch claude/sex-magick-2-0-review-atdnu8
+git pull --ff-only origin claude/sex-magick-2-0-review-atdnu8
 ```
 
 Start the server:
 
 ```bash
-python -m http.server 8000 --bind 127.0.0.1
+python3 tools/serve-playtest.py 8000
 ```
+
+**Use this server, not `python -m http.server`.** The stock module sends no
+`Cache-Control`, so the browser heuristically caches the runtime modules. On
+2026-08-12 that produced a report which looked complete but described a build that
+did not exist: the new files loaded while a pre-M16 Gate slice ran from cache, and
+the whole session had to be discarded. `serve-playtest.py` sends `no-store`.
+
+Every report now carries a `runtime` fingerprint recording the entry radius, band
+table and module versions that actually executed. Check it before trusting a
+session.
+
+## Confirming the build that ran
+
+Open the exported report and read its `runtime` block **before** reading any
+result. All eight module versions below must be non-`null`. A `null` means that
+module did not load, which means the session did not test it — whatever the rest
+of the report says.
+
+| Field | Should read | Absent means |
+|---|---|---|
+| `grammarVersion` | `2` | pre-M4 obstacle grammar |
+| `varietyVersion` | `1` | no M17 moving walls / gap variation |
+| `missionsVersion` | `1` | no M18 missions |
+| `powerupsVersion` | `1` | no M19 power-ups |
+| `monasProgressionVersion` | `1` | no M32 MONAS gate-driven curve |
+| `productIntegrationVersion` | `1` | no M33 — Gate stack **off** by default, Fold-open DPR unmanaged |
+| `ritualAscentVersion` | `1` | no M34 Sephirah HUD or clarified Gate copy |
+| `sephirahIdentityVersion` | `1` | no M35 per-Sephirah visuals or undertone |
+
+`gateSlice` should also report eight `bandNames` ending in `KETHER`.
+
+The bottom four were added on 2026-08-19 and are the reason this check matters
+right now: the Gate fingerprint and the top four versions are **identical with or
+without** M32–M35, so before they were added a session that silently ran a
+checkout predating the ritual ascent HUD and Living Sephiroth would have produced
+a report that looked completely valid. That is the same class of failure as the
+discarded 2026-08-12 session, and those four modules are exactly the ones no
+human has played yet.
 
 ## Fold-closed V2 session
 

@@ -28,7 +28,27 @@
     'monas.return-flow',
     'monas.orbit-settle',
     'monas.serpent-current',
-    'monas.caduceus-wave'
+    'monas.caduceus-wave',
+
+    // M40.3. This list is an allowlist, not a description: a pattern absent
+    // here is replaced at runtime by the rite's fallback, so nothing reaches a
+    // player until the solver has actually cleared it. Every id below returned
+    // `verified` from auditPatternLibrary at the hard scenarios (8.5 speed,
+    // 110px corridor, phone and Fold-open). Four MONAS entries were rejected on
+    // first submission and their amplitudes reduced until they passed - see the
+    // note in obstacle-grammar.js's library.
+    'hex.open-corridor',
+    'hex.plunge',
+    'hex.pendulum',
+    'hex.settle-drift',
+    'hex.serpent-strike',
+    'hex.hammerfall',
+    'monas.long-glide',
+    'monas.spiral-tighten',
+    'monas.undertow',
+    'monas.rising-calm',
+    'monas.double-helix',
+    'monas.vortex-fall'
   ]);
 
   const PATTERN_VERDICTS = Object.freeze(Object.fromEntries(

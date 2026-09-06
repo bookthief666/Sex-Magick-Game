@@ -1,8 +1,17 @@
 # R-1 Human Playtest — Input Truth Before the Gate Slice
 
 Date prepared: 2026-08-04  
-Status: **required and not yet completed**  
+Status: **retired 2026-08-12 — answered by the M8 owner pilot**  
 Branch: `develop/sex-magick-2.0`
+
+> This protocol is no longer a prerequisite for anything. The 2026-08-12 Fold 6
+> block (see [`m8-fold6-owner-pilot-results.md`](./m8-fold6-owner-pilot-results.md))
+> recorded **1768 immediate inputs and zero buffered, rejected, expired, or
+> coalesced ones**, and the owner answered "no" to whether input felt ignored.
+> The buffer never engages in ordinary play, so the 3-vs-6 question has no
+> measurable difference to decide. **Three frames is the release value.**
+> Retained below for the record and for the local-server setup instructions,
+> which are still accurate.
 
 ## Purpose
 

@@ -153,7 +153,18 @@
         assert(originalClassification.classification === 'invalid', 'Original Monas return flow defect was not reproduced');
         assert(adjustedClassification.classification === 'verified', 'Adjusted Monas return flow is not verified');
         assert(adjustedClassification.verifiedMargin === 8, 'Adjusted Monas return flow lacks eight-pixel margin');
-        assert(runtimePolicy.verifiedPatternCount === 16, 'Unexpected verified pattern count');
+        const catalogPatternIds = ['HEX', 'MONAS']
+          .flatMap(rite => grammar.PATTERN_LIBRARY[rite].map(pattern => pattern.id))
+          .sort();
+        const policyPatternIds = Object.keys(runtimePolicy.verdicts).sort();
+        assert(
+          JSON.stringify(policyPatternIds) === JSON.stringify(catalogPatternIds),
+          `Reachability policy/catalog mismatch: policy=${policyPatternIds.join(',')} catalog=${catalogPatternIds.join(',')}`
+        );
+        assert(
+          runtimePolicy.verifiedPatternCount === catalogPatternIds.length,
+          'Derived verified pattern count does not cover the exact catalog set'
+        );
         assert(runtimePolicy.fallbackPatternIds.MONAS === 'monas.still-point', 'Unsafe Monas fallback configured');
 
         const scheduler = new grammar.PatternScheduler({ seed: 305419896, rite: 'MONAS' });

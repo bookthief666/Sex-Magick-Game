@@ -21,6 +21,23 @@ assert.match(html, /Fold open/, 'Fold-open profile must be selectable');
 assert.match(html, /What is the game asking you to do\?/, 'comprehension question must remain');
 assert.match(html, /What did the meter mean/, 'meter question must remain');
 assert.match(html, /What did the large ring or Gate mean/, 'Gate question must remain');
+// The runtime fingerprint is the guard against a session reporting cleanly while a
+// stale build ran (D-030, after the discarded 2026-08-12 session). It only works if
+// it covers every module whose absence would change what the player saw, so each
+// new player-facing runtime has to be added here as it lands.
+for (const [field, global] of [
+  ['grammarVersion', '__SEX_MAGICK_PATTERNS__'],
+  ['varietyVersion', '__SEX_MAGICK_OBSTACLE_VARIETY__'],
+  ['missionsVersion', '__SEX_MAGICK_MISSIONS__'],
+  ['powerupsVersion', '__SEX_MAGICK_POWERUPS__'],
+  ['monasProgressionVersion', '__SEX_MAGICK_MONAS_PROGRESSION__'],
+  ['productIntegrationVersion', '__SEX_MAGICK_PRODUCT_DEFAULTS__'],
+  ['ritualAscentVersion', '__SEX_MAGICK_RITUAL_ASCENT__'],
+  ['sephirahIdentityVersion', '__SEX_MAGICK_SEPHIRAH_IDENTITY__']
+]) {
+  assert.match(html, new RegExp(`${field}:[^,\\n]*${global}`), `runtime fingerprint must record ${field} from ${global}`);
+}
+
 assert.doesNotMatch(html, /\bfetch\s*\(/, 'harness must not transmit reports');
 assert.doesNotMatch(html, /XMLHttpRequest|sendBeacon|WebSocket/, 'harness must not contain reporting APIs');
 

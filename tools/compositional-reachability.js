@@ -128,14 +128,21 @@
     const rite = normalizeRite(options.rite);
     const seed = normalizeSeed(options.seed);
     const patternCycles = Math.max(1, Math.floor(finite(options.patternCycles, DEFAULT_PATTERN_CYCLES)));
-    const targetPatterns = patternCycles * grammar.FAMILY_CYCLE.length;
+    // M40.3: the family cycle is per-band now. Sequence length follows the cycle
+    // actually in play, and every tier is the same six beats, so this stays
+    // equivalent for band 0 and correct for the rest.
+    const bandIndex = Math.max(0, Math.floor(finite(options.bandIndex, 0)));
+    const activeCycle = typeof grammar.cycleForBand === 'function'
+      ? grammar.cycleForBand(bandIndex)
+      : grammar.FAMILY_CYCLE;
+    const targetPatterns = patternCycles * activeCycle.length;
     const viewportHeight = Math.max(1, finite(options.viewportHeight, 844));
     const gap = Math.max((reachability.HITBOX_HALF * 2) + 1, finite(options.gap, 110));
     const scheduler = new grammar.PatternScheduler({ seed, rite, initialRatio: finite(options.initialRatio, 0.5) });
     const sequence = [];
 
     while (sequence.length === 0 || sequence[sequence.length - 1].patternSerial < targetPatterns) {
-      const spec = scheduler.next({ viewportHeight, gap, orbChance: 0 });
+      const spec = scheduler.next({ viewportHeight, gap, orbChance: 0, bandIndex });
       if (spec.patternSerial > targetPatterns) break;
       sequence.push({ ...spec });
       if (sequence.length > 600) throw new Error('Pattern sequence exceeded safety limit');

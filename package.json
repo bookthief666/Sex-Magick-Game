@@ -9,10 +9,17 @@
     "test:cross-screen:update": "playwright test --config=playwright.config.ts --update-snapshots",
     "test:browserstack-config": "node tools/test-browserstack-sdk-config.mjs",
     "test:supply-chain": "node tools/test-qa-supply-chain.mjs",
+    "test:gallery": "node tools/test-gallery-source.mjs",
+    "fetch:gallery": "node tools/fetch-gallery.mjs",
     "test:browserstack": "node tools/browserstack-real-device-smoke.mjs",
-    "test:browserstack-mobile": "browserstack-node-sdk playwright test --config=playwright.browserstack.config.ts"
+    "test:browserstack-mobile": "browserstack-node-sdk playwright test --config=playwright.browserstack.config.ts",
+    "migrate:gallery-to-r2": "node tools/migrate-images-to-r2.mjs",
+    "build:itch": "node tools/build-itch.mjs",
+    "deploy:board": "wrangler deploy --config worker/wrangler.toml",
+    "test:board": "node tools/test-collision-runtime.js && node tools/test-rite-ladder-parity.js && node tools/test-monas-progression-runtime.js && node tools/test-leaderboard-runtime.js && node tools/test-global-board-worker.js"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1112.0",
     "@playwright/test": "1.59.1",
     "browserstack-node-sdk": "1.65.3",
     "http-server": "14.1.1"

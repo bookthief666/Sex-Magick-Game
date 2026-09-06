@@ -1,7 +1,9 @@
 # M8 Owner Pilot — Gate Slice on Samsung Galaxy Z Fold 6
 
 Date prepared: 2026-08-04  
-Status: ready to run; not yet completed
+Status: **completed 2026-08-12** (fold-open posture) — see
+[`m8-fold6-owner-pilot-results.md`](./m8-fold6-owner-pilot-results.md).
+Fold-closed coverage is still owed.
 
 ## Purpose
 

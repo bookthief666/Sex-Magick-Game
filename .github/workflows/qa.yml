@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - develop/sex-magick-2.0
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,7 +16,12 @@ permissions:
 jobs:
   fast-gameplay-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Raised from 15 after the first real run on this branch: the Playwright
+    # Chromium install alone took 14m02s on a cold runner, leaving under a minute
+    # for the suite. The job was cancelled by this timeout while the tests were
+    # still going, which would have read as an infrastructure hang rather than as
+    # the genuine obstacle-grammar regression it had just found.
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -25,11 +31,27 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
+          cache: npm
+
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Export pinned Chromium to legacy CDP suites
+        run: >-
+          node -e "require('node:fs').appendFileSync(process.env.GITHUB_ENV,
+          'CHROME_BIN=' + require('@playwright/test').chromium.executablePath() + '\\n')"
 
       - name: Syntax-check runtime and tests
         run: |
           node --check tools/fixed-step-clock.js
           node --check tools/fixed-step-prototype.js
+          node --check tools/product-integration-runtime.js
+          node --check tools/ritual-ascent-runtime.js
+          node --check tools/sephirah-identity-runtime.js
+          node --check tools/sephirah-identity-bootstrap.js
           node --check tools/collision-runtime.js
           node --check tools/input-feedback-policy.js
           node --check tools/gate-slice-runtime.js
@@ -41,6 +63,14 @@ jobs:
           node --check tools/performance-evidence-analysis.js
           node --check tools/run-telemetry.js
           node --check tools/obstacle-grammar.js
+          node --check tools/obstacle-variety-runtime.js
+          node --check tools/missions-runtime.js
+          node --check tools/powerup-runtime.js
+          node --check tools/monas-runtime.js
+          node --check tools/monas-reachability.js
+          node --check tools/leaderboard-runtime.js
+          node --check tools/occult-art-runtime.js
+          node --check tools/occult-field-runtime.js
           node --check tools/player-reachability.js
           node --check tools/reachability-policy.js
           node --check tools/compositional-reachability.js
@@ -48,6 +78,9 @@ jobs:
           node --check tools/m7-review-diagnostics.js
           node --check tools/run-m7-review-audit.js
           node --check tools/test-fixed-step-clock.js
+          node --check tools/test-product-integration-runtime.js
+          node --check tools/test-ritual-ascent-runtime.js
+          node --check tools/test-sephirah-identity-runtime.js
           node --check tools/test-collision-runtime.js
           node --check tools/test-input-feedback-policy.js
           node --check tools/test-r1-playtest-harness.js
@@ -64,9 +97,39 @@ jobs:
           node --check tools/test-performance-evidence-harness.js
           node --check tools/test-run-telemetry.js
           node --check tools/test-obstacle-grammar.js
+          node --check tools/test-obstacle-variety-runtime.js
+          node --check tools/test-missions-runtime.js
+          node --check tools/test-powerup-runtime.js
+          node --check tools/test-monas-runtime.js
+          node --check tools/test-monas-reachability.js
+          node --check tools/test-leaderboard-runtime.js
+          node --check tools/test-occult-art-runtime.js
           node --check tools/test-player-reachability.js
+          node --check tools/test-player-replay-timeline.js
           node --check tools/test-compositional-reachability.js
           node --check tools/test-m7-review-diagnostics.js
+          node --check tools/notice-slot.js
+          node --check tools/test-notice-slot.js
+          node --check tools/polygram.js
+          node --check tools/test-polygram.js
+          node --check tools/void-constellation.js
+          node --check tools/test-void-constellation.js
+          node --check tools/void-edge-layer.js
+          node --check tools/gnosis-edge.js
+          node --check tools/test-gnosis-edge.js
+          node --check tools/monas-currents.js
+          node --check tools/test-monas-currents.js
+          node --check tools/monas-progression-runtime.js
+          node --check tools/test-monas-progression-runtime.js
+          node --check tools/test-global-board-worker.js
+          node --check tools/test-monas-compositional-reachability.js
+          node --check tools/test-monas-progression-frontier.js
+          node --check tools/test-void-edge-layer.js
+          node --check tools/test-gallery-source.mjs
+          node --check tools/gallery-source.mjs
+          node --check tools/fetch-gallery.mjs
+          node --check tools/qa-static-server.mjs
+          node --check tools/build-itch.mjs
           node --check tools/browser-fixed-step-test.mjs
           node --check tools/browser-collision-test.mjs
           node --check tools/browser-policy-fail-closed-test.mjs
@@ -75,6 +138,28 @@ jobs:
           node --check tools/browser-m10-render-resilience-test.mjs
           node --check tools/browser-m11-performance-budget-test.mjs
           node --check tools/browser-m12-physical-performance-evidence-test.mjs
+          node --check tools/browser-m17-obstacle-variety-test.mjs
+          node --check tools/browser-m18-missions-test.mjs
+          node --check tools/browser-m19-powerups-test.mjs
+          node --check tools/browser-m21-aesthetic-test.mjs
+          node --check tools/browser-monas-test.mjs
+          node --check tools/run-browser-monas-diagnostic.mjs
+          node --check tools/browser-leaderboard-test.mjs
+          node --check tools/browser-m30-standard-entry-test.mjs
+          node --check tools/browser-m33-product-integration-test.mjs
+          node --check tools/browser-m34-ritual-ascent-test.mjs
+          node --check tools/browser-m35-living-sephiroth-test.mjs
+          node --check tools/browser-m41-hud-defects-test.mjs
+          node --check tools/browser-m41-title-gallery-test.mjs
+          node --check tools/browser-m41-monas-powerups-test.mjs
+          node --check tools/browser-m41-caduceus-test.mjs
+          node --check tools/browser-m42-orb-sweep-test.mjs
+          node --check tools/browser-m42-monas-edge-test.mjs
+          node --check tools/browser-m43-monas-rite-test.mjs
+          node --check tools/browser-m44-endless-test.mjs
+          node --check tools/browser-m45-perf-ceiling-test.mjs
+          node --check tools/browser-m32-monas-progression-test.mjs
+          node --check tools/browser-global-board-test.mjs
           node --check tools/browser-telemetry-test.mjs
           node --check tools/run-browser-fixed-step-test.mjs
           node --check tools/run-browser-collision-test.mjs
@@ -86,6 +171,9 @@ jobs:
       - name: Run fast deterministic contracts
         run: |
           node tools/test-fixed-step-clock.js
+          node tools/test-product-integration-runtime.js
+          node tools/test-ritual-ascent-runtime.js
+          node tools/test-sephirah-identity-runtime.js
           node tools/test-collision-runtime.js
           node tools/test-input-feedback-policy.js
           node tools/test-r1-playtest-harness.js
@@ -102,7 +190,44 @@ jobs:
           node tools/test-performance-evidence-harness.js
           node tools/test-run-telemetry.js
           node tools/test-obstacle-grammar.js
+          node tools/test-obstacle-variety-runtime.js
+          node tools/test-missions-runtime.js
+          node tools/test-powerup-runtime.js
+          node tools/test-monas-runtime.js
+          node tools/test-monas-reachability.js
+          node tools/test-player-replay-timeline.js
+          node tools/test-leaderboard-runtime.js
+          node tools/test-occult-art-runtime.js
           node tools/test-m7-review-diagnostics.js
+          node tools/test-notice-slot.js
+          node tools/test-polygram.js
+          node tools/test-void-constellation.js
+          node tools/test-void-edge-layer.js
+          node tools/test-gnosis-edge.js
+          node tools/test-monas-currents.js
+          # M45: these four existed and were never run here. The band ladder
+          # contract and the client/Worker parity check (D-044) are both things a
+          # silent drift would ship, and the two MONAS evidence suites are what
+          # make its reachability claims mean anything.
+          node tools/test-monas-progression-runtime.js
+          node tools/test-global-board-worker.js
+          node tools/test-monas-compositional-reachability.js
+          node tools/test-monas-progression-frontier.js
+          node tools/test-gallery-source.mjs
+
+      # D-075: compare the self-contained release shell with every external HTTP
+      # origin blocked. M14's existing visual-state workflow remains intact; its
+      # screenshots are a separate art-regression contract, not a before/after
+      # oracle for intentionally replacing network fonts with embedded faces.
+      - name: Run release shell Chrome integration
+        run: >-
+          npx playwright test tests/cross-screen.spec.ts
+          --config=playwright.config.ts
+          --grep "release shell styling"
+          --project=chromium-small-phone
+          --project=chromium-fold-cover
+          --project=chromium-fold-inner
+          --project=chromium-desktop
 
       - name: Run fixed-step Chrome integration
         run: node tools/run-browser-fixed-step-test.mjs
@@ -115,6 +240,48 @@ jobs:
 
       - name: Run Gate slice Chrome integration
         run: node tools/browser-gate-slice-test.mjs
+
+      - name: Run M41 HUD defect Chrome integration
+        run: node tools/browser-m41-hud-defects-test.mjs
+
+      - name: Run M41 title gallery Chrome integration
+        run: node tools/browser-m41-title-gallery-test.mjs
+
+      - name: Run M41 MONAS power-up Chrome integration
+        run: node tools/browser-m41-monas-powerups-test.mjs
+
+      - name: Run M41 Caduceus Chrome integration
+        run: node tools/browser-m41-caduceus-test.mjs
+
+      - name: Run M42 orb sweep Chrome integration
+        run: node tools/browser-m42-orb-sweep-test.mjs
+
+      - name: Run M42 MONAS edge and portal Chrome integration
+        run: node tools/browser-m42-monas-edge-test.mjs
+
+      # M45: four suites that existed and were never run here. The first two guard
+      # defects the owner reported twice - a MONAS rite that was bookkeeping without
+      # a body, and a difficulty ladder that stopped escalating - and the third
+      # carries the frame-level speed assertion that caught the M43 clobber. A suite
+      # outside CI is a suite that runs once.
+      - name: Run M43 MONAS rite Chrome integration
+        run: node tools/browser-m43-monas-rite-test.mjs
+
+      - name: Run M44 endless-ladder Chrome integration
+        run: node tools/browser-m44-endless-test.mjs
+
+      - name: Run M32 MONAS progression Chrome integration
+        run: node tools/browser-m32-monas-progression-test.mjs
+
+      # M45: what the raised ceiling costs to draw. Asserts on ratios between
+      # phases measured back-to-back, never on absolute milliseconds - this runner
+      # rasterises in software and no figure from it is comparable to D-060. The
+      # absolute capture is docs/qa/m45-fold-perf-capture.md, run on the device.
+      - name: Run M45 perf-ceiling Chrome integration
+        run: node tools/browser-m45-perf-ceiling-test.mjs
+
+      - name: Run global board client Chrome integration
+        run: node tools/browser-global-board-test.mjs
 
       - name: Run M9 runtime hardening Chrome integration
         run: node tools/browser-m9-runtime-hardening-test.mjs
@@ -133,3 +300,51 @@ jobs:
 
       - name: Run obstacle grammar Chrome integration
         run: node tools/run-browser-obstacle-grammar-test.mjs
+
+      # The scheduled/develop-only reachability workflow does not run on a draft
+      # PR synchronize event. Keep these browser contracts in the release gate as
+      # well so exact catalog equality and real-player parity cannot wait a week.
+      - name: Run real-player reachability Chrome integration
+        run: node tools/run-browser-reachability-test.mjs
+
+      - name: Run compositional reachability Chrome integration
+        run: node tools/run-browser-compositional-test.mjs
+
+      - name: Run M17 obstacle variety Chrome integration
+        run: node tools/browser-m17-obstacle-variety-test.mjs
+
+      - name: Run M18 missions Chrome integration
+        run: node tools/browser-m18-missions-test.mjs
+
+      - name: Run M19 power-ups Chrome integration
+        run: node tools/browser-m19-powerups-test.mjs
+
+      - name: Run M21 aesthetic Chrome integration
+        run: node tools/browser-m21-aesthetic-test.mjs
+
+      - name: Run MONAS Chrome integration
+        run: node tools/run-browser-monas-diagnostic.mjs
+
+      - name: Upload MONAS browser diagnostic
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: monas-browser-report-${{ github.run_attempt }}
+          path: artifacts/monas-browser-report.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Run Rite Board Chrome integration
+        run: node tools/browser-leaderboard-test.mjs
+
+      - name: Run M30 standard-entry Chrome integration
+        run: node tools/browser-m30-standard-entry-test.mjs
+
+      - name: Run M33 normal-product Chrome integration
+        run: node tools/browser-m33-product-integration-test.mjs
+
+      - name: Run M34 ritual-ascent Chrome integration
+        run: node tools/browser-m34-ritual-ascent-test.mjs
+
+      - name: Run M35 Living Sephiroth Chrome integration
+        run: node tools/browser-m35-living-sephiroth-test.mjs
