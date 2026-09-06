@@ -191,7 +191,39 @@ async function openGame(query) {
       .map(row => row.textContent.replace(/\s+/g, ' ').trim())
   }));
 
-  report.flagOn = { ...submission, ...view };
+  // Reproduce the physical Fold failure: enough board rows to make the menu taller
+  // than a short browser viewport. Before the layout fix, centred flex overflow
+  // pushed the title above y=0 where the user could not scroll back to it.
+  await page.waitForFunction(() => Boolean(window.__SEX_MAGICK_LEADERBOARD_PROFILE__), null, { timeout: 20000 });
+  await page.setViewportSize({ width: 884, height: 640 });
+  const shortScreenLayout = await page.evaluate(() => {
+    const section = document.getElementById('global-rite-board');
+    const note = document.getElementById('global-rite-board-note');
+    const seed = section?.querySelector('.leaderboard-row');
+    if (section && seed) {
+      while (section.querySelectorAll('.leaderboard-row').length < 5) {
+        section.insertBefore(seed.cloneNode(true), note || null);
+      }
+    }
+
+    const start = document.getElementById('startScreen');
+    const title = start?.querySelector('.title-text');
+    const rect = title?.getBoundingClientRect();
+    const style = start ? getComputedStyle(start) : null;
+    return {
+      profileInstalled: Boolean(window.__SEX_MAGICK_LEADERBOARD_PROFILE__),
+      menuClass: Boolean(start?.classList.contains('sex-magick-board-menu-scroll')),
+      titleTop: rect?.top ?? null,
+      titleBottom: rect?.bottom ?? null,
+      viewportHeight: window.innerHeight,
+      justifyContent: style?.justifyContent ?? null,
+      overflowY: style?.overflowY ?? null,
+      scrollHeight: start?.scrollHeight ?? null,
+      clientHeight: start?.clientHeight ?? null
+    };
+  });
+
+  report.flagOn = { ...submission, ...view, shortScreenLayout };
 
   try {
     assert.equal(submission.hadToken, true, 'run start must obtain a token from the Worker');
@@ -213,6 +245,18 @@ async function openGame(query) {
     assert.match(view.section, /GATES/, 'the board rows must name gates, the thing 2.0 measures');
     assert.match(view.section, /NOT ANTI-CHEAT/,
       'the board must state what its verification does not establish');
+    assert.equal(shortScreenLayout.profileInstalled, true,
+      'the production board profile must install before short-screen layout is judged');
+    assert.equal(shortScreenLayout.menuClass, true,
+      'the board profile must scope the short-screen menu correction');
+    assert.equal(shortScreenLayout.justifyContent, 'flex-start',
+      'short board menus must anchor from the top rather than centre overflowing content');
+    assert.match(shortScreenLayout.overflowY, /auto|scroll/,
+      'short board menus must remain vertically scrollable');
+    assert.ok(shortScreenLayout.titleTop >= 0,
+      `the Sex Magick title must stay reachable in a short Fold viewport (top=${shortScreenLayout.titleTop})`);
+    assert.ok(shortScreenLayout.titleBottom <= shortScreenLayout.viewportHeight,
+      'the title itself must fit inside the short Fold viewport');
   } catch (error) {
     failures.push(`default on: ${error.message}`);
   }
