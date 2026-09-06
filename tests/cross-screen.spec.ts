@@ -74,7 +74,7 @@ test('BrowserStack SDK configuration remains serializable', async ({}, testInfo)
 });
 
 test('layout, profile, touch targets, and DPR budget remain valid', async ({ page }, testInfo) => {
-  const pageErrors = await openGame(page);
+  const pageErrors = await openGame(page, 'globalBoard=0');
   const result = await page.evaluate(() => {
     const viewport = (window as any).__SEX_MAGICK_VIEWPORT__?.getSnapshot?.();
     const touchTargets = (window as any).__SEX_MAGICK_TOUCH_TARGETS__;
@@ -252,7 +252,7 @@ test('missions HUD stays inside the safe area and clear of the play corridor', a
   // it holds at every geometry rather than at the four reference ones.
   const pageErrors: string[] = [];
   page.on('pageerror', error => pageErrors.push(error.message));
-  await page.goto('/index.html?assetMode=offline&renderDpr=native&gateSlice=1', { waitUntil: 'domcontentloaded' });
+  await page.goto('/index.html?assetMode=offline&renderDpr=native&gateSlice=1&globalBoard=0', { waitUntil: 'domcontentloaded' });
   await page.locator('#game-container').waitFor({ state: 'visible' });
   // The runtime installs off the Game prototype, which exists before the `game`
   // instance is constructed on DOMContentLoaded. Wait for both.
@@ -312,7 +312,7 @@ test('power-up readout adds no control and clears the missions HUD', async ({ pa
   // back: the entire screen is the jump surface, and nothing may compete for a tap.
   const pageErrors: string[] = [];
   page.on('pageerror', error => pageErrors.push(error.message));
-  await page.goto('/index.html?assetMode=offline&renderDpr=native&gateSlice=1', { waitUntil: 'domcontentloaded' });
+  await page.goto('/index.html?assetMode=offline&renderDpr=native&gateSlice=1&globalBoard=0', { waitUntil: 'domcontentloaded' });
   await page.locator('#game-container').waitFor({ state: 'visible' });
   await page.waitForFunction('!!window.__SEX_MAGICK_POWERUPS__ && typeof game !== "undefined" && !!game');
 
@@ -388,7 +388,7 @@ test('every centered transient overlay clears every other one, worst case', asyn
   // a fifth instance of this before a human has to find it by hand again.
   const pageErrors: string[] = [];
   page.on('pageerror', error => pageErrors.push(error.message));
-  await page.goto('/index.html?assetMode=offline&renderDpr=native&gateSlice=1', { waitUntil: 'domcontentloaded' });
+  await page.goto('/index.html?assetMode=offline&renderDpr=native&gateSlice=1&globalBoard=0', { waitUntil: 'domcontentloaded' });
   await page.locator('#game-container').waitFor({ state: 'visible' });
   await page.waitForFunction(`
     !!window.__SEX_MAGICK_GATE_SLICE__ && !!window.__SEX_MAGICK_RITUAL_ASCENT__ &&
@@ -488,7 +488,7 @@ test('every centered transient overlay clears every other one, worst case', asyn
 
 test('major resize creates one settled layout without overflow', async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith('chromium-'), 'Resize contract runs once per Chromium geometry.');
-  const pageErrors = await openGame(page);
+  const pageErrors = await openGame(page, 'globalBoard=0');
   const before = page.viewportSize();
   if (!before) throw new Error('Viewport unavailable');
   await page.setViewportSize({ width: before.height, height: before.width });

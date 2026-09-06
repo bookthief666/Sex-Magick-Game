@@ -167,7 +167,8 @@ async function openVisualController(page: Page, gateSlice = false, primeGameplay
   const query = new URLSearchParams({
     assetMode: 'offline',
     renderDpr: '1',
-    visualQa: '1'
+    visualQa: '1',
+    globalBoard: '0'
   });
   if (gateSlice) {
     query.set('gateSlice', '1');
