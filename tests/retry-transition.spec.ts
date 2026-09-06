@@ -25,7 +25,7 @@ test('the real retry path resets score and returns to gameplay', async ({ page }
   });
   await page.route(/lootlocker\.io/i, route => route.abort('failed'));
 
-  await page.goto('/index.html?assetMode=offline&renderDpr=1&visualQa=1', {
+  await page.goto('/index.html?assetMode=offline&renderDpr=1&visualQa=1&globalBoard=0', {
     waitUntil: 'domcontentloaded'
   });
   await page.locator('#game-container').waitFor({ state: 'visible' });
