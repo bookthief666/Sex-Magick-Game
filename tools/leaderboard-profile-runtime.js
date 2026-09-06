@@ -117,6 +117,31 @@
         letter-spacing: 1.2px;
         text-align: left;
       }
+
+      /* The global board, local rows and handle make the menu taller than a Fold
+         viewport in landscape. A centred flex column then overflows equally in
+         both directions, which makes the title unreachable above the top edge.
+         On short screens the menu becomes a normal top-anchored scroll surface;
+         taller screens keep the original centred composition unchanged. */
+      @media (max-height: 900px) {
+        #startScreen.sex-magick-board-menu-scroll {
+          justify-content: flex-start;
+          overflow-y: auto;
+          overscroll-behavior-y: contain;
+          -webkit-overflow-scrolling: touch;
+          pointer-events: auto;
+          touch-action: pan-y;
+          padding-top: max(18px, env(safe-area-inset-top));
+          padding-bottom: max(24px, env(safe-area-inset-bottom));
+        }
+        #startScreen.sex-magick-board-menu-scroll > div {
+          flex-shrink: 0;
+        }
+        #startScreen.sex-magick-board-menu-scroll #menuButtons {
+          padding-bottom: max(24px, env(safe-area-inset-bottom));
+        }
+      }
+
       @media (max-width: 420px) {
         #sex-magick-board-profile-row { gap: 6px; }
         #sex-magick-board-handle,
@@ -137,6 +162,11 @@
 
     installed = true;
     ensureStyle();
+
+    // The profile and global board are what add enough vertical content to expose
+    // the centred-flex overflow on short screens. Scope the responsive correction
+    // to exactly that menu state rather than changing the base start screen.
+    document.getElementById('startScreen')?.classList.add('sex-magick-board-menu-scroll');
 
     const shell = document.createElement('div');
     shell.id = 'sex-magick-board-profile';
