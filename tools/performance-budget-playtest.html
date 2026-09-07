@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>SEX MAGICK · Physical Performance Evidence</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top, #10182a, #020306 65%); color: #f8fbff; }
+    main { width: min(1120px, calc(100% - 24px)); margin: 0 auto; padding: max(18px, env(safe-area-inset-top)) 0 40px; }
+    h1 { font-size: clamp(20px, 5vw, 34px); letter-spacing: .08em; color: #00e5ff; margin: 0 0 8px; }
+    h2 { font-size: 16px; color: #ffd700; margin: 0 0 10px; }
+    h3 { font-size: 13px; color: #00ff9d; margin: 0 0 8px; }
+    p, li { line-height: 1.55; color: #cbd5e1; }
+    section { margin-top: 16px; padding: 14px; border: 1px solid #26344e; background: rgba(4, 8, 18, .82); border-radius: 10px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    .field { display: grid; gap: 5px; color: #cbd5e1; font-size: 12px; }
+    input[type="number"] { width: 90px; min-height: 44px; border: 1px solid #40516f; border-radius: 8px; padding: 8px; background: #02060c; color: #fff; font: inherit; }
+    button, label.file { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 12px; border: 1px solid #00e5ff; border-radius: 8px; background: #08131f; color: #f8fbff; font: inherit; text-decoration: none; cursor: pointer; }
+    button:hover, label.file:hover { background: #10253b; }
+    button[data-preset] { text-align: center; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    label.file input { display: none; }
+    .note { border-left: 3px solid #ff2f6d; padding-left: 10px; }
+    .ok { color: #00ff9d; }
+    .warn { color: #ffd700; }
+    .bad { color: #ff6b8f; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1020px; }
+    th, td { border-bottom: 1px solid #243049; padding: 8px 6px; text-align: right; white-space: nowrap; vertical-align: top; }
+    th:first-child, td:first-child { text-align: left; }
+    .table-wrap { overflow-x: auto; }
+    #status, #captureStatus { color: #00ff9d; min-height: 1.4em; }
+    code { color: #d4ff00; }
+    .recommendations { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+    .card { border: 1px solid #30405d; border-radius: 8px; padding: 12px; background: rgba(2, 6, 12, .78); }
+    .metric { display: grid; grid-template-columns: 1fr auto; gap: 8px; font-size: 11px; padding: 3px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>PHYSICAL PERFORMANCE EVIDENCE</h1>
+  <p>Milestone 12 local Fold 6 capture, validation, repeat aggregation, and provisional DPR recommendation gate. Reports remain on this device unless you explicitly download them.</p>
+
+  <section>
+    <h2>1 · Run one controlled repeat</h2>
+    <div class="controls">
+      <label class="field">Repeat number
+        <input id="repeat" type="number" min="1" max="99" step="1" value="1" inputmode="numeric">
+      </label>
+      <button id="capture" type="button" disabled>Capture active run</button>
+      <button id="closeTarget" type="button" disabled>Close game tab</button>
+    </div>
+    <p id="captureStatus" aria-live="polite">Choose a preset. The game opens in a same-origin tab; play for at least 60 seconds after warm-up, return here, then capture.</p>
+    <div class="grid">
+      <button type="button" data-preset="closed-native">Fold closed · native DPR</button>
+      <button type="button" data-preset="closed-2x">Fold closed · 2× DPR</button>
+      <button type="button" data-preset="closed-css">Fold closed · CSS 1×</button>
+      <button type="button" data-preset="open-native">Fold open · native DPR</button>
+      <button type="button" data-preset="open-2x">Fold open · 2× DPR</button>
+      <button type="button" data-preset="open-css">Fold open · CSS 1×</button>
+    </div>
+    <ol>
+      <li>Physically use the matching closed or open posture.</li>
+      <li>Play normally for at least 60 seconds after the probe warm-up.</li>
+      <li>Avoid app switching, notification shades, split screen, and system overlays.</li>
+      <li>Return to this tab and use <code>Capture active run</code>. The capture stops only the probe, not the game.</li>
+      <li>Collect at least three eligible repeats for all six presets. Five repeats improves confidence.</li>
+    </ol>
+    <p class="note">Do not use the game panel’s legacy EXPORT button for M12 evidence. This harness adds protocol, preset, repeat, requested-DPR, and session provenance before downloading.</p>
+  </section>
+
+  <section>
+    <h2>2 · Load and validate reports</h2>
+    <div class="controls">
+      <label class="file">Load M12 report JSON<input id="reports" type="file" accept="application/json,.json" multiple></label>
+      <button id="clear" type="button">Clear comparison</button>
+    </div>
+    <p id="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>File / segment</th><th>Preset</th><th>Repeat</th><th>Eligible</th><th>Profile</th><th>DPR</th><th>Samples</th><th>Frame p50</th><th>Frame p95</th><th>Frame p99</th><th>Critical %</th><th>Dropped/min</th><th>Exclusion</th>
+          </tr>
+        </thead>
+        <tbody id="runRows"><tr><td colspan="13">No reports loaded.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>3 · Repeat-level aggregates</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Preset</th><th>Eligible repeats</th><th>Status</th><th>DPR median</th><th>p95 median</th><th>p95 MAD</th><th>p99 median</th><th>Critical median</th><th>Dropped/min median</th><th>Thresholds</th>
+          </tr>
+        </thead>
+        <tbody id="groupRows"><tr><td colspan="10">No analysis yet.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>4 · Recommendation gate</h2>
+    <div id="recommendations" class="recommendations">
+      <article class="card">No analysis yet.</article>
+    </div>
+    <p class="note">A recommendation is emitted only after every DPR preset for that posture has enough eligible repeats. It selects the highest-DPR candidate that satisfies the provisional thresholds. It must still be checked against sharpness, heat, battery drain, touch latency, and visible stutter.</p>
+  </section>
+
+  <section>
+    <h2>Interpretation boundary</h2>
+    <p>The gate may return <code>insufficient-evidence</code> or <code>no-sustainable-candidate</code>. Those are valid outcomes. The analysis does not authenticate device identity, prove untampered evidence, measure GPU memory, thermal throttling, battery cost, subjective clarity, Samsung Internet, Safari, broad hardware support, fun, or release readiness. The FNV fingerprint is for duplicate detection only, not security.</p>
+  </section>
+</main>
+<script src="./performance-evidence-analysis.js"></script>
+<script>
+(() => {
+  'use strict';
+  const Analysis = window.SexMagickPerformanceEvidence;
+  const repeatInput = document.getElementById('repeat');
+  const captureButton = document.getElementById('capture');
+  const closeButton = document.getElementById('closeTarget');
+  const captureStatus = document.getElementById('captureStatus');
+  const reportsInput = document.getElementById('reports');
+  const clearButton = document.getElementById('clear');
+  const status = document.getElementById('status');
+  const runRows = document.getElementById('runRows');
+  const groupRows = document.getElementById('groupRows');
+  const recommendations = document.getElementById('recommendations');
+  const loadedReports = [];
+  let activeTarget = null;
+  let activeRun = null;
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>'"]/g, character => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[character]);
+  }
+  function number(value, digits = 2) { return Number.isFinite(value) ? Number(value).toFixed(digits) : '—'; }
+  function percent(value) { return Number.isFinite(value) ? `${(value * 100).toFixed(2)}%` : '—'; }
+  function sessionId(preset, repeat) {
+    const random = globalThis.crypto?.getRandomValues ? crypto.getRandomValues(new Uint32Array(1))[0].toString(16) : Math.random().toString(16).slice(2);
+    return `${preset}-r${repeat}-${Date.now().toString(36)}-${random}`;
+  }
+  function downloadJson(report, filename) {
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = 'noopener';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+  function annotateSnapshot(snapshot, run) {
+    const definition = Analysis.presetDefinition(run.preset);
+    return {
+      ...snapshot,
+      measurement: {
+        schemaVersion: 1,
+        protocol: Analysis.PROTOCOL,
+        source: 'm12-same-origin-harness-capture',
+        sessionId: run.sessionId,
+        preset: run.preset,
+        repeat: run.repeat,
+        requestedDpr: definition.requestedDpr,
+        expectedProfile: definition.profile
+      }
+    };
+  }
+  function launchPreset(preset) {
+    const definition = Analysis.presetDefinition(preset);
+    const repeat = Math.max(1, Math.min(99, Math.floor(Number(repeatInput.value) || 1)));
+    repeatInput.value = String(repeat);
+    const run = { preset, repeat, sessionId: sessionId(preset, repeat) };
+    const url = new URL('../index.html', location.href);
+    url.searchParams.set('assetMode', 'offline');
+    url.searchParams.set('renderDpr', definition.requestedDpr);
+    url.searchParams.set('perfProbe', '1');
+    url.searchParams.set('perfPanel', '1');
+    url.searchParams.set('viewportProfile', definition.profile);
+    url.searchParams.set('perfProtocol', Analysis.PROTOCOL);
+    url.searchParams.set('perfPreset', preset);
+    url.searchParams.set('perfRepeat', String(repeat));
+    url.searchParams.set('perfSession', run.sessionId);
+    activeTarget = window.open(url.href, 'sexMagickPhysicalPerformanceTarget');
+    activeRun = run;
+    captureButton.disabled = !activeTarget;
+    closeButton.disabled = !activeTarget;
+    captureStatus.textContent = activeTarget
+      ? `Active ${preset}, repeat ${repeat}. Play in the game tab, return here, then capture.`
+      : 'The browser blocked the game tab. Allow this user-initiated popup and try again.';
+  }
+  function captureActiveRun() {
+    if (!activeTarget || activeTarget.closed || !activeRun) throw new Error('No active game tab.');
+    const runtime = activeTarget.__SEX_MAGICK_PERFORMANCE__;
+    if (!runtime?.getSnapshot) throw new Error('Performance probe is not ready in the game tab.');
+    const snapshot = runtime.stop?.() || runtime.getSnapshot();
+    const report = annotateSnapshot(snapshot, activeRun);
+    const fingerprint = Analysis.fingerprintReport(report).replace(':', '-');
+    const filename = `sex-magick-${activeRun.preset}-repeat-${activeRun.repeat}-${fingerprint}.json`;
+    downloadJson(report, filename);
+    loadedReports.push({ sourceLabel: filename, report });
+    captureStatus.textContent = `Captured ${activeRun.preset}, repeat ${activeRun.repeat}. Report downloaded and added to the local comparison.`;
+    renderAnalysis();
+    return report;
+  }
+  function thresholdText(checks) {
+    return Object.entries(checks || {}).map(([name, passed]) => `${name}:${passed ? '✓' : '×'}`).join(' ');
+  }
+  function renderAnalysis() {
+    const analysis = Analysis.analyzeReports(loadedReports);
+    status.textContent = `Accepted ${analysis.summary.acceptedReportCount}; rejected ${analysis.summary.rejectedReportCount}; eligible segments ${analysis.summary.eligibleRunCount}; excluded ${analysis.summary.excludedRunCount}.`;
+    if (!analysis.runs.length) runRows.innerHTML = '<tr><td colspan="13">No reports loaded.</td></tr>';
+    else runRows.innerHTML = analysis.runs.map(run => `<tr>
+      <td>${escapeHtml(run.sourceLabel)}</td><td>${escapeHtml(run.preset || '—')}</td><td>${run.repeat ?? '—'}</td>
+      <td class="${run.eligible ? 'ok' : 'bad'}">${run.eligible ? 'YES' : 'NO'}</td><td>${escapeHtml(run.profile)}</td>
+      <td>${number(run.effectiveDpr, 3)}</td><td>${run.sampleCount}</td><td>${number(run.frameP50Ms)}</td><td>${number(run.frameP95Ms)}</td><td>${number(run.frameP99Ms)}</td>
+      <td>${percent(run.criticalFrameRate)}</td><td>${number(run.droppedSimulationMsPerMinute)}</td><td>${escapeHtml(run.exclusionReasons.join(', ') || '—')}</td>
+    </tr>`).join('');
+    groupRows.innerHTML = analysis.groups.map(group => `<tr>
+      <td>${escapeHtml(group.preset)}</td><td>${group.uniqueRepeats} / ${analysis.policy.minRepeats}</td>
+      <td class="${group.sustainable ? 'ok' : group.enoughRepeats ? 'bad' : 'warn'}">${escapeHtml(group.status)}</td>
+      <td>${number(group.effectiveDpr.median, 3)}</td><td>${number(group.frameP95.median)}</td><td>${number(group.frameP95.mad)}</td><td>${number(group.frameP99.median)}</td>
+      <td>${percent(group.criticalFrameRate.median)}</td><td>${number(group.droppedSimulationMsPerMinute.median)}</td><td>${escapeHtml(thresholdText(group.thresholdChecks))}</td>
+    </tr>`).join('');
+    recommendations.innerHTML = analysis.recommendations.map(item => `<article class="card">
+      <h3>${escapeHtml(item.profile)}</h3>
+      <div class="metric"><span>Status</span><strong class="${item.status === 'provisional-recommendation' ? 'ok' : item.status === 'insufficient-evidence' ? 'warn' : 'bad'}">${escapeHtml(item.status)}</strong></div>
+      <div class="metric"><span>Recommendation</span><strong>${escapeHtml(item.recommendation || 'NONE')}</strong></div>
+      <div class="metric"><span>Confidence</span><strong>${escapeHtml(item.confidence || 'none')}</strong></div>
+      <p>${escapeHtml(item.rationale)}</p>
+      ${item.missingPresets?.length ? `<p class="warn">Missing: ${escapeHtml(item.missingPresets.join(', '))}</p>` : ''}
+    </article>`).join('');
+    return analysis;
+  }
+
+  document.querySelectorAll('button[data-preset]').forEach(button => button.addEventListener('click', () => launchPreset(button.dataset.preset)));
+  captureButton.addEventListener('click', () => {
+    try { captureActiveRun(); }
+    catch (error) { captureStatus.textContent = error.message; }
+  });
+  closeButton.addEventListener('click', () => {
+    if (activeTarget && !activeTarget.closed) activeTarget.close();
+    activeTarget = null;
+    activeRun = null;
+    captureButton.disabled = true;
+    closeButton.disabled = true;
+    captureStatus.textContent = 'Game tab closed.';
+  });
+  reportsInput.addEventListener('change', async () => {
+    let rejected = 0;
+    for (const file of Array.from(reportsInput.files || [])) {
+      try { loadedReports.push({ sourceLabel: file.name, report: JSON.parse(await file.text()) }); }
+      catch (_error) { rejected += 1; }
+    }
+    reportsInput.value = '';
+    const analysis = renderAnalysis();
+    if (rejected) status.textContent += ` JSON parse failures: ${rejected}.`;
+    return analysis;
+  });
+  clearButton.addEventListener('click', () => {
+    loadedReports.length = 0;
+    status.textContent = 'Comparison cleared.';
+    renderAnalysis();
+  });
+
+  window.__SEX_MAGICK_M12_HARNESS__ = Object.freeze({
+    protocol: Analysis.PROTOCOL,
+    presets: Analysis.PRESETS,
+    loadedReports,
+    annotateSnapshot,
+    analyzeReports: inputs => Analysis.analyzeReports(inputs),
+    renderAnalysis
+  });
+  renderAnalysis();
+})();
+</script>
+</body>
+</html>

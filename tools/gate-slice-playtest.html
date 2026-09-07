@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SEX MAGICK — Gate Slice Playtest</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #08080b; color: #f4f4f6; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .panel { width: min(720px, calc(100vw - 28px)); margin: 22px auto; padding: 20px; border: 1px solid #41414b; background: #111116; }
+    h1, h2 { margin-top: 0; letter-spacing: .08em; }
+    p, label, legend { line-height: 1.5; }
+    .warning { padding: 11px; border-left: 3px solid #ff2f6d; background: #1c0d13; color: #ffdbe6; }
+    .muted { color: #aaa; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .field { display: grid; gap: 6px; }
+    .full { grid-column: 1 / -1; }
+    input, select, textarea { width: 100%; padding: 11px; border: 1px solid #555; background: #08080b; color: #fff; }
+    textarea { min-height: 92px; resize: vertical; }
+    .primary { width: 100%; margin-top: 18px; padding: 14px; border: 1px solid #00e5ff; background: #08242a; color: #cfffff; }
+    .secondary { padding: 10px 12px; border: 1px solid #666; background: #17171d; color: #fff; }
+    #session { display: none; position: fixed; inset: 0; background: #000; }
+    #gameFrame { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+    #sessionBar { position: fixed; top: max(6px, env(safe-area-inset-top)); right: 8px; z-index: 50; display: flex; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid rgba(255,255,255,.24); background: rgba(0,0,0,.75); font-size: 12px; }
+    #timer { min-width: 54px; text-align: center; letter-spacing: .08em; }
+    #questionnaire, #report { display: none; }
+    .answers { display: flex; flex-wrap: wrap; gap: 18px; margin: 10px 0 16px; }
+    .answers label { display: flex; gap: 7px; align-items: center; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 45vh; overflow: auto; padding: 12px; background: #07070a; border: 1px solid #333; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } .full { grid-column: auto; } .panel { margin: 12px auto; padding: 15px; } }
+  </style>
+</head>
+<body>
+  <main id="setup" class="panel">
+    <h1>THE GATE — PLAYTEST</h1>
+    <p class="warning"><strong>Facilitator:</strong> do not explain Gnosis, risk zones, banking, the Gate, or the Void. The player may read only what the game itself presents.</p>
+    <div class="grid">
+      <label class="field">Anonymous tester code
+        <input id="testerCode" value="OWNER-PILOT" maxlength="30" autocomplete="off">
+      </label>
+      <label class="field">Device / posture
+        <input id="device" value="Samsung Galaxy Z Fold 6 — closed" maxlength="100" autocomplete="off">
+      </label>
+      <label class="field">Input buffer
+        <select id="buffer">
+          <option value="3">3 simulation steps</option>
+          <option value="6">6 simulation steps</option>
+        </select>
+      </label>
+      <label class="field">Session length
+        <select id="duration">
+          <option value="10">10 minutes</option>
+          <option value="15" selected>15 minutes</option>
+          <option value="20">20 minutes</option>
+        </select>
+      </label>
+    </div>
+    <p class="muted">The experimental Gate slice is loaded with local-only evidence. The leaderboard guest session and score submission are disabled. Nothing in this harness transmits a report.</p>
+    <button id="begin" class="primary">BEGIN SESSION</button>
+    <p id="setupError" class="warning" hidden></p>
+  </main>
+
+  <section id="session" aria-label="Gate slice playtest session">
+    <iframe id="gameFrame" title="SEX MAGICK Gate slice" allow="autoplay; fullscreen"></iframe>
+    <div id="sessionBar"><span id="timer">15:00</span><button id="endNow" class="secondary" type="button">END</button></div>
+  </section>
+
+  <section id="questionnaire" class="panel">
+    <h2>Post-session questions</h2>
+    <form id="questionForm">
+      <label class="field full">What is the game asking you to do?
+        <textarea id="asking" required></textarea>
+      </label>
+      <label class="field full">What did the meter mean, in your own words?
+        <textarea id="meterMeaning" required></textarea>
+      </label>
+      <label class="field full">What did the large ring or Gate mean? What did you think would happen if you entered or avoided it?
+        <textarea id="gateMeaning" required></textarea>
+      </label>
+      <fieldset>
+        <legend>Did the game ever ignore your input?</legend>
+        <div class="answers">
+          <label><input type="radio" name="ignored" value="yes" required> Yes</label>
+          <label><input type="radio" name="ignored" value="no" required> No</label>
+          <label><input type="radio" name="ignored" value="unsure" required> Unsure</label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Would you voluntarily play another run?</legend>
+        <div class="answers">
+          <label><input type="radio" name="anotherRun" value="yes" required> Yes</label>
+          <label><input type="radio" name="anotherRun" value="no" required> No</label>
+          <label><input type="radio" name="anotherRun" value="maybe" required> Maybe</label>
+        </div>
+      </fieldset>
+      <label class="field full">What felt exciting, confusing, unfair, or boring?
+        <textarea id="openFeedback" required></textarea>
+      </label>
+      <button class="primary" type="submit">SAVE LOCAL REPORT</button>
+    </form>
+  </section>
+
+  <section id="report" class="panel">
+    <h2>Local Gate-slice report</h2>
+    <pre id="reportJson"></pre>
+    <div class="actions">
+      <button id="copyReport" class="secondary" type="button">COPY JSON</button>
+      <button id="downloadReport" class="secondary" type="button">DOWNLOAD JSON</button>
+      <button id="newSession" class="secondary" type="button">NEW SESSION</button>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const setup = document.getElementById('setup');
+      const session = document.getElementById('session');
+      const questionnaire = document.getElementById('questionnaire');
+      const report = document.getElementById('report');
+      const frame = document.getElementById('gameFrame');
+      const timer = document.getElementById('timer');
+      const setupError = document.getElementById('setupError');
+      let sessionMeta = null;
+      let sessionTimer = null;
+      let captured = null;
+      let finalReport = null;
+
+      const params = new URLSearchParams(location.search);
+      if (params.get('buffer') === '6') document.getElementById('buffer').value = '6';
+      if (params.get('buffer') === '3') document.getElementById('buffer').value = '3';
+      if (params.get('tester')) document.getElementById('testerCode').value = params.get('tester').slice(0, 30);
+      if (params.get('device')) document.getElementById('device').value = params.get('device').slice(0, 100);
+      if (['10', '15', '20'].includes(params.get('minutes'))) document.getElementById('duration').value = params.get('minutes');
+
+      function formatTime(ms) {
+        const seconds = Math.max(0, Math.ceil(ms / 1000));
+        return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      }
+
+      function waitForGameApi(timeoutMs = 18_000) {
+        const started = performance.now();
+        return new Promise((resolve, reject) => {
+          const attempt = () => {
+            try {
+              const gameWindow = frame.contentWindow;
+              if (
+                gameWindow?.__SEX_MAGICK_GATE_SLICE__ &&
+                gameWindow?.__SEX_MAGICK_GATE_PREFLIGHT__ &&
+                gameWindow?.__SEX_MAGICK_COLLISION__
+              ) {
+                resolve(gameWindow);
+                return;
+              }
+            } catch (_error) {}
+            if (performance.now() - started >= timeoutMs) {
+              reject(new Error('The Gate slice runtime did not become ready.'));
+              return;
+            }
+            setTimeout(attempt, 50);
+          };
+          attempt();
+        });
+      }
+
+      function aggregateEvidence(history, currentState) {
+        const records = [...history];
+        if (currentState && !currentState.endedAt) records.push(currentState);
+        const totals = records.reduce((sum, record) => {
+          for (const key of ['gateOffers', 'gateEntries', 'gateBanks', 'voidAttempts', 'voidSurvivals', 'voidDeaths', 'gatesCleared']) {
+            sum[key] += Number(record?.[key] || 0);
+          }
+          return sum;
+        }, {
+          gateOffers: 0,
+          gateEntries: 0,
+          gateBanks: 0,
+          voidAttempts: 0,
+          voidSurvivals: 0,
+          voidDeaths: 0,
+          gatesCleared: 0
+        });
+        return {
+          ...totals,
+          completedRuns: history.length,
+          gateEntryRate: totals.gateOffers > 0 ? Number((totals.gateEntries / totals.gateOffers).toFixed(4)) : null,
+          voidSurvivalRate: totals.voidAttempts > 0 ? Number((totals.voidSurvivals / totals.voidAttempts).toFixed(4)) : null
+        };
+      }
+
+      async function beginSession() {
+        setupError.hidden = true;
+        const bufferFrames = Number(document.getElementById('buffer').value);
+        const durationMinutes = Number(document.getElementById('duration').value);
+        const durationMs = durationMinutes * 60 * 1000;
+        const sessionId = `gate_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        sessionMeta = {
+          protocol: 'gate-slice-playtest-v1',
+          sessionId,
+          testerCode: document.getElementById('testerCode').value.trim() || 'anonymous',
+          device: document.getElementById('device').value.trim() || 'unspecified',
+          bufferFrames,
+          durationMinutes,
+          plannedDurationMs: durationMs,
+          startedAt: new Date().toISOString(),
+          startedMonotonicMs: performance.now()
+        };
+
+        setup.style.display = 'none';
+        session.style.display = 'block';
+        frame.src = `../index.html?gateSlice=1&inputBuffer=${bufferFrames}&gatePlaytest=1&session=${encodeURIComponent(sessionId)}`;
+
+        try {
+          const gameWindow = await waitForGameApi();
+          gameWindow.__SEX_MAGICK_GATE_SLICE__.clearHistory();
+          gameWindow.__SEX_MAGICK_COLLISION__.resetInputStats();
+          gameWindow.__SEX_MAGICK_INPUT_FEEDBACK__?.setTextEnabled?.(false);
+          const deadline = performance.now() + durationMs;
+          timer.textContent = formatTime(durationMs);
+          sessionTimer = setInterval(() => {
+            const remaining = deadline - performance.now();
+            timer.textContent = formatTime(remaining);
+            if (remaining <= 0) endSession('timer');
+          }, 250);
+          try { await session.requestFullscreen?.(); } catch (_error) {}
+        } catch (error) {
+          session.style.display = 'none';
+          setup.style.display = 'block';
+          setupError.textContent = error.message;
+          setupError.hidden = false;
+        }
+      }
+
+      function captureState() {
+        const gameWindow = frame.contentWindow;
+        const gateApi = gameWindow?.__SEX_MAGICK_GATE_SLICE__;
+        const current = gateApi?.getSnapshot?.() || null;
+        const history = gateApi?.getHistory?.() || [];
+        const inputStats = gameWindow?.__SEX_MAGICK_COLLISION__?.getInputStats?.() || null;
+        const preflight = gameWindow?.__SEX_MAGICK_GATE_PREFLIGHT__?.getSnapshot?.() || null;
+        return {
+          current,
+          history,
+          aggregate: aggregateEvidence(history, current?.state || null),
+          inputStats,
+          preflight,
+          viewport: {
+            width: gameWindow?.innerWidth || null,
+            height: gameWindow?.innerHeight || null,
+            devicePixelRatio: gameWindow?.devicePixelRatio || null
+          }
+        };
+      }
+
+      function endSession(reason) {
+        if (!sessionMeta || captured) return;
+        clearInterval(sessionTimer);
+        sessionTimer = null;
+        captured = captureState();
+        frame.src = 'about:blank';
+        try { document.exitFullscreen?.(); } catch (_error) {}
+        sessionMeta.endedAt = new Date().toISOString();
+        sessionMeta.actualDurationMs = Math.max(0, Math.round(performance.now() - sessionMeta.startedMonotonicMs));
+        sessionMeta.endReason = reason;
+        delete sessionMeta.startedMonotonicMs;
+        session.style.display = 'none';
+        questionnaire.style.display = 'block';
+      }
+
+      function buildReport(answers) {
+        const lifetime = captured?.inputStats?.lifetime || {};
+        const attempts = ['immediate', 'buffered', 'rejected', 'coalesced']
+          .reduce((sum, key) => sum + Number(lifetime[key] || 0), 0);
+        return {
+          schemaVersion: 1,
+          privacy: 'local-playtest-only-no-network-transmission',
+          ...sessionMeta,
+          evidence: captured,
+          derivedInput: {
+            inputAttempts: attempts,
+            rejectedRate: attempts > 0 ? Number((Number(lifetime.rejected || 0) / attempts).toFixed(4)) : null,
+            expiredPerBuffered: Number(lifetime.buffered || 0) > 0
+              ? Number((Number(lifetime.expired || 0) / Number(lifetime.buffered || 0)).toFixed(4))
+              : null
+          },
+          answers
+        };
+      }
+
+      document.getElementById('begin').addEventListener('click', beginSession);
+      document.getElementById('endNow').addEventListener('click', () => endSession('facilitator'));
+      document.getElementById('questionForm').addEventListener('submit', event => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        finalReport = buildReport({
+          whatIsTheGameAsking: document.getElementById('asking').value.trim(),
+          meterMeaning: document.getElementById('meterMeaning').value.trim(),
+          gateMeaning: document.getElementById('gateMeaning').value.trim(),
+          didGameIgnoreInput: data.get('ignored'),
+          wouldPlayAnotherRun: data.get('anotherRun'),
+          openFeedback: document.getElementById('openFeedback').value.trim()
+        });
+        questionnaire.style.display = 'none';
+        report.style.display = 'block';
+        document.getElementById('reportJson').textContent = JSON.stringify(finalReport, null, 2);
+      });
+      document.getElementById('copyReport').addEventListener('click', async event => {
+        await navigator.clipboard.writeText(JSON.stringify(finalReport, null, 2));
+        event.currentTarget.textContent = 'COPIED';
+      });
+      document.getElementById('downloadReport').addEventListener('click', () => {
+        const blob = new Blob([JSON.stringify(finalReport, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${finalReport.sessionId}.json`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      });
+      document.getElementById('newSession').addEventListener('click', () => location.reload());
+    })();
+  </script>
+</body>
+</html>

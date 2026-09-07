@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SEX MAGICK 2.0 Runtime Harness</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #0a0a0a;
+      color: #f5f5f5;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    button, select { font: inherit; }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      background: rgba(10, 10, 10, 0.96);
+      border-bottom: 1px solid #333;
+    }
+    button, select {
+      min-height: 40px;
+      padding: 8px 12px;
+      color: #fff;
+      background: #181818;
+      border: 1px solid #555;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover, button:focus-visible { border-color: #fff; }
+    .meta { margin-left: auto; font-size: 12px; color: #aaa; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+      gap: 12px;
+      padding: 12px;
+      min-height: calc(100vh - 62px);
+    }
+    #stage {
+      min-width: 0;
+      overflow: auto;
+      display: grid;
+      place-items: start center;
+      padding: 20px;
+      border: 1px solid #292929;
+      background:
+        linear-gradient(45deg, #111 25%, transparent 25%),
+        linear-gradient(-45deg, #111 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #111 75%),
+        linear-gradient(-45deg, transparent 75%, #111 75%);
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+    }
+    #device {
+      position: relative;
+      width: 390px;
+      height: 844px;
+      flex: none;
+      overflow: hidden;
+      border: 2px solid #ddd;
+      border-radius: 18px;
+      background: #000;
+      box-shadow: 0 10px 50px rgba(0,0,0,.65);
+    }
+    iframe { width: 100%; height: 100%; border: 0; background: #000; }
+    aside {
+      border: 1px solid #292929;
+      background: #111;
+      padding: 12px;
+      overflow: auto;
+    }
+    h1, h2 { margin: 0 0 10px; font-size: 14px; }
+    h2 { margin-top: 18px; color: #ddd; }
+    #events {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #ccc;
+    }
+    .ok { color: #8dff9a; }
+    .warn { color: #ffd86b; }
+    .error { color: #ff7f91; }
+    ol { padding-left: 22px; font-size: 12px; line-height: 1.5; color: #ccc; }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      .meta { width: 100%; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>SEX MAGICK 2.0 — RUNTIME HARNESS</strong>
+    <select id="preset" aria-label="Viewport preset">
+      <option value="390x844">Phone portrait — 390×844</option>
+      <option value="844x390">Phone landscape — 844×390</option>
+      <option value="374x882">Fold closed — 374×882</option>
+      <option value="884x1104">Fold open portrait — 884×1104</option>
+      <option value="1104x884">Fold open landscape — 1104×884</option>
+      <option value="1280x720">Desktop — 1280×720</option>
+      <option value="1440x900">Desktop — 1440×900</option>
+    </select>
+    <button id="apply">Apply</button>
+    <button id="rotate">Rotate</button>
+    <button id="reload">Reload game</button>
+    <button id="clear">Clear log</button>
+    <span class="meta" id="meta"></span>
+  </header>
+
+  <main>
+    <section id="stage" aria-label="Game viewport test stage">
+      <div id="device">
+        <iframe id="game" src="../index.html#debug" title="SEX MAGICK game under test"></iframe>
+      </div>
+    </section>
+
+    <aside>
+      <h1>Branch-only QA instrument</h1>
+      <p style="font-size:12px;color:#aaa;line-height:1.5">
+        This page does not alter the game. It loads the current branch entry point in a same-origin iframe, applies repeatable viewport sizes, and records uncaught errors and promise rejections where browser security permits.
+      </p>
+
+      <h2>Smoke sequence</h2>
+      <ol>
+        <li>Wait for Rite buttons and record load time.</li>
+        <li>Start Hexagram; pass the first obstacle.</li>
+        <li>Pause/resume twice.</li>
+        <li>Rotate during play and observe speed/layout.</li>
+        <li>Die, restart five times, then return to menu.</li>
+        <li>Repeat core checks in Monas.</li>
+        <li>Review this log and the browser Network panel.</li>
+      </ol>
+
+      <h2>Captured events</h2>
+      <div id="events" role="log" aria-live="polite"></div>
+    </aside>
+  </main>
+
+  <script>
+    'use strict';
+
+    const preset = document.getElementById('preset');
+    const device = document.getElementById('device');
+    const iframe = document.getElementById('game');
+    const events = document.getElementById('events');
+    const meta = document.getElementById('meta');
+    const startedAt = performance.now();
+
+    function log(message, level = 'ok') {
+      const time = ((performance.now() - startedAt) / 1000).toFixed(2);
+      const line = document.createElement('div');
+      line.className = level;
+      line.textContent = `[${time}s] ${message}`;
+      events.prepend(line);
+    }
+
+    function parseSize(value) {
+      const match = /^(\d+)x(\d+)$/.exec(value);
+      if (!match) throw new Error(`Invalid viewport preset: ${value}`);
+      return { width: Number(match[1]), height: Number(match[2]) };
+    }
+
+    function applySize(value) {
+      const { width, height } = parseSize(value);
+      device.style.width = `${width}px`;
+      device.style.height = `${height}px`;
+      meta.textContent = `${width}×${height} CSS px · DPR ${window.devicePixelRatio || 1}`;
+      log(`Applied viewport ${width}×${height}`);
+    }
+
+    function attachFrameDiagnostics() {
+      let frameWindow;
+      try {
+        frameWindow = iframe.contentWindow;
+        if (!frameWindow) throw new Error('iframe window unavailable');
+
+        frameWindow.addEventListener('error', event => {
+          const location = event.filename ? ` @ ${event.filename}:${event.lineno || 0}` : '';
+          log(`GAME ERROR: ${event.message || 'Unknown error'}${location}`, 'error');
+        });
+
+        frameWindow.addEventListener('unhandledrejection', event => {
+          const reason = event.reason instanceof Error
+            ? `${event.reason.name}: ${event.reason.message}`
+            : String(event.reason);
+          log(`GAME UNHANDLED REJECTION: ${reason}`, 'error');
+        });
+
+        log('Game iframe loaded; diagnostics attached');
+      } catch (error) {
+        log(`Could not attach same-origin diagnostics: ${error.message}`, 'warn');
+      }
+    }
+
+    document.getElementById('apply').addEventListener('click', () => applySize(preset.value));
+
+    document.getElementById('rotate').addEventListener('click', () => {
+      const { width, height } = parseSize(preset.value);
+      const rotated = `${height}x${width}`;
+      let option = [...preset.options].find(item => item.value === rotated);
+      if (!option) {
+        option = new Option(`Custom — ${rotated.replace('x', '×')}`, rotated);
+        preset.add(option);
+      }
+      preset.value = rotated;
+      applySize(rotated);
+    });
+
+    document.getElementById('reload').addEventListener('click', () => {
+      log('Reload requested', 'warn');
+      iframe.src = `../index.html?qa=${Date.now()}#debug`;
+    });
+
+    document.getElementById('clear').addEventListener('click', () => {
+      events.replaceChildren();
+      log('Log cleared');
+    });
+
+    iframe.addEventListener('load', attachFrameDiagnostics);
+    window.addEventListener('error', event => log(`HARNESS ERROR: ${event.message}`, 'error'));
+    window.addEventListener('unhandledrejection', event => log(`HARNESS REJECTION: ${String(event.reason)}`, 'error'));
+
+    applySize(preset.value);
+    log('Harness initialized');
+  </script>
+</body>
+</html>

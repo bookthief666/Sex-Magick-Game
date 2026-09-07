@@ -1,0 +1,710 @@
+(function installSexMagickFixedStepRuntime() {
+  'use strict';
+
+  const api = globalThis.SexMagickFixedStep;
+  if (!api?.FixedStepClock) {
+    throw new Error('SexMagickFixedStep.FixedStepClock must load before the fixed-step runtime');
+  }
+  if (typeof Game === 'undefined' || typeof GameState === 'undefined') {
+    throw new Error('SEX MAGICK game classes are unavailable; load the fixed-step runtime after the game script');
+  }
+  if (Game.prototype.__fixedStepRuntimeInstalled) return;
+
+  const STEP_MS = 1000 / 60;
+  const MAX_STEPS_PER_FRAME = 5;
+  const SUSPENSION_RESET_MS = 250;
+
+  function ensureClock(instance) {
+    if (!instance.fixedStepClock) {
+      instance.fixedStepClock = new api.FixedStepClock({
+        stepMs: STEP_MS,
+        maxStepsPerFrame: MAX_STEPS_PER_FRAME,
+        suspensionResetMs: SUSPENSION_RESET_MS
+      });
+    }
+    return instance.fixedStepClock;
+  }
+
+  Game.prototype.resetFixedStepTiming = function resetFixedStepTiming() {
+    ensureClock(this).reset();
+    this.renderLastFrameTime = 0;
+    this.lastFrameTime = 0;
+    this.fixedStepLastResult = null;
+  };
+
+  Game.prototype.runFixedSimulationStep = function runFixedSimulationStep() {
+    if (this.hitStop > 0) {
+      this.hitStop -= 1;
+      return;
+    }
+
+    this.frames += 1;
+
+    const reducedMotion = typeof document !== 'undefined'
+      && document.documentElement.classList.contains('sex-magick-reduced-motion');
+    if (!reducedMotion && this.frames % 30 === 0 && Math.random() > 0.8) {
+      GlitchFX.trigger(10, 'random');
+    }
+
+    if (this.voidMode) {
+      this.voidTimer -= 1;
+      if (this.voidTimer <= 0) this.endVoidMode();
+    }
+
+    this.tunnelOffset += this.tunnelSpeed * (1 + this.gameSpeed * 0.1) || 10;
+    this.updateGameObjects();
+  };
+
+  Game.prototype.scheduleFixedStepFrame = function scheduleFixedStepFrame() {
+    if (this.fixedStepRafId != null) return;
+
+    this.fixedStepRafId = requestAnimationFrame(time => {
+      this.fixedStepRafId = null;
+      this.gameLoop(time);
+    });
+  };
+
+  Game.prototype.gameLoop = function fixedStepGameLoop(currentTime) {
+    if (this.state !== GameState.PLAYING) {
+      ensureClock(this).reset();
+      this.renderLastFrameTime = 0;
+      return;
+    }
+
+    const manualCall = !Number.isFinite(currentTime);
+    const clock = ensureClock(this);
+
+    if (manualCall) {
+      const now = performance.now();
+      clock.reset(now - STEP_MS);
+      this.renderLastFrameTime = 0;
+
+      if (this.fixedStepRafId != null) return;
+      currentTime = now;
+    }
+
+    if (this.renderLastFrameTime) {
+      const renderDelta = currentTime - this.renderLastFrameTime;
+      if (renderDelta > 0) {
+        this.fps = Math.round(1000 / renderDelta);
+        if (CONFIG.DEBUG) document.getElementById('fpsCounter').textContent = this.fps;
+      }
+    }
+    this.renderLastFrameTime = currentTime;
+    this.lastFrameTime = currentTime;
+
+    this.fixedStepLastResult = clock.advance(currentTime, () => {
+      if (this.state === GameState.PLAYING) this.runFixedSimulationStep();
+    });
+
+    this.drawScene(currentTime);
+
+    if (this.state === GameState.PLAYING) {
+      this.scheduleFixedStepFrame();
+    }
+  };
+
+  Game.prototype.__fixedStepRuntimeInstalled = true;
+
+  globalThis.__SEX_MAGICK_TIMING__ = Object.freeze({
+    mode: 'fixed-step-runtime',
+    version: 1,
+    stepMs: STEP_MS,
+    maxStepsPerFrame: MAX_STEPS_PER_FRAME,
+    suspensionResetMs: SUSPENSION_RESET_MS,
+    getSnapshot() {
+      if (typeof game === 'undefined' || !game) return null;
+      const clock = ensureClock(game);
+      return {
+        state: game.state,
+        rite: game.gameMode,
+        renderFps: game.fps,
+        simulationFrames: game.frames,
+        score: game.score,
+        pendingRaf: game.fixedStepRafId != null,
+        lastAdvance: game.fixedStepLastResult,
+        clock: clock.snapshot()
+      };
+    }
+  });
+
+  if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG) {
+    console.info('[SEX MAGICK] Fixed-step runtime installed', {
+      stepMs: STEP_MS,
+      maxStepsPerFrame: MAX_STEPS_PER_FRAME,
+      suspensionResetMs: SUSPENSION_RESET_MS
+    });
+  }
+})();
+
+(function bootstrapCollisionTruthRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickCollision ||
+    document.querySelector('script[data-sex-magick-collision-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./collision-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickCollisionRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Collision truth runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapInputFeedbackPolicy() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickInputFeedbackPolicy ||
+    document.querySelector('script[data-sex-magick-input-feedback-policy]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./input-feedback-policy.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickInputFeedbackPolicy = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Input feedback policy failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapRunTelemetryRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickRunTelemetry ||
+    document.querySelector('script[data-sex-magick-run-telemetry]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./run-telemetry.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickRunTelemetry = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Local run telemetry failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+// The art foundation loads before the field that consumes it. Neither touches
+// gameplay: the field replaces drawHyperspaceTunnel and nothing else.
+(function bootstrapOccultArtRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickOccultArt ||
+    document.querySelector('script[data-sex-magick-occult-art]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./occult-art-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickOccultArt = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Occult art runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapOccultFieldRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickOccultField ||
+    document.querySelector('script[data-sex-magick-occult-field]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./occult-field-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickOccultField = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Occult field runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+// Waits for the Gate slice before installing, so its gameOver wrapper is the
+// outermost one and still sees __gateSliceVoidActive when the shield decides
+// whether to absorb.
+// D-065: must load before any runtime that raises a transient notice, so the
+// first announce of a session already has the slot arbiter to claim. It is a
+// passive registry with no dependency on Game, so loading it first is free -
+// and every caller treats it as optional anyway, so a failed load degrades to
+// the pre-D-065 behaviour rather than breaking an announce.
+(function bootstrapNoticeSlot() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickNoticeSlot ||
+    document.querySelector('script[data-sex-magick-notice-slot]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./notice-slot.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickNoticeSlot = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Notice slot failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapPowerupRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickPowerups ||
+    document.querySelector('script[data-sex-magick-powerups]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./powerup-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickPowerups = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Power-up runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+// Observes the Gate slice rather than driving anything, so load order relative
+// to it does not matter; it installs once the Game prototype exists.
+(function bootstrapMissionsRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickMissions ||
+    document.querySelector('script[data-sex-magick-missions]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./missions-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickMissions = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Missions runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+// Loads ahead of the grammar because spawnPatternPillar routes pillar geometry
+// through the variety runtime's safety clamps when it is present.
+(function bootstrapObstacleVarietyRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickObstacleVariety ||
+    document.querySelector('script[data-sex-magick-obstacle-variety]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./obstacle-variety-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickObstacleVariety = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Obstacle variety runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapObstacleGrammarRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickObstacleGrammar ||
+    document.querySelector('script[data-sex-magick-obstacle-grammar]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./obstacle-grammar.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickObstacleGrammar = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Deterministic obstacle grammar failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapReachabilityPolicyRuntime() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const startedAt = Date.now();
+  let status = 'waiting-for-grammar';
+  let reason = null;
+
+  function updateBootstrapStatus(nextStatus, nextReason = null) {
+    status = nextStatus;
+    reason = nextReason;
+  }
+
+  function sealMonas(message) {
+    const button = document.getElementById('startMonasBtn');
+    if (button) {
+      button.disabled = true;
+      button.dataset.reachabilityPolicyUnavailable = 'true';
+      button.title = message;
+      if (!button.textContent.includes('SEALED')) button.textContent = 'RITE OF MONAS — SEALED';
+    }
+  }
+
+  function showPolicyFailure(instance, message) {
+    sealMonas(message);
+    if (!instance || instance.gameMode !== 'MONAS' || instance.state !== GameState.PLAYING) return;
+    instance.togglePause();
+    const heading = document.querySelector('#pauseScreen .title-text');
+    if (heading) heading.textContent = 'RITE SEALED';
+    const resume = document.getElementById('resumeBtn');
+    if (resume) {
+      resume.textContent = 'RETURN TO VOID';
+      resume.onclick = event => {
+        event.stopPropagation();
+        instance.returnToMenu();
+      };
+    }
+    const pauseScreen = document.getElementById('pauseScreen');
+    if (pauseScreen) pauseScreen.title = message;
+  }
+
+  function installFailClosedGuard(failureReason) {
+    if (Game.prototype.__reachabilityPolicyFailClosedInstalled) return;
+    const message = `Reachability policy unavailable: ${failureReason}`;
+    const guardedUpdate = Game.prototype.updateGameObjects;
+    const guardedStart = Game.prototype.startGame;
+    const guardedRestart = Game.prototype.restartGame;
+
+    Game.prototype.updateGameObjects = function updateGameObjectsWithPolicyGuard(...args) {
+      if (this.gameMode === 'MONAS' && !globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+        showPolicyFailure(this, message);
+        return undefined;
+      }
+      return guardedUpdate.apply(this, args);
+    };
+
+    Game.prototype.startGame = function startGameWithPolicyGuard(...args) {
+      if (this.gameMode === 'MONAS' && !globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+        showPolicyFailure(this, message);
+        return undefined;
+      }
+      return guardedStart.apply(this, args);
+    };
+
+    Game.prototype.restartGame = function restartGameWithPolicyGuard(...args) {
+      if (this.gameMode === 'MONAS' && !globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+        showPolicyFailure(this, message);
+        return undefined;
+      }
+      return guardedRestart.apply(this, args);
+    };
+
+    Game.prototype.__reachabilityPolicyFailClosedInstalled = true;
+    sealMonas(message);
+    updateBootstrapStatus('failed-closed', failureReason);
+    console.error('[SEX MAGICK] Reachability policy failed closed; Monas sealed', failureReason);
+  }
+
+  function verifyPolicyInstallation(timeoutMs = 5000) {
+    const verificationStartedAt = Date.now();
+    const attempt = () => {
+      if (globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+        updateBootstrapStatus('ready');
+        return;
+      }
+      if (Date.now() - verificationStartedAt >= timeoutMs) {
+        installFailClosedGuard('policy script loaded but runtime installation did not complete');
+        return;
+      }
+      setTimeout(attempt, 10);
+    };
+    attempt();
+  }
+
+  function loadPolicyWhenGrammarIsReady() {
+    if (globalThis.__SEX_MAGICK_REACHABILITY_POLICY__) {
+      updateBootstrapStatus('ready');
+      return;
+    }
+
+    if (document.querySelector('script[data-sex-magick-reachability-policy]')) {
+      verifyPolicyInstallation();
+      return;
+    }
+
+    if (!globalThis.SexMagickObstacleGrammar) {
+      if (Date.now() - startedAt >= 5000) {
+        installFailClosedGuard('timed out waiting for obstacle grammar');
+        return;
+      }
+      setTimeout(loadPolicyWhenGrammarIsReady, 10);
+      return;
+    }
+
+    updateBootstrapStatus('loading-policy');
+    const script = document.createElement('script');
+    script.src = new URL('./reachability-policy.js', currentSource).href;
+    script.async = false;
+    script.dataset.sexMagickReachabilityPolicy = 'true';
+    script.onload = () => verifyPolicyInstallation();
+    script.onerror = () => installFailClosedGuard(`policy script failed to load: ${script.src}`);
+    document.head.appendChild(script);
+  }
+
+  globalThis.__SEX_MAGICK_POLICY_BOOTSTRAP__ = Object.freeze({
+    mode: 'reachability-policy-bootstrap',
+    version: 1,
+    getSnapshot() {
+      return {
+        status,
+        reason,
+        policyInstalled: Boolean(globalThis.__SEX_MAGICK_REACHABILITY_POLICY__),
+        failClosedInstalled: Boolean(Game.prototype.__reachabilityPolicyFailClosedInstalled),
+        monasSealed: Boolean(document.getElementById('startMonasBtn')?.disabled)
+      };
+    }
+  });
+
+  loadPolicyWhenGrammarIsReady();
+})();
+
+// MONAS is a player-facing Rite, not a Gate-slice feature. M27-M29 accidentally
+// loaded its enhanced runtime only inside the `?gateSlice=1` bootstrap, so the
+// normal game URL still exposed the old base-mode behavior. Load it independently
+// on ordinary pages, but preserve the established Gate -> MONAS wrapper order when
+// `gateSlice=1`; that path remains owned by the Gate bootstrap below.
+(function bootstrapMonasRuntime() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('gateSlice') === '1') return;
+  // patternBrowserQa is the base obstacle-grammar fixture. It sets `gameMode` by
+  // hand and steps `updateGameObjects()` a frame at a time to assert the *base*
+  // grammar spawns exactly one deterministic pillar per interval. Loading the
+  // enhanced Rite here makes its MONAS arm measure hold/release glide and MONAS's
+  // own gap ownership instead, which is a different game and fails that assertion.
+  // The product behaviour above is correct and stays; the fixture just has to keep
+  // seeing the primitive it was written to test, the same way it is now held out of
+  // M33's Gate promotion.
+  //
+  // reachabilityBrowserQa and compositionBrowserQa need the same hold-out for a
+  // different reason: they drive the real Player against player-reachability.js and
+  // require exact agreement. That solver models MONAS as the pre-M27 tap-jump avatar
+  // (gravity 0.18, jumpImpulse -7.2), so loading the glide rite here fails parity at
+  // 400.1728 != 393.1204 on a difference that is deliberate, not a defect. MONAS's
+  // real evidence model is tools/monas-reachability.js (D-048). Holding these two out
+  // of *both* the Gate promotion and this bootstrap is what restores their base view;
+  // exempting only one leaves the other path still loading the enhanced rite.
+  if (query.has('patternBrowserQa') || query.has('reachabilityBrowserQa') || query.has('compositionBrowserQa')) return;
+
+  if (
+    globalThis.SexMagickMonas ||
+    document.querySelector('script[data-sex-magick-monas-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./monas-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickMonasRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Monas runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapVisualQaLocalOnlyPreflight() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('visualQa') !== '1') return;
+
+  let leaderboardSuppressed = false;
+  try {
+    if (typeof Leaderboard !== 'undefined' && Leaderboard) {
+      const localOnly = async function visualQaLocalOnlyLeaderboard() {
+        const list = document.getElementById('leaderboardList');
+        if (list) list.textContent = 'VISUAL QA · LOCAL ONLY';
+        const status = document.getElementById('uploadStatus');
+        if (status) status.textContent = 'VISUAL QA · LOCAL ONLY';
+        return { localOnly: true, visualQa: true };
+      };
+      Leaderboard.init = localOnly;
+      Leaderboard.fetchTop = localOnly;
+      Leaderboard.submit = localOnly;
+      Leaderboard.__visualQaLocalOnly = true;
+      leaderboardSuppressed = true;
+    }
+  } catch (error) {
+    console.error('[SEX MAGICK] Visual QA could not suppress leaderboard initialization', error);
+  }
+
+  globalThis.__SEX_MAGICK_VISUAL_QA_PREFLIGHT__ = Object.freeze({
+    mode: 'visual-qa-local-only-preflight',
+    version: 1,
+    getSnapshot() {
+      return {
+        enabled: true,
+        leaderboardSuppressed,
+        guestSessionAllowed: false,
+        scoreSubmissionAllowed: false
+      };
+    }
+  });
+})();
+
+(function bootstrapGateSliceRuntime() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const query = new URLSearchParams(window.location.search);
+  if (query.get('gateSlice') !== '1') return;
+
+  let leaderboardSuppressed = false;
+  try {
+    if (typeof Leaderboard !== 'undefined' && Leaderboard) {
+      const localOnly = async function gateSliceLocalOnlyLeaderboard() {
+        const list = document.getElementById('leaderboardList');
+        // The Rite board owns this list once it is installed; without this guard a
+        // later fetchTop() would paint over a rendered board with the stub text.
+        if (list && !globalThis.__SEX_MAGICK_RITE_BOARD__) list.textContent = 'GATE SLICE — LOCAL ONLY';
+        const status = document.getElementById('uploadStatus');
+        if (status) status.textContent = 'GATE SLICE — LOCAL ONLY';
+        return { localOnly: true };
+      };
+      Leaderboard.init = localOnly;
+      Leaderboard.fetchTop = localOnly;
+      Leaderboard.submit = localOnly;
+      Leaderboard.__gateSliceLocalOnly = true;
+      leaderboardSuppressed = true;
+    }
+  } catch (error) {
+    console.error('[SEX MAGICK] Gate slice could not suppress leaderboard initialization', error);
+  }
+
+  globalThis.__SEX_MAGICK_GATE_PREFLIGHT__ = Object.freeze({
+    mode: 'gate-slice-local-only-preflight',
+    version: 1,
+    getSnapshot() {
+      return {
+        enabled: true,
+        leaderboardSuppressed,
+        guestSessionAllowed: false,
+        scoreSubmissionAllowed: false
+      };
+    }
+  });
+
+  if (
+    globalThis.SexMagickGateSlice ||
+    document.querySelector('script[data-sex-magick-gate-slice-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./gate-slice-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickGateSliceRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Gate slice runtime failed to load', script.src);
+  document.head.appendChild(script);
+
+  if (
+    globalThis.SexMagickRiteBoard ||
+    document.querySelector('script[data-sex-magick-rite-board-runtime]')
+  ) return;
+
+  if (!globalThis.SexMagickMonas && !document.querySelector('script[data-sex-magick-monas-runtime]')) {
+    const monasScript = document.createElement('script');
+    monasScript.src = new URL('./monas-runtime.js', currentSource).href;
+    monasScript.async = false;
+    monasScript.dataset.sexMagickMonasRuntime = 'true';
+    monasScript.onerror = () => console.error('[SEX MAGICK] Monas runtime failed to load', monasScript.src);
+    document.head.appendChild(monasScript);
+  }
+
+  // The validation core the board judges runs with, and which the global board's
+  // Worker runs the same copy of (D-044). Inserted first, and every one of these
+  // scripts sets async = false, which keeps insertion order as execution order -
+  // so the board never runs before its rules exist.
+  if (!globalThis.SexMagickRiteValidation && !document.querySelector('script[data-sex-magick-rite-validation]')) {
+    const validationScript = document.createElement('script');
+    validationScript.src = new URL('./rite-validation.js', currentSource).href;
+    validationScript.async = false;
+    validationScript.dataset.sexMagickRiteValidation = 'true';
+    validationScript.onerror = () => console.error('[SEX MAGICK] Rite validation failed to load', validationScript.src);
+    document.head.appendChild(validationScript);
+  }
+
+  const boardScript = document.createElement('script');
+  boardScript.src = new URL('./leaderboard-runtime.js', currentSource).href;
+  boardScript.async = false;
+  boardScript.dataset.sexMagickRiteBoardRuntime = 'true';
+  boardScript.onerror = () => console.error('[SEX MAGICK] Rite board runtime failed to load', boardScript.src);
+  document.head.appendChild(boardScript);
+
+  // The Worker has a production URL now, so load its client on ordinary builds.
+  // global-board-runtime.js remains the authority for activation and honours
+  // ?globalBoard=0 as the emergency network-off switch.
+  if (!document.querySelector('script[data-sex-magick-global-board]')) {
+    const globalScript = document.createElement('script');
+    globalScript.src = new URL('./global-board-runtime.js', currentSource).href;
+    globalScript.async = false;
+    globalScript.dataset.sexMagickGlobalBoard = 'true';
+    globalScript.onerror = () => console.error('[SEX MAGICK] Global board runtime failed to load', globalScript.src);
+    document.head.appendChild(globalScript);
+  }
+})();
+
+(function bootstrapViewportRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickViewport ||
+    document.querySelector('script[data-sex-magick-viewport-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./viewport-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickViewportRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Viewport profile runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapGateEvidenceRuntime() {
+  'use strict';
+
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (new URLSearchParams(window.location.search).get('gateSlice') !== '1') return;
+  if (
+    globalThis.SexMagickGateEvidence ||
+    document.querySelector('script[data-sex-magick-gate-evidence-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./gate-evidence-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickGateEvidenceRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Gate evidence runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();

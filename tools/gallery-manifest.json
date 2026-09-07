@@ -1,0 +1,614 @@
+{
+  "generatedAt": "2026-08-21T00:50:13.863Z",
+  "source": "google-drive",
+  "encode": {
+    "format": "webp",
+    "quality": 82,
+    "maxDim": 1600
+  },
+  "expected": 75,
+  "present": 75,
+  "totalBytes": 6248296,
+  "images": {
+    "1jI7bl3hsVOuzYf6u35L4bhHq5JUiBDa1": {
+      "name": "MALKUTH",
+      "file": "assets/gallery/1jI7bl3hsVOuzYf6u35L4bhHq5JUiBDa1.webp",
+      "bytes": 92702,
+      "width": 768,
+      "height": 512,
+      "sha256": "c7af5e3fae4062279c66dbfabd8c4272b059ee375ecd7434369d65dcc2eff1d9"
+    },
+    "1tHgxNvDO5md4z24hS81eTa9uva25mtr5": {
+      "name": "YESOD",
+      "file": "assets/gallery/1tHgxNvDO5md4z24hS81eTa9uva25mtr5.webp",
+      "bytes": 110976,
+      "width": 768,
+      "height": 512,
+      "sha256": "8bb4034e2a64dce63d3e36581e57e5c128f6882f991d7245f4c28dcea2e858aa"
+    },
+    "1Mtp6cP6lwGbPRhLWjQKKDijrLX53K4UR": {
+      "name": "HOD",
+      "file": "assets/gallery/1Mtp6cP6lwGbPRhLWjQKKDijrLX53K4UR.webp",
+      "bytes": 98148,
+      "width": 768,
+      "height": 512,
+      "sha256": "d2af620c720f7afb6a099291a5b899732ed47619688773f229760d4ae38b7e08"
+    },
+    "1y1i5lxL1jVp37bIz1mtJh4-Puce-E5k0": {
+      "name": "NETZACH",
+      "file": "assets/gallery/1y1i5lxL1jVp37bIz1mtJh4-Puce-E5k0.webp",
+      "bytes": 108508,
+      "width": 768,
+      "height": 512,
+      "sha256": "52b25f3b436580714a57d1d7660b6208bfca5027c5fbf8fc25ca898bd9a46f46"
+    },
+    "12png0vOPyJC1Ab4Vffcw2R_K-yRw1sqj": {
+      "name": "TIPHARETH",
+      "file": "assets/gallery/12png0vOPyJC1Ab4Vffcw2R_K-yRw1sqj.webp",
+      "bytes": 93644,
+      "width": 768,
+      "height": 512,
+      "sha256": "bf7b627af84d2a2ad61e12a658f9f8f83c4bccda4d8f5377b68fad4058637c16"
+    },
+    "1le2Hox1ORxhL28fv7WujO0410vM6jUEJ": {
+      "name": "GEBURAH",
+      "file": "assets/gallery/1le2Hox1ORxhL28fv7WujO0410vM6jUEJ.webp",
+      "bytes": 88518,
+      "width": 768,
+      "height": 512,
+      "sha256": "184aae2f26a7a283643e9b143b9e1917d25eaed987061f1c1265d57289554f14"
+    },
+    "1Gsq1xSx9ivfVEq6W2nCMrO-dOIMrSYrW": {
+      "name": "CHESED",
+      "file": "assets/gallery/1Gsq1xSx9ivfVEq6W2nCMrO-dOIMrSYrW.webp",
+      "bytes": 93144,
+      "width": 768,
+      "height": 512,
+      "sha256": "014f87f005f44b43905b98d158e75d5687c1946b56f3ab00249fe081b12d0465"
+    },
+    "1o601hrLi5RpuGL_kiVEoPXxXk2SCbM2z": {
+      "name": "DA'ATH",
+      "file": "assets/gallery/1o601hrLi5RpuGL_kiVEoPXxXk2SCbM2z.webp",
+      "bytes": 101136,
+      "width": 768,
+      "height": 512,
+      "sha256": "f487b9c36b342b03a695fe1688b27d07b2056b05bd867a0c37746dca5c31c6a8"
+    },
+    "1iSYJfPsaYjA1rmRTsujLcn1Do-lBydF7": {
+      "name": "BINAH",
+      "file": "assets/gallery/1iSYJfPsaYjA1rmRTsujLcn1Do-lBydF7.webp",
+      "bytes": 107312,
+      "width": 768,
+      "height": 512,
+      "sha256": "af54c41d066ba2ca8e0e416e92edb954f42d6360acb2205c7ea71deaa2217db0"
+    },
+    "1PvOC62nv5HdsE1cuCF8RENY9Z8HTabn7": {
+      "name": "CHOKMAH",
+      "file": "assets/gallery/1PvOC62nv5HdsE1cuCF8RENY9Z8HTabn7.webp",
+      "bytes": 101378,
+      "width": 768,
+      "height": 512,
+      "sha256": "2a335b18d412a94669f26734a18f7a41dad01ec5d475c83528767fcf6ae575ab"
+    },
+    "1Ym_eyrXJEQUBA7Lg_2oUc6dQ-gy9yfGs": {
+      "name": "KETHER",
+      "file": "assets/gallery/1Ym_eyrXJEQUBA7Lg_2oUc6dQ-gy9yfGs.webp",
+      "bytes": 93744,
+      "width": 768,
+      "height": 512,
+      "sha256": "7332d0bf2c1c0b1005ad07f9fd72d340fe50bee9ed01eab50eaa95d8aae26b82"
+    },
+    "1pJ5CUGyKXgkSgEREkKos1Kch5FmfUyxE": {
+      "name": "KUNDALINI",
+      "file": "assets/gallery/1pJ5CUGyKXgkSgEREkKos1Kch5FmfUyxE.webp",
+      "bytes": 125710,
+      "width": 768,
+      "height": 768,
+      "sha256": "461512839046d49a8a8691634e6343b7b63a6f102e32c6dd3b8d904d792e1f21"
+    },
+    "1spT4HpO_4q9joE4x6bLjZQRlFTS9j-ie": {
+      "name": "HIEROS GAMOS",
+      "file": "assets/gallery/1spT4HpO_4q9joE4x6bLjZQRlFTS9j-ie.webp",
+      "bytes": 124436,
+      "width": 768,
+      "height": 768,
+      "sha256": "edc1961f42993af2a8bd5727dd7d05f0c04838499bbb18fe86e3b0ec287d701b"
+    },
+    "1YGzyjcjiCoPCLbYjJEiqT8USUhe4S6hM": {
+      "name": "SACRED UNION",
+      "file": "assets/gallery/1YGzyjcjiCoPCLbYjJEiqT8USUhe4S6hM.webp",
+      "bytes": 121716,
+      "width": 768,
+      "height": 722,
+      "sha256": "136b5df75638afb91966ea06ae666ec8d4d6be814ae2349e197a370734377ee5"
+    },
+    "1ELjoJU7KDC88nUk_Vs57OKUG9oLl5E8N": {
+      "name": "RED TINCTURE",
+      "file": "assets/gallery/1ELjoJU7KDC88nUk_Vs57OKUG9oLl5E8N.webp",
+      "bytes": 37826,
+      "width": 768,
+      "height": 512,
+      "sha256": "612acb064dcb5f08feb22f7de264e58132343fa24036ee353197ab49e00b8907"
+    },
+    "1faa2c3QFWhZ8UgvyZ_ZrlnyFsnsKRclm": {
+      "name": "WHITE GLUTEN",
+      "file": "assets/gallery/1faa2c3QFWhZ8UgvyZ_ZrlnyFsnsKRclm.webp",
+      "bytes": 104146,
+      "width": 768,
+      "height": 512,
+      "sha256": "e8316aeff12d396c1c28a0e41aca6346ee061dc73a5d1d0e5ef94d3cfdf750ab"
+    },
+    "10W5oYkoqB9LC3YjvB_aozR0kG3hWaHka": {
+      "name": "CUP OF BABALON",
+      "file": "assets/gallery/10W5oYkoqB9LC3YjvB_aozR0kG3hWaHka.webp",
+      "bytes": 154600,
+      "width": 768,
+      "height": 768,
+      "sha256": "5f963815e34f7ab234ba12eb05f9dd8f0985714bbfbf87d2cdaa69dce472b8e8"
+    },
+    "1l9Jdm0EQh8sgWh1W0wsXQCzrQM19Bfm9": {
+      "name": "BLOOD OF SAINTS",
+      "file": "assets/gallery/1l9Jdm0EQh8sgWh1W0wsXQCzrQM19Bfm9.webp",
+      "bytes": 119594,
+      "width": 768,
+      "height": 768,
+      "sha256": "5e0155a45e30c14f22d80be7ef45bb6fb264c357e3de12b29ce516e030d81460"
+    },
+    "1BrHTF2dvfbRkyYfXAbPUiujwE1AJskY4": {
+      "name": "CITY OF PYRAMIDS",
+      "file": "assets/gallery/1BrHTF2dvfbRkyYfXAbPUiujwE1AJskY4.webp",
+      "bytes": 209914,
+      "width": 1600,
+      "height": 1307,
+      "sha256": "fddc93f64030b9557414135a7847a341c614fbde59b20f788e00acf0b51b5c03"
+    },
+    "1KqV8IYF7KDbmgHS3ph6eRQKl4uAAFG_u": {
+      "name": "NIGHT OF PAN",
+      "file": "assets/gallery/1KqV8IYF7KDbmgHS3ph6eRQKl4uAAFG_u.webp",
+      "bytes": 65828,
+      "width": 768,
+      "height": 512,
+      "sha256": "14f83adc555a4b7164f6a49ee6d6814416daf0004e789106e0c390c9d9a00fb1"
+    },
+    "1sZ02UH_vb1xLaOvyETqptc5FuvOtVKd4": {
+      "name": "HADIT'S FLAME",
+      "file": "assets/gallery/1sZ02UH_vb1xLaOvyETqptc5FuvOtVKd4.webp",
+      "bytes": 67232,
+      "width": 768,
+      "height": 512,
+      "sha256": "7c4cd676435e503422b6a6841c0521ad6df54dc16e563abcd6df2cdcbbe55da6"
+    },
+    "1hLKOGYXCBemcIKt8OLEX4dHTn6bd88cr": {
+      "name": "NUIT'S EMBRACE",
+      "file": "assets/gallery/1hLKOGYXCBemcIKt8OLEX4dHTn6bd88cr.webp",
+      "bytes": 126058,
+      "width": 768,
+      "height": 768,
+      "sha256": "919231f793ee036cd15a60e0d2bde7a17bc21f9c2e8ab65a03dc4c56792b7992"
+    },
+    "1g_DQeG6qldMBxHzZ82MOVoxk9APwb4NO": {
+      "name": "LAW OF THELEMA",
+      "file": "assets/gallery/1g_DQeG6qldMBxHzZ82MOVoxk9APwb4NO.webp",
+      "bytes": 86248,
+      "width": 768,
+      "height": 512,
+      "sha256": "6b6896df9ee31e0597db00ef87b3b6e21b3995812507768a47994754a0a8b14f"
+    },
+    "1-SIvE5EZyUd7FKXJ7eyB4JCrtOpQoF18": {
+      "name": "LOVE UNDER WILL",
+      "file": "assets/gallery/1-SIvE5EZyUd7FKXJ7eyB4JCrtOpQoF18.webp",
+      "bytes": 109790,
+      "width": 768,
+      "height": 512,
+      "sha256": "28670633a892e0a43ff4e2014b5cfcbfe4e50a189cc6d78317b0e1a2f9a99412"
+    },
+    "1S4y4YSCjxSb-b_U1BfMw_0PhabJ-METm": {
+      "name": "GREAT WORK",
+      "file": "assets/gallery/1S4y4YSCjxSb-b_U1BfMw_0PhabJ-METm.webp",
+      "bytes": 63316,
+      "width": 768,
+      "height": 512,
+      "sha256": "d2b75733bbcd0662d81bf0e98631f1a5eb42bb343e93d1539d6c3ad2d3825412"
+    },
+    "1OL-kWl-TJNcZFPcsCAtynW2NWp-YYjGd": {
+      "name": "STONE OF WISE",
+      "file": "assets/gallery/1OL-kWl-TJNcZFPcsCAtynW2NWp-YYjGd.webp",
+      "bytes": 71678,
+      "width": 768,
+      "height": 512,
+      "sha256": "b2bb2582f67d1379010bf58d97fa8aa5854a394253d1ff1f3a1ff1c766ff56f6"
+    },
+    "1ApPgou40N2Q6GlNKNuyoQ2Gk5DqAfmw_": {
+      "name": "ELIXIR OF LIFE",
+      "file": "assets/gallery/1ApPgou40N2Q6GlNKNuyoQ2Gk5DqAfmw_.webp",
+      "bytes": 113878,
+      "width": 768,
+      "height": 512,
+      "sha256": "f6cc6e3dd11a73fc8a81522529f009be08dbf0df7952a3c907bdf45b8a8d5866"
+    },
+    "1OeH1GMu2rDcwzdtWFZSB1WWe0OjkmxV0": {
+      "name": "RED LION",
+      "file": "assets/gallery/1OeH1GMu2rDcwzdtWFZSB1WWe0OjkmxV0.webp",
+      "bytes": 95598,
+      "width": 768,
+      "height": 512,
+      "sha256": "aea06ea07719a5c517b8db4d9c72f2c7aa37375ac4d219a76dd07ead60d49abc"
+    },
+    "12Z92v9Mu9yNOnDTtK-bjMRZ8_2BAW2eW": {
+      "name": "WHITE EAGLE",
+      "file": "assets/gallery/12Z92v9Mu9yNOnDTtK-bjMRZ8_2BAW2eW.webp",
+      "bytes": 78178,
+      "width": 768,
+      "height": 512,
+      "sha256": "1906a812eaca07ecf659e3457303c6faad2ca573cc30e1b4bc64deda4d0ab757"
+    },
+    "1Erf3DKxZpfbG57oGcUCjuHIhajsweLZz": {
+      "name": "ABRAHADABRA",
+      "file": "assets/gallery/1Erf3DKxZpfbG57oGcUCjuHIhajsweLZz.webp",
+      "bytes": 85106,
+      "width": 768,
+      "height": 512,
+      "sha256": "5699944fdc0e50daf4435ec413916cfb3e4768d257f237464276f9f433b79aa4"
+    },
+    "1qK22CJhJ1XgElL156uOQxYrucaRG16p0": {
+      "name": "LASHTAL",
+      "file": "assets/gallery/1qK22CJhJ1XgElL156uOQxYrucaRG16p0.webp",
+      "bytes": 86560,
+      "width": 768,
+      "height": 512,
+      "sha256": "0522386b07bc7704e70b5716546677a789072bae6a11b2a4240ef1c9848cc484"
+    },
+    "1euwdAWg-xQw7isR-JAiZ-krXQXOS8pi0": {
+      "name": "KA",
+      "file": "assets/gallery/1euwdAWg-xQw7isR-JAiZ-krXQXOS8pi0.webp",
+      "bytes": 77008,
+      "width": 768,
+      "height": 512,
+      "sha256": "c9f58c1cb4d48fc219ca7fdd67827ffddca9a4cedaf951435df97299aed2c154"
+    },
+    "1A3hT3mJibINtsr8CVxTmp71QsYgPB2JZ": {
+      "name": "BA",
+      "file": "assets/gallery/1A3hT3mJibINtsr8CVxTmp71QsYgPB2JZ.webp",
+      "bytes": 41268,
+      "width": 512,
+      "height": 512,
+      "sha256": "1696411cff0b4c741ecb49887f67ebb2911c196a7d432d25e535fa435dc505c6"
+    },
+    "1QUVr-RK2kP7IIAuy0wX3pOZRQuyr-o-e": {
+      "name": "KHU",
+      "file": "assets/gallery/1QUVr-RK2kP7IIAuy0wX3pOZRQuyr-o-e.webp",
+      "bytes": 58952,
+      "width": 512,
+      "height": 512,
+      "sha256": "f61a32413c9251a46d39722daa30a7d1bf5d51950fecdfb225598222bf8965c4"
+    },
+    "1eF02YMyYBcgx7Ga20pXgoltzWXPYznfD": {
+      "name": "SCARLET WOMAN",
+      "file": "assets/gallery/1eF02YMyYBcgx7Ga20pXgoltzWXPYznfD.webp",
+      "bytes": 53722,
+      "width": 512,
+      "height": 512,
+      "sha256": "0509733ce5c82af7e6764afb89209e00b1296d44a5cf175c23f8ddcdf9a88cf8"
+    },
+    "1zx1vrrbuSA4xCFKXAHgXbkG1rX8PUPel": {
+      "name": "THE BEAST",
+      "file": "assets/gallery/1zx1vrrbuSA4xCFKXAHgXbkG1rX8PUPel.webp",
+      "bytes": 57096,
+      "width": 512,
+      "height": 512,
+      "sha256": "f6768ebc689a4a015da86ed43396d03e675a6bc987857d9b87237ea824b3b792"
+    },
+    "1ds1iqXf90gy9PUFs80t4QOxamkJj0u1I": {
+      "name": "AEON OF HORUS",
+      "file": "assets/gallery/1ds1iqXf90gy9PUFs80t4QOxamkJj0u1I.webp",
+      "bytes": 72760,
+      "width": 512,
+      "height": 512,
+      "sha256": "c5a79928a5d86a389c94ed613f0cfbbae0f3979eaf6be822cc84f6169bbcba54"
+    },
+    "14-t6dPPv5MeXe7LWPIp7Tjc8x4w5Vj2d": {
+      "name": "93",
+      "file": "assets/gallery/14-t6dPPv5MeXe7LWPIp7Tjc8x4w5Vj2d.webp",
+      "bytes": 70912,
+      "width": 512,
+      "height": 512,
+      "sha256": "07cc834f40e4da3c228e9fb02cb150e06aef36552c580c1ebcdc5383be496684"
+    },
+    "1pUtIizMzVhjzB46dhah5mgz6Tr-vaSLO": {
+      "name": "AGAPE",
+      "file": "assets/gallery/1pUtIizMzVhjzB46dhah5mgz6Tr-vaSLO.webp",
+      "bytes": 65900,
+      "width": 512,
+      "height": 512,
+      "sha256": "8453a376c21fd4245b5de5a1921bd57d55c413843fca2cb7a249d9772eaa91db"
+    },
+    "1ZOEkUW8q2s5zerS7BubYJU69RHk7_Zlo": {
+      "name": "THELEMA",
+      "file": "assets/gallery/1ZOEkUW8q2s5zerS7BubYJU69RHk7_Zlo.webp",
+      "bytes": 56244,
+      "width": 512,
+      "height": 512,
+      "sha256": "461965b49fdf536d0a13d5d3a1848a88458f75d5217d42d3d9f9a240773bdc7b"
+    },
+    "15ZHj0fLYu-4rEQy43BMJKDgXnnQ5FeyP": {
+      "name": "VIA OVUM",
+      "file": "assets/gallery/15ZHj0fLYu-4rEQy43BMJKDgXnnQ5FeyP.webp",
+      "bytes": 57136,
+      "width": 512,
+      "height": 512,
+      "sha256": "d05d665bd4ad9672dde57a70d90d9fa3e36dfb2b0c99a13bafd43eea71a05121"
+    },
+    "1ZzgVT0O6XQzW3DUP4i1aoKd_DD5wV5LZ": {
+      "name": "SPERMATOZOON",
+      "file": "assets/gallery/1ZzgVT0O6XQzW3DUP4i1aoKd_DD5wV5LZ.webp",
+      "bytes": 70232,
+      "width": 512,
+      "height": 512,
+      "sha256": "93ef5c7baa54a02b77ee631256578c9b645af474ab04dc76fabf552240630380"
+    },
+    "1rZHZM0bR_j6uiYZLS82J0BkbIfEUoXvY": {
+      "name": "HOMUNCULUS",
+      "file": "assets/gallery/1rZHZM0bR_j6uiYZLS82J0BkbIfEUoXvY.webp",
+      "bytes": 83244,
+      "width": 512,
+      "height": 512,
+      "sha256": "d5e62d638cf993daefdd0355706d29778d87f9159a1855f2dbae5191682760d8"
+    },
+    "1CNrQ_EeMXQgHJGXxe7EHysQi_A0A9UE7": {
+      "name": "DIVINE EROS",
+      "file": "assets/gallery/1CNrQ_EeMXQgHJGXxe7EHysQi_A0A9UE7.webp",
+      "bytes": 51954,
+      "width": 512,
+      "height": 512,
+      "sha256": "fa00ca1df881c5a26ba78b687ad1d4eb2da32e92a8afcea672cf142740268795"
+    },
+    "1ubCqIg7ETOIsHGfBjQfVsRzjlZIpBP6E": {
+      "name": "TANTRA",
+      "file": "assets/gallery/1ubCqIg7ETOIsHGfBjQfVsRzjlZIpBP6E.webp",
+      "bytes": 44724,
+      "width": 512,
+      "height": 512,
+      "sha256": "7520f328cfe6fc16463b1e5348f359372d64f703910d92042601a330dcf8440e"
+    },
+    "1pojzjR-uiQ0oTHRJxXXCW_w0hlJUCqyb": {
+      "name": "YONI",
+      "file": "assets/gallery/1pojzjR-uiQ0oTHRJxXXCW_w0hlJUCqyb.webp",
+      "bytes": 43226,
+      "width": 512,
+      "height": 512,
+      "sha256": "15d1131d66f3f04457a8651f9e9c5b31a9da0d1f1cff4bcebad10f85430c51ae"
+    },
+    "1SnclBlH6sflhaTWzFhbcNedzNeh25-BV": {
+      "name": "LINGAM",
+      "file": "assets/gallery/1SnclBlH6sflhaTWzFhbcNedzNeh25-BV.webp",
+      "bytes": 28382,
+      "width": 512,
+      "height": 512,
+      "sha256": "ad0e15d761a404c84bfcbb4de5feebe006071026226d57817c489487235758e0"
+    },
+    "1thfc-9DnM4GhCi0zTbcX4MH-yaQEpomX": {
+      "name": "O.T.O.",
+      "file": "assets/gallery/1thfc-9DnM4GhCi0zTbcX4MH-yaQEpomX.webp",
+      "bytes": 43478,
+      "width": 512,
+      "height": 512,
+      "sha256": "a8fcbbf3f29a8501d1c7aa8434e550f59f427b1d921e36874d80a9b9c5be4783"
+    },
+    "1BXrXXd9TKSqCFNwvS-cJpNORbyvP6fkR": {
+      "name": "A.'.A.'.",
+      "file": "assets/gallery/1BXrXXd9TKSqCFNwvS-cJpNORbyvP6fkR.webp",
+      "bytes": 42158,
+      "width": 512,
+      "height": 512,
+      "sha256": "fdb3a5dcf98fa71af3cf555e76dabdcdfed3c8f40982e8822ca2d97ab84e200f"
+    },
+    "1D1bOksatIt6Jw6Zq8Sbmhbq_GC_2EQHh": {
+      "name": "STAR SAPPHIRE",
+      "file": "assets/gallery/1D1bOksatIt6Jw6Zq8Sbmhbq_GC_2EQHh.webp",
+      "bytes": 45882,
+      "width": 512,
+      "height": 512,
+      "sha256": "08a7ee0e875d67086734fb18d2fb3ae56e529d9d884649d8275343d2029c9b7d"
+    },
+    "1eP_Xnk80YnL3w3Q69wQmVo9_F0OaA3Wo": {
+      "name": "MASS OF PHOENIX",
+      "file": "assets/gallery/1eP_Xnk80YnL3w3Q69wQmVo9_F0OaA3Wo.webp",
+      "bytes": 51944,
+      "width": 512,
+      "height": 512,
+      "sha256": "f8dacca74b11b41f18ba38854a48fbeb194de6b9dac229043867704bdda1101a"
+    },
+    "1ARDOipcr0lB1GYf3gmhqlHXlpC23Q2JE": {
+      "name": "LIBER AL",
+      "file": "assets/gallery/1ARDOipcr0lB1GYf3gmhqlHXlpC23Q2JE.webp",
+      "bytes": 42320,
+      "width": 512,
+      "height": 512,
+      "sha256": "5134c5762cba336330bad09a82f4d4e38b75ef180db85b4be5f70b28cfb73c98"
+    },
+    "1io39jfggXQl-OyvSFGIpgOtoIzHbml3M": {
+      "name": "RESH",
+      "file": "assets/gallery/1io39jfggXQl-OyvSFGIpgOtoIzHbml3M.webp",
+      "bytes": 61440,
+      "width": 512,
+      "height": 512,
+      "sha256": "2daae42637029b9a0516e67589eb455524f41db2db82df9a563ab2ac33c42a7c"
+    },
+    "1o0rJmx3vEKITMx1ixP5iruOX2ujOT6VO": {
+      "name": "SAMEKH",
+      "file": "assets/gallery/1o0rJmx3vEKITMx1ixP5iruOX2ujOT6VO.webp",
+      "bytes": 52648,
+      "width": 512,
+      "height": 512,
+      "sha256": "ceab644f391d1af7c8ca2f055c901ebcae810c61ccac096572113e1967bb93f2"
+    },
+    "1Irw61utgSGdip21OgTcYqz56LpWWS9fb": {
+      "name": "TZADDI",
+      "file": "assets/gallery/1Irw61utgSGdip21OgTcYqz56LpWWS9fb.webp",
+      "bytes": 67376,
+      "width": 512,
+      "height": 512,
+      "sha256": "f1d6c176ad372b3100a02d615006d802e87d3d154716390674fd95108d797c17"
+    },
+    "19V2ObVoQn9R9bt1ZgMNEBJokaAjYdX_9": {
+      "name": "KUNDALINI",
+      "file": "assets/gallery/19V2ObVoQn9R9bt1ZgMNEBJokaAjYdX_9.webp",
+      "bytes": 48042,
+      "width": 512,
+      "height": 512,
+      "sha256": "ce9778b01d4ee7db16cc374baec6b0b09fddd15ae33c6fd18350d0931ed202dd"
+    },
+    "1WWvLnkkPBN7Q0ZsGi16FL1anhPlti3Qd": {
+      "name": "HIEROS GAMOS",
+      "file": "assets/gallery/1WWvLnkkPBN7Q0ZsGi16FL1anhPlti3Qd.webp",
+      "bytes": 52058,
+      "width": 512,
+      "height": 512,
+      "sha256": "1008416934baf8cdbc19abc67df34d6092063cb67bd18b8c3db47e847b55ed19"
+    },
+    "1HoYqC0SLc3nrSDnoW9KJ2-z8AnRWIz5M": {
+      "name": "SACRED UNION",
+      "file": "assets/gallery/1HoYqC0SLc3nrSDnoW9KJ2-z8AnRWIz5M.webp",
+      "bytes": 42746,
+      "width": 512,
+      "height": 512,
+      "sha256": "6c354e8c6ef446d275b9ecdcf0ab552d854cb455499037c69369b9929960e1e7"
+    },
+    "1oS0J3F-zh5H48-Qs5Mrm10dPR993kF-b": {
+      "name": "RED TINCTURE",
+      "file": "assets/gallery/1oS0J3F-zh5H48-Qs5Mrm10dPR993kF-b.webp",
+      "bytes": 58030,
+      "width": 512,
+      "height": 512,
+      "sha256": "481eb6441de90c3ca4b70ebe2669fd4cd67ee9924b4a4367d5f6776cf338eb98"
+    },
+    "1bRwsBEuZiAIZW_5f3WOZVI6-KVnCEslk": {
+      "name": "WHITE GLUTEN",
+      "file": "assets/gallery/1bRwsBEuZiAIZW_5f3WOZVI6-KVnCEslk.webp",
+      "bytes": 58928,
+      "width": 512,
+      "height": 512,
+      "sha256": "ecc0475d11f2d94ddb848bd38051b869e40022b708914888789a99f8afdcb77a"
+    },
+    "1GLza2_RmR4c_KD_KGxbXPOoCAw9SITKl": {
+      "name": "CUP OF BABALON",
+      "file": "assets/gallery/1GLza2_RmR4c_KD_KGxbXPOoCAw9SITKl.webp",
+      "bytes": 63238,
+      "width": 512,
+      "height": 512,
+      "sha256": "c8beae2bac2afc4959f4df81f0e424da7a3333b2230a32ff1cfb45b58e54313b"
+    },
+    "1uWFSChozQmHEnuJwXqiPNApXuAwPAzKS": {
+      "name": "BLOOD OF SAINTS",
+      "file": "assets/gallery/1uWFSChozQmHEnuJwXqiPNApXuAwPAzKS.webp",
+      "bytes": 116242,
+      "width": 768,
+      "height": 768,
+      "sha256": "6d9a22292e415f3f76d7c8ee4006c6caa29c55a43c7cface6d9395a516931eea"
+    },
+    "1t2hNBEudzIo19kuP8ksPY_cNetDdTd8P": {
+      "name": "CITY OF PYRAMIDS",
+      "file": "assets/gallery/1t2hNBEudzIo19kuP8ksPY_cNetDdTd8P.webp",
+      "bytes": 52096,
+      "width": 512,
+      "height": 512,
+      "sha256": "62a9617770f653d6c025115fb419bd06a4da095e322b61d41abe5df61c22eeb0"
+    },
+    "1KhMBL7a3NSggVerbyy53fQ-dLq11adwj": {
+      "name": "NIGHT OF PAN",
+      "file": "assets/gallery/1KhMBL7a3NSggVerbyy53fQ-dLq11adwj.webp",
+      "bytes": 88974,
+      "width": 768,
+      "height": 512,
+      "sha256": "c0898f827b0b49159a02ec2a5f9b4815187aac52b6893b771c8226000fedaa7a"
+    },
+    "1wgxalTR68YM7oIku8JYZYKtG50atEnG_": {
+      "name": "HADIT'S FLAME",
+      "file": "assets/gallery/1wgxalTR68YM7oIku8JYZYKtG50atEnG_.webp",
+      "bytes": 119016,
+      "width": 768,
+      "height": 768,
+      "sha256": "b2c74f212850d8a24ba0526eb81ffa86b5325e5b273d06ebe9c8c9ded4ead3f9"
+    },
+    "1BceMgnHgVn9U_7EYnXQu9HDwEQY1UBa_": {
+      "name": "NUIT'S EMBRACE",
+      "file": "assets/gallery/1BceMgnHgVn9U_7EYnXQu9HDwEQY1UBa_.webp",
+      "bytes": 108696,
+      "width": 768,
+      "height": 768,
+      "sha256": "b4ca0f391e4c69f5c53d3a6a04fc4507c26e1a9f7af56a41fe0f3894d522d1c6"
+    },
+    "14_iwYDQjp34-R_iby8QadKnI9m3zVnOu": {
+      "name": "LAW OF THELEMA",
+      "file": "assets/gallery/14_iwYDQjp34-R_iby8QadKnI9m3zVnOu.webp",
+      "bytes": 78930,
+      "width": 512,
+      "height": 768,
+      "sha256": "c3ea8645ea1b87b0aaed0e11ada576b38ff36276879225a71bde2a129365b714"
+    },
+    "1cZ_ci9J80jnqCAdag8SQofYZw1dfsX3C": {
+      "name": "LOVE UNDER WILL",
+      "file": "assets/gallery/1cZ_ci9J80jnqCAdag8SQofYZw1dfsX3C.webp",
+      "bytes": 116006,
+      "width": 768,
+      "height": 768,
+      "sha256": "141c9e77e7c8696de6cafac3b247c5bb262b175bc23757868f25ac96af16fb4e"
+    },
+    "15z3bGrCqUy8SQjX1dO5C1vlN3y4-soai": {
+      "name": "GREAT WORK",
+      "file": "assets/gallery/15z3bGrCqUy8SQjX1dO5C1vlN3y4-soai.webp",
+      "bytes": 89168,
+      "width": 768,
+      "height": 512,
+      "sha256": "97f11d45ba65c31f908d502539963175474977d4c7bc8de126bd007637acc772"
+    },
+    "10xAFw98B39Ou0SSeB4eWyoY2D_OLLPgz": {
+      "name": "STONE OF WISE",
+      "file": "assets/gallery/10xAFw98B39Ou0SSeB4eWyoY2D_OLLPgz.webp",
+      "bytes": 135528,
+      "width": 768,
+      "height": 768,
+      "sha256": "b3cf1803f996c56974a10b8a7de659f8de747fb703282615b4b556dd3a2468c4"
+    },
+    "1CexZQw11p33u1-YA7JhPAkGV6NBCgd6e": {
+      "name": "ELIXIR OF LIFE",
+      "file": "assets/gallery/1CexZQw11p33u1-YA7JhPAkGV6NBCgd6e.webp",
+      "bytes": 66344,
+      "width": 512,
+      "height": 768,
+      "sha256": "a198f15593294fafb88bbe1547a22fbf2a594a574f9d42353a1055c982b24af7"
+    },
+    "16t1EdHfHRpb7GmqNAfo2iKKm57qLfbKn": {
+      "name": "RED LION",
+      "file": "assets/gallery/16t1EdHfHRpb7GmqNAfo2iKKm57qLfbKn.webp",
+      "bytes": 109604,
+      "width": 768,
+      "height": 512,
+      "sha256": "5abaf695ac336c30105b6ed2954a38c7ae56e0595f1c059556f868ad6ac40186"
+    },
+    "12wQOhUztVCVEFV21fPDq-JXGi5zxdkeQ": {
+      "name": "WHITE EAGLE",
+      "file": "assets/gallery/12wQOhUztVCVEFV21fPDq-JXGi5zxdkeQ.webp",
+      "bytes": 87346,
+      "width": 512,
+      "height": 768,
+      "sha256": "164048aec5fe5276802ca650322f0b7811c8d9babe741a99cd7dc056529ad5b2"
+    },
+    "1-0u9JUH0oUHD1--5iaySxRpO_PuyxkH6": {
+      "name": "ABRAHADABRA",
+      "file": "assets/gallery/1-0u9JUH0oUHD1--5iaySxRpO_PuyxkH6.webp",
+      "bytes": 158190,
+      "width": 768,
+      "height": 768,
+      "sha256": "68b0323250d77764979b034fd0b6a210033e24824030e0ae2b098502c2d7778e"
+    },
+    "1wnITY3i6XxOr1b3l6P0cT10LkEHQauO5": {
+      "name": "LASHTAL",
+      "file": "assets/gallery/1wnITY3i6XxOr1b3l6P0cT10LkEHQauO5.webp",
+      "bytes": 122486,
+      "width": 768,
+      "height": 768,
+      "sha256": "24571eefd2f03cee316318e1ea43dd367d25d319be127154a49a5f54cf9ae221"
+    }
+  }
+}

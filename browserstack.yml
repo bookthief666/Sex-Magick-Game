@@ -1,0 +1,35 @@
+userName: ${BROWSERSTACK_USERNAME}
+accessKey: ${BROWSERSTACK_ACCESS_KEY}
+framework: playwright
+
+platforms:
+  - browserName: chrome
+    osVersion: "13.0"
+    deviceName: Samsung Galaxy S23 Ultra
+    playwrightConfigOptions:
+      name: browserstack-android
+      testDir: ./tests
+      testMatch: "**/browserstack-mobile.spec.ts"
+      use:
+        baseURL: "http://bs-local.com:3000"
+
+  - browserName: safari
+    osVersion: "15"
+    deviceName: iPhone 13
+    playwrightConfigOptions:
+      name: browserstack-ios
+      testDir: ./tests
+      testMatch: "**/browserstack-mobile.spec.ts"
+      use:
+        baseURL: "http://bs-local.com:3000"
+
+projectName: Sex-Magick-Game
+buildName: M13 real-mobile matrix
+buildIdentifier: ${BUILD_NUMBER}
+browserstackLocal: true
+browserStackLocalOptions:
+  forcelocal: true
+debug: true
+networkLogs: true
+video: true
+parallelsPerPlatform: 1

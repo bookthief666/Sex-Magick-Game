@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SEX MAGICK 2.0 — Fixed-Step A/B Playtest</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #080808;
+      color: #f4f4f4;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      border-bottom: 1px solid #333;
+      background: rgba(8, 8, 8, .96);
+    }
+    button, select {
+      min-height: 40px;
+      padding: 8px 12px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      background: #181818;
+      color: #fff;
+      font: inherit;
+    }
+    button { cursor: pointer; }
+    button:hover, button:focus-visible { border-color: #fff; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+      gap: 12px;
+      padding: 12px;
+      min-height: calc(100vh - 62px);
+    }
+    #stage {
+      min-width: 0;
+      overflow: auto;
+      display: grid;
+      place-items: start center;
+      padding: 20px;
+      border: 1px solid #292929;
+      background: #101010;
+    }
+    #device {
+      width: 390px;
+      height: 844px;
+      overflow: hidden;
+      border: 2px solid #ddd;
+      border-radius: 18px;
+      background: #000;
+      box-shadow: 0 10px 50px rgba(0, 0, 0, .65);
+    }
+    iframe { width: 100%; height: 100%; border: 0; background: #000; }
+    aside {
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid #292929;
+      background: #111;
+    }
+    h1, h2 { margin: 0 0 10px; font-size: 14px; }
+    h2 { margin-top: 18px; color: #ddd; }
+    p, li, pre { font-size: 12px; line-height: 1.5; }
+    p, li { color: #bbb; }
+    pre {
+      min-height: 100px;
+      margin: 0;
+      padding: 10px;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+      border: 1px solid #292929;
+      background: #090909;
+      color: #ddd;
+    }
+    #events { display: grid; gap: 4px; }
+    .ok { color: #8dff9a; }
+    .warn { color: #ffd86b; }
+    .error { color: #ff7f91; }
+    .meta { margin-left: auto; color: #aaa; font-size: 12px; }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      .meta { width: 100%; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>SEX MAGICK 2.0 — FIXED-STEP A/B</strong>
+    <select id="mode" aria-label="Timing mode">
+      <option value="fixed">Fixed-step prototype</option>
+      <option value="baseline">Unmodified branch baseline</option>
+    </select>
+    <select id="preset" aria-label="Viewport preset">
+      <option value="390x844">Phone portrait — 390×844</option>
+      <option value="844x390">Phone landscape — 844×390</option>
+      <option value="374x882">Fold closed — 374×882</option>
+      <option value="884x1104">Fold open portrait — 884×1104</option>
+      <option value="1104x884">Fold open landscape — 1104×884</option>
+      <option value="1280x720">Desktop — 1280×720</option>
+      <option value="1440x900">Desktop — 1440×900</option>
+    </select>
+    <button id="apply">Apply viewport</button>
+    <button id="reload">Reload run</button>
+    <button id="snapshot">Timing snapshot</button>
+    <span class="meta" id="meta"></span>
+  </header>
+
+  <main>
+    <section id="stage" aria-label="Game viewport test stage">
+      <div id="device">
+        <iframe id="game" title="SEX MAGICK game under timing test"></iframe>
+      </div>
+    </section>
+
+    <aside>
+      <h1>Purpose</h1>
+      <p>
+        Compare the exact branch game with and without the branch-only 60 Hz fixed-step prototype. The prototype patches the real game loop after load; it does not modify <code>index.html</code> or the live itch.io build.
+      </p>
+
+      <h2>Required run record</h2>
+      <ol>
+        <li>Record mode, browser, device, refresh rate, Rite, and viewport.</li>
+        <li>Compare jump feel, obstacle speed, spawn cadence, pause/resume, and Void duration.</li>
+        <li>Switch tabs for ten seconds, return, and check for a catch-up burst.</li>
+        <li>Restart repeatedly and check for duplicate animation loops.</li>
+        <li>Capture a timing snapshot during active play.</li>
+      </ol>
+
+      <h2>Latest timing snapshot</h2>
+      <pre id="timing">No snapshot yet.</pre>
+
+      <h2>Harness events</h2>
+      <div id="events" role="log" aria-live="polite"></div>
+    </aside>
+  </main>
+
+  <script>
+    'use strict';
+
+    const mode = document.getElementById('mode');
+    const preset = document.getElementById('preset');
+    const device = document.getElementById('device');
+    const iframe = document.getElementById('game');
+    const events = document.getElementById('events');
+    const timing = document.getElementById('timing');
+    const meta = document.getElementById('meta');
+    const startedAt = performance.now();
+
+    function log(message, level = 'ok') {
+      const row = document.createElement('div');
+      row.className = level;
+      row.textContent = `[${((performance.now() - startedAt) / 1000).toFixed(2)}s] ${message}`;
+      events.prepend(row);
+    }
+
+    function parseSize(value) {
+      const match = /^(\d+)x(\d+)$/.exec(value);
+      if (!match) throw new Error(`Invalid viewport preset: ${value}`);
+      return { width: Number(match[1]), height: Number(match[2]) };
+    }
+
+    function applyViewport() {
+      const { width, height } = parseSize(preset.value);
+      device.style.width = `${width}px`;
+      device.style.height = `${height}px`;
+      meta.textContent = `${mode.value} · ${width}×${height} CSS px · DPR ${window.devicePixelRatio || 1}`;
+      log(`Applied ${width}×${height} viewport`);
+    }
+
+    function injectScript(frameDocument, relativePath) {
+      return new Promise((resolve, reject) => {
+        const script = frameDocument.createElement('script');
+        script.src = new URL(relativePath, window.location.href).href;
+        script.onload = () => resolve(script.src);
+        script.onerror = () => reject(new Error(`Failed to load ${script.src}`));
+        frameDocument.head.appendChild(script);
+      });
+    }
+
+    async function attachDiagnostics() {
+      try {
+        const frameWindow = iframe.contentWindow;
+        const frameDocument = iframe.contentDocument;
+        if (!frameWindow || !frameDocument) throw new Error('iframe is not same-origin');
+
+        frameWindow.addEventListener('error', event => {
+          log(`GAME ERROR: ${event.message || 'Unknown error'}`, 'error');
+        });
+        frameWindow.addEventListener('unhandledrejection', event => {
+          log(`GAME REJECTION: ${String(event.reason)}`, 'error');
+        });
+
+        if (mode.value === 'fixed') {
+          await injectScript(frameDocument, './fixed-step-clock.js');
+          await injectScript(frameDocument, './fixed-step-prototype.js');
+          log('Fixed-step prototype injected');
+        } else {
+          log('Baseline mode: no timing patch injected', 'warn');
+        }
+      } catch (error) {
+        log(error.message, 'error');
+      }
+    }
+
+    function reloadGame() {
+      timing.textContent = 'No snapshot yet.';
+      iframe.src = `../index.html?qa=${Date.now()}#debug`;
+      applyViewport();
+      log(`Reloaded in ${mode.value} mode`, 'warn');
+    }
+
+    document.getElementById('apply').addEventListener('click', applyViewport);
+    document.getElementById('reload').addEventListener('click', reloadGame);
+    mode.addEventListener('change', reloadGame);
+
+    document.getElementById('snapshot').addEventListener('click', () => {
+      try {
+        const api = iframe.contentWindow.__SEX_MAGICK_TIMING__;
+        if (!api) {
+          timing.textContent = 'Timing API unavailable in baseline mode.';
+          return;
+        }
+        timing.textContent = JSON.stringify(api.getSnapshot(), null, 2);
+        log('Captured timing snapshot');
+      } catch (error) {
+        timing.textContent = error.message;
+        log(`Snapshot failed: ${error.message}`, 'error');
+      }
+    });
+
+    iframe.addEventListener('load', attachDiagnostics);
+    window.addEventListener('error', event => log(`HARNESS ERROR: ${event.message}`, 'error'));
+    window.addEventListener('unhandledrejection', event => log(`HARNESS REJECTION: ${String(event.reason)}`, 'error'));
+
+    reloadGame();
+  </script>
+</body>
+</html>

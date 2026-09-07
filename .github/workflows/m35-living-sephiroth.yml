@@ -1,0 +1,63 @@
+name: M35 living Sephiroth
+
+on:
+  push:
+    branches:
+      - agent/m35-living-sephiroth
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  living-sephiroth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Syntax-check M35 surface
+        run: |
+          node --check tools/product-integration-runtime.js
+          node --check tools/sephirah-identity-runtime.js
+          node --check tools/sephirah-identity-bootstrap.js
+          node --check tools/test-sephirah-identity-runtime.js
+          node --check tools/browser-m35-living-sephiroth-test.mjs
+
+      - name: Prove Living Sephiroth deterministic contracts
+        run: node tools/test-sephirah-identity-runtime.js
+
+      - name: Recheck inherited product contracts
+        run: |
+          node tools/test-product-integration-runtime.js
+          node tools/test-ritual-ascent-runtime.js
+          node tools/test-gate-slice.js
+          node tools/test-missions-runtime.js
+          node tools/test-powerup-runtime.js
+          node tools/test-monas-runtime.js
+
+      - name: Prove Fold-open Living Sephiroth integration
+        run: node tools/browser-m35-living-sephiroth-test.mjs
+
+      - name: Reprove M34 ritual ascent
+        run: node tools/browser-m34-ritual-ascent-test.mjs
+
+      - name: Reprove M33 product integration
+        run: node tools/browser-m33-product-integration-test.mjs
+
+      - name: Reprove MONAS standard-entry separation
+        run: node tools/browser-m30-standard-entry-test.mjs

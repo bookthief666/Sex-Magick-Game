@@ -1,0 +1,71 @@
+name: M33 product integration
+
+on:
+  push:
+    branches:
+      - agent/m33-product-integration-fold-performance
+  pull_request:
+    branches:
+      - agent/m32-monas-progression
+    paths:
+      - 'tools/product-integration-runtime.js'
+      - 'tools/test-product-integration-runtime.js'
+      - 'tools/browser-m33-product-integration-test.mjs'
+      - 'tools/browser-m30-standard-entry-test.mjs'
+      - 'tools/fixed-step-clock.js'
+      - 'docs/decisions/d054-product-integration-and-fold-rendering.md'
+      - '.github/workflows/m33-product-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  product-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Syntax-check M33 integration surface
+        run: |
+          node --check tools/product-integration-runtime.js
+          node --check tools/test-product-integration-runtime.js
+          node --check tools/fixed-step-clock.js
+          node --check tools/browser-m33-product-integration-test.mjs
+          node --check tools/browser-m30-standard-entry-test.mjs
+
+      - name: Prove product default policy
+        run: node tools/test-product-integration-runtime.js
+
+      - name: Recheck inherited Claude product systems
+        run: |
+          node tools/test-obstacle-variety-runtime.js
+          node tools/test-missions-runtime.js
+          node tools/test-powerup-runtime.js
+          node tools/test-occult-art-runtime.js
+          node tools/test-monas-runtime.js
+          node tools/test-leaderboard-runtime.js
+
+      - name: Prove normal URL is the full product on Fold-open geometry
+        run: node tools/browser-m33-product-integration-test.mjs
+
+      - name: Reprove MONAS standard-entry semantics
+        run: node tools/browser-m30-standard-entry-test.mjs
+
+      - name: Reprove M32 MONAS progression parity
+        run: node tools/browser-m32-monas-progression-test.mjs
