@@ -708,3 +708,62 @@
   script.onerror = () => console.error('[SEX MAGICK] Gate evidence runtime failed to load', script.src);
   document.head.appendChild(script);
 })();
+// Evolution pass (M32/M34/M35 integration): the ascent layer. Each of these was
+// built and tested against this game's DOM and degrades to a no-op when its
+// host conditions are absent, so wiring them in carries the live build forward
+// rather than rewriting it.
+(function bootstrapMonasProgressionRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickMonasProgression ||
+    document.querySelector('script[data-sex-magick-monas-progression-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./monas-progression-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickMonasProgressionRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Monas progression runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapRitualAscentRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    globalThis.SexMagickRitualAscent ||
+    document.querySelector('script[data-sex-magick-ritual-ascent-runtime]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./ritual-ascent-runtime.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickRitualAscentRuntime = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Ritual ascent runtime failed to load', script.src);
+  document.head.appendChild(script);
+})();
+
+(function bootstrapSephirahIdentityRuntime() {
+  'use strict';
+
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    document.querySelector('script[data-sex-magick-sephirah-identity-bootstrap]')
+  ) return;
+
+  const currentSource = document.currentScript?.src || window.location.href;
+  const script = document.createElement('script');
+  script.src = new URL('./sephirah-identity-bootstrap.js', currentSource).href;
+  script.async = false;
+  script.dataset.sexMagickSephirahIdentityBootstrap = 'true';
+  script.onerror = () => console.error('[SEX MAGICK] Sephirah identity bootstrap failed to load', script.src);
+  document.head.appendChild(script);
+})();

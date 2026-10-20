@@ -457,7 +457,9 @@
                 
                 <div class="mode-select-container">
                     <button id="startHexBtn" class="mystic-btn hex-btn">RITE OF HEXAGRAM</button>
+                    <p style="font-family: 'Orbitron'; font-size: 0.78rem; letter-spacing: 2px; color: #c2b8a8; text-shadow: 0 0 6px rgba(255,255,255,.25); margin: 4px 0 10px; text-align: center;">TAP TO FLAP · THREAD THE GATES</p>
                     <button id="startMonasBtn" class="mystic-btn monas-btn">RITE OF MONAS</button>
+                    <p style="font-family: 'Orbitron'; font-size: 0.78rem; letter-spacing: 2px; color: #c2b8a8; text-shadow: 0 0 6px rgba(255,255,255,.25); margin: 4px 0 0; text-align: center;">HOLD &amp; RELEASE · RIDE THE CURRENTS</p>
                 </div>
                 
                 <button id="settingsBtn" class="mystic-btn" style="min-width: 150px; padding: 10px; font-size: 0.8rem;">SETTINGS</button>
@@ -479,6 +481,7 @@
             <h1 class="title-text" data-glitch-text="Good job foo" style="color: #ff003c; font-size: 3.5rem;">Good job foo</h1>
             <p style="font-size: 1rem; letter-spacing: 4px; margin-bottom: 20px; font-family: 'Orbitron'; color: #888;">RITUAL ENDED</p>
             <p class="release-final-score">WILL: <span id="finalScore" style="color: #fff; font-weight:bold; text-shadow: 0 0 10px #fff;">0</span></p>
+            <p id="runSummary" style="color: #c9a0ff; font-size: 0.85rem; letter-spacing: 2px; margin-bottom: 8px; font-family: 'Orbitron';"></p>
             <p id="uploadStatus" style="color: var(--secondary); font-size: 0.8rem; margin-bottom: 10px;">CONNECTING TO ETHER...</p>
             <p id="highScoreMsg" style="color: #ffd700; margin-bottom: 20px; font-size: 0.9rem; letter-spacing: 2px;"></p>
             
@@ -1814,6 +1817,22 @@
                 Leaderboard.submit(this.score);
                 if (this.settings.music) AudioSys.switchToGameOverMusic(); else AudioSys.stop();
                 document.getElementById('finalScore').innerText = this.score;
+                // Evolution pass: the run gets a story - realm reached, and how far the next one was.
+                try {
+                    const summaryEl = document.getElementById('runSummary');
+                    const bands = window.SexMagickGateSlice?.BANDS || [];
+                    if (summaryEl && bands.length && this.gameMode === 'HEX') {
+                        let bandIdx = 0;
+                        bands.forEach((b, i) => { if (this.score >= (b.gateThreshold || 0)) bandIdx = i; });
+                        const cur = bands[bandIdx];
+                        const nxt = bands[bandIdx + 1];
+                        summaryEl.textContent = nxt
+                            ? `REALM ${cur.name} — ${nxt.name} WAS ${nxt.gateThreshold - this.score} GATES AWAY`
+                            : `REALM ${cur.name} — THE CROWN IS YOURS`;
+                    } else if (summaryEl) {
+                        summaryEl.textContent = '';
+                    }
+                } catch (e) {}
                 document.getElementById('scoreUi').classList.add('hidden');
                 document.getElementById('pauseBtn').classList.add('hidden');
                 document.getElementById('instructions').classList.add('hidden');
@@ -1955,7 +1974,13 @@
                 const lvl = this.gameLevels[this.currentLevelIdx];
                 const levelImage = !this.voidMode ? this.levelImage(lvl) : null;
                 if (levelImage) {
-                    ctx.globalAlpha = 0.6;
+                    // Living background (evolution pass): the gallery art itself is
+                    // untouched and every image stays in rotation - it only gains a
+                    // slow Ken Burns drift and a breathing light so the stills feel
+                    // alive. STILLNESS (reduced motion) freezes the drift entirely.
+                    const calmBg = document.documentElement.classList.contains('sex-magick-reduced-motion');
+                    const bgT = calmBg ? 0 : (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.001;
+                    ctx.globalAlpha = calmBg ? 0.6 : 0.6 + Math.sin(bgT * 0.35) * 0.035;
                     try {
                         const img = levelImage;
                         const canvasRatio = this.canvas.width / this.canvas.height;
@@ -1973,6 +1998,14 @@
                             drawY = (this.canvas.height - drawHeight) / 2;
                         }
                         ctx.filter = 'blur(1px)';
+                        if (!calmBg) {
+                            const bgZoom = 1.07 + Math.sin(bgT * 0.11) * 0.025;
+                            drawWidth *= bgZoom; drawHeight *= bgZoom;
+                            const maxPanX = Math.max(0, (drawWidth - this.canvas.width) / 2);
+                            const maxPanY = Math.max(0, (drawHeight - this.canvas.height) / 2);
+                            drawX = (this.canvas.width - drawWidth) / 2 + Math.sin(bgT * 0.07) * maxPanX * 0.8;
+                            drawY = (this.canvas.height - drawHeight) / 2 + Math.cos(bgT * 0.09) * maxPanY * 0.8;
+                        }
                         ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
                         ctx.filter = 'none';
                     } catch (e) {}
